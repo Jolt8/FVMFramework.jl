@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.5"
+julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "d3fbdaccc3a1f5eea3a6e6ae6ad624aeed4e52ae"
+project_hash = "72bd2726b32d1fe4daeb30487908200120458181"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -836,7 +836,7 @@ uuid = "f5851436-0d7a-5f13-b9de-f02708fd171a"
 version = "3.3.12+0"
 
 [[deps.FVMFramework]]
-deps = ["ADTypes", "AlgebraicMultigrid", "ComponentArrays", "DSP", "DataInterpolations", "Dates", "DiffEqFlux", "Enzyme", "Ferrite", "ForwardDiff", "ILUZero", "LinearAlgebra", "Logging", "Lux", "NonlinearSolve", "Optimization", "OptimizationBBO", "OptimizationOptimJL", "OptimizationPolyalgorithms", "OrdinaryDiffEq", "Polyester", "PreallocationTools", "ProfileView", "RecursiveArrayTools", "SciMLSensitivity", "SparseArrays", "SparseConnectivityTracer", "StaticArrays", "SymbolicRegression", "Unitful", "WriteVTK", "Zygote"]
+deps = ["ADTypes", "AlgebraicMultigrid", "Clapeyron", "ComponentArrays", "DSP", "DataInterpolations", "Dates", "DiffEqFlux", "Enzyme", "Ferrite", "ForwardDiff", "ILUZero", "LinearAlgebra", "Logging", "Lux", "NonlinearSolve", "Optimization", "OptimizationBBO", "OptimizationOptimJL", "OptimizationPolyalgorithms", "OrdinaryDiffEq", "Polyester", "PreallocationTools", "ProfileView", "RecursiveArrayTools", "SciMLSensitivity", "SparseArrays", "SparseConnectivityTracer", "StaticArrays", "SymbolicRegression", "Unitful", "WriteVTK", "Zygote"]
 path = "."
 uuid = "3bea8ca0-a952-4872-be97-bc38a725671f"
 version = "0.1.0"
@@ -1437,10 +1437,10 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 version = "1.12.0"
 
 [[deps.LinearSolve]]
-deps = ["AMD", "ArrayInterface", "ConcreteStructs", "DocStringExtensions", "EnumX", "GPUArraysCore", "InteractiveUtils", "Krylov", "Libdl", "LinearAlgebra", "MKL_jll", "Markdown", "OpenBLAS_jll", "PrecompileTools", "Preferences", "PureKLU", "RecursiveArrayTools", "Reexport", "SciMLBase", "SciMLLogging", "SciMLOperators", "Setfield", "SparseColumnPivotedQR", "StaticArraysCore"]
-git-tree-sha1 = "70de717540ffc613424866635b99d0c187cf7b59"
+deps = ["AMD", "ArrayInterface", "ConcreteStructs", "DocStringExtensions", "EnumX", "GPUArraysCore", "InteractiveUtils", "Krylov", "Libdl", "LinearAlgebra", "MKL_jll", "Markdown", "OpenBLAS_jll", "PrecompileTools", "Preferences", "PureKLU", "RecursiveArrayTools", "Reexport", "SciMLBase", "SciMLLogging", "SciMLOperators", "Setfield", "SparseArrays", "SparseColumnPivotedQR", "StaticArraysCore"]
+git-tree-sha1 = "ec49ed72f6024be2f9833fe630fbd72f6048f8ad"
 uuid = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
-version = "3.85.1"
+version = "3.87.0"
 
     [deps.LinearSolve.extensions]
     LinearSolveAMDGPUExt = "AMDGPU"
@@ -1459,6 +1459,7 @@ version = "3.85.1"
     LinearSolveFastLapackInterfaceExt = "FastLapackInterface"
     LinearSolveForwardDiffExt = "ForwardDiff"
     LinearSolveGinkgoExt = ["Ginkgo", "SparseArrays"]
+    LinearSolveHSLExt = ["HSL", "SparseArrays"]
     LinearSolveHYPREExt = "HYPRE"
     LinearSolveIterativeSolversExt = "IterativeSolvers"
     LinearSolveKernelAbstractionsExt = "KernelAbstractions"
@@ -1471,10 +1472,13 @@ version = "3.85.1"
     LinearSolveParUExt = ["ParU_jll", "SparseArrays"]
     LinearSolvePardisoExt = ["Pardiso", "SparseArrays"]
     LinearSolvePartitionedSolversExt = ["PartitionedArrays", "PartitionedSolvers"]
+    LinearSolvePureUMFPACKExt = ["PureUMFPACK", "SparseArrays"]
     LinearSolveRecursiveFactorizationExt = "RecursiveFactorization"
     LinearSolveSTRUMPACKExt = ["SparseArrays", "STRUMPACK_jll"]
     LinearSolveSparseArraysExt = "SparseArrays"
     LinearSolveSparspakExt = ["SparseArrays", "Sparspak"]
+    LinearSolveSpecializingFactorizationsExt = "SpecializingFactorizations"
+    LinearSolveSuperLUDISTExt = ["SparseArrays", "SuperLUDIST"]
 
     [deps.LinearSolve.weakdeps]
     AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
@@ -1491,6 +1495,7 @@ version = "3.85.1"
     FastLapackInterface = "29a986be-02c6-4525-aec4-84b980013641"
     ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
     Ginkgo = "4c8bd3c9-ead9-4b5e-a625-08f1338ba0ec"
+    HSL = "34c5aeac-e683-54a6-a0e9-6e0fdc586c50"
     HYPRE = "b5ffcf37-a2bd-41ab-a3da-4bd9bc8ad771"
     IterativeSolvers = "42fd0dbc-a981-5370-80f2-aaf504508153"
     KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
@@ -1504,11 +1509,13 @@ version = "3.85.1"
     Pardiso = "46dd5b70-b6fb-5a00-ae2d-e8fea33afaf2"
     PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
     PartitionedSolvers = "11b65f7f-80ac-401b-9ef2-3db765482d62"
+    PureUMFPACK = "b7e1f0a2-3c4d-4e5f-9a0b-1c2d3e4f5a6b"
     RecursiveFactorization = "f2c3362d-daeb-58d1-803e-2bc74f2840b4"
     STRUMPACK_jll = "86fbd0b9-476f-557c-b766-62c724b42d8c"
-    SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
     SparseMatricesCSR = "a0a7dd2c-ebf4-11e9-1f05-cf50bc540ca1"
     Sparspak = "e56a9233-b9d6-4f03-8d0f-1825330902ac"
+    SpecializingFactorizations = "fa08b7a1-13d3-4faf-875d-5cbc1520e3f3"
+    SuperLUDIST = "4cd002a6-0da4-410d-a012-232df062f478"
     blis_jll = "6136c539-28a5-5bf0-87cc-b183200dce32"
     cuSOLVER = "887afef0-6a32-4de5-add4-7827692ba8fc"
 
