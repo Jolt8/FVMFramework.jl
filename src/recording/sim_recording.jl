@@ -101,7 +101,7 @@ function write_to_vtk_helper!(vtk, named_step, n_cells, geo; prev_field = "", pr
     end
 end
 
-function sol_to_vtk(sol, du_named, u_named, grid, geo, sim_file, root_dir; include_zeros_fields = true)
+function sol_to_vtk(sol, du_named, u_named, grid, geo, sim_file, root_dir; include_zeros_fields = true, track_progress = false)
     date_and_time = Dates.format(now(), "I.MM.SS p yyyy-mm-dd")
     #date_and_time = Dates.format(now(), "I.MM.SS p")
 
@@ -128,6 +128,9 @@ function sol_to_vtk(sol, du_named, u_named, grid, geo, sim_file, root_dir; inclu
     n_cells = length(grid.cells)
 
     for (step, t) in enumerate(sol.t)
+        if track_progress == true
+            println("saving timestep $t of $(sol.t[end]), remaining steps = $(length(sol.t)-step)")
+        end
         VTKGridFile(step_filename * " $step" * " at $t.vtu", grid) do vtk
             write_to_vtk_helper!(vtk, u_named[step], n_cells, geo; prev_field = "", prefix = "u_", include_zeros_fields = include_zeros_fields)
             write_to_vtk_helper!(vtk, du_named[step], n_cells, geo; prev_field = "", prefix = "du_", include_zeros_fields = include_zeros_fields)
