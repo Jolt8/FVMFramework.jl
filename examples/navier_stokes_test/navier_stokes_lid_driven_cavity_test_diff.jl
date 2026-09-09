@@ -1,7 +1,7 @@
 #NOTE:
 #This file was written entirely by AI
 #the reason I did this is because I wanted to test if my framework was fast enough to actually handle navier stokes and from what I'm seeing, it definitely is!!!
-#a problem with 100 x 100 cells (10000 total) only took 114 seconds to solve for a lid-driven cavity simulation which is in the ballpark of OpenFOAM
+#a problem with 100 x 100 cells (10000 total) only took 114 seconds to solve for 100000.0 simulated seconds of a lid-driven cavity simulation which is in the ballpark of OpenFOAM
 #thus, while I'm not going to work on navier stokes further personally because I really don't want to sell my soul to the devil of getting navier stokes to work and be physically consistent,
 #and also because navier stokes doesn't really seem that useful in chemical engineering for a majority of problems (and is also often too slow even with extremely efficient solvers for parameter optimization), 
 #I at least know it's possible if I want to do it in the future.
@@ -319,7 +319,6 @@ du0_vec, u0_vec, geo, system =
 # System solver function
 function solve_system!(du, u, p, t, geo, system)
     solve_connection_groups!(du, u, p, t, geo, system)
-    solve_controller_groups!(du, u, p, t, geo, system)
     solve_patch_groups!(du, u, p, t, geo, system)
     solve_region_groups!(du, u, p, t, geo, system)
 end
