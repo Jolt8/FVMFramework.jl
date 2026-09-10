@@ -89,7 +89,7 @@ end
 
 function fluid_sum_and_cap_fluxes!(du, u, cell_id, vol)
     #it's definitely one of these
-    sum_mass_flux_face_to_cell!(du, u, cell_id) #this always has to go before cap_mass_flux_to_pressure_change!
+    sum_mass_flux_face_to_cell!(du, u, cell_id, vol) #this always has to go before cap_mass_flux_to_pressure_change!
 
     cap_heat_flux_to_temp_change!(du, u, cell_id, vol)
     cap_mass_flux_to_pressure_change!(du, u, cell_id, vol)
@@ -297,7 +297,7 @@ add_region!(
     ),
     properties = water_properties,
     property_update_function = 
-    function update_inlet!(du, u, p, t, cell_id, vol)
+    function update_inlet!(du, u, p, t, cell_id, vol, system)
         update_fluid_properties!(du, u, p, t, cell_id, vol, system)
     end,
     region_function =
@@ -378,7 +378,6 @@ function solve_system!(du, u, p_vec, t, geo, system)
 
     update_region_groups!(du, u, p, t, geo, system)
     solve_connection_groups!(du, u, p, t, geo, system)
-    solve_controller_groups!(du, u, p, t, geo, system)
     solve_patch_groups!(du, u, p, t, geo, system)
     solve_region_groups!(du, u, p, t, geo, system)
 end
