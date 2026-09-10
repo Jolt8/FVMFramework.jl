@@ -15,23 +15,12 @@ mutable struct PatchSetupInfo #this must be defined before SimulationConfigInfo
     cell_neighbors::Vector{Tuple{Int, Vector{Tuple{Int, Int}}}}
 end
 
-mutable struct ControllerSetupInfo #this must be defined before SimulationConfigInfo
-    name::String
-    controller::ComponentVector
-    monitored_cellset::String
-    affected_cellset::String
-    controller_function::Function
-    monitored_cells::Vector{Int}
-    affected_cells::Vector{Int}
-end
-
 mutable struct SimulationConfigInfo
     grid::Ferrite.Grid
     geo::FVMGeometry
     top::ExclusiveTopology
     regions::Vector{RegionSetupInfo}
     patches::Vector{PatchSetupInfo}
-    controllers::Vector{ControllerSetupInfo}
 
     cache_syms_and_units::NamedTuple
     special_caches::ComponentVector

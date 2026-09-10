@@ -14,15 +14,6 @@ struct PatchGroup{P <: ComponentVector, F <: Function}
     cell_neighbors::Vector{Tuple{Int, Vector{Tuple{Int, Int}}}}
 end
 
-struct ControllerGroup{T <: ComponentVector, F <: Function}
-    name::String
-    id::Int
-    controller::T
-    controller_function!::F
-    monitored_cells::Vector{Int}
-    affected_cells::Vector{Int}
-end
-
 #=
 struct CellNeighbors
     idx_a::Int
@@ -39,7 +30,6 @@ end
 
 struct FVMSystem
     connection_groups::Vector{ConnectionGroup}
-    controller_groups::Vector{ControllerGroup}
     patch_groups::Vector{PatchGroup}
     region_groups::Vector{RegionGroup}
     du_virtual_axes::NamedTuple
@@ -59,7 +49,6 @@ function finish_fvm_config(config, connection_map_function; check_units::Bool)
     n_cells = length(config.geo.cell_volumes)
 
     connection_groups = ConnectionGroup[]
-    controller_groups = ControllerGroup[]
     patch_groups = PatchGroup[]
     region_groups = RegionGroup[]
 
@@ -86,18 +75,6 @@ function finish_fvm_config(config, connection_map_function; check_units::Bool)
     #Patches
     for patch in config.patches
         push!(patch_groups, PatchGroup(patch.name, patch.properties, patch.patch_function, patch.cell_neighbors))
-    end
-
-    #Controllers
-    for (controller_id, controller) in enumerate(config.controllers)
-        push!(controller_groups, ControllerGroup(
-            controller.name,
-            controller_id,
-            controller.controller,
-            controller.controller_function,
-            controller.monitored_cells, controller.affected_cells
-        )
-        )
     end
 
     #Connections
@@ -213,7 +190,7 @@ function finish_fvm_config(config, connection_map_function; check_units::Bool)
 
     if check_units == true
         system = FVMSystem(
-            connection_groups, controller_groups, patch_groups, region_groups,
+            connection_groups, patch_groups, region_groups,
             du_virtual_axes, u_virtual_axes,
             du_diff_cache, u_diff_cache,
             properties_vec, properties_axes,
@@ -224,7 +201,7 @@ function finish_fvm_config(config, connection_map_function; check_units::Bool)
     end
 
     system = FVMSystem(
-        connection_groups, controller_groups, patch_groups, region_groups,
+        connection_groups, patch_groups, region_groups,
         du_virtual_axes, u_virtual_axes,
         state_axes,
         du_diff_cache, u_diff_cache, 

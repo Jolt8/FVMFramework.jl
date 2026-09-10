@@ -17,20 +17,6 @@ function solve_connection_group!(
     end
 end
 
-function solve_controller_group!(
-    du, u, p, t,
-    controller::C, controller_id,
-    control!::F, monitored_cells, affected_cells,
-    cell_volumes
-) where {C, F}
-    control!(
-        du, u, p, t, 
-        controller, controller_id,
-        monitored_cells, affected_cells,
-        cell_volumes
-    )
-end
-
 function update_region_group!(
     du, u, p, t,
     property_update_function!::F, region_cells,
