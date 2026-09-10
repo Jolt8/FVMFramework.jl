@@ -1,3 +1,71 @@
+#Note that this script was written by AI
+
+"""
+    foreach_field_at!(f, cell_id::Int, groups::Vararg{Any, N}) where {N}
+
+Iterates over the elements of each field at a specific cell_id
+
+# Example:
+```julia
+foreach_field_at!(cell_id, du.mass_fractions, du.molar_concentrations) do species, du_mass_fractions, du_molar_concentrations
+    du_mass_fractions[species] += 1.0
+    du_molar_concentrations[species] += 1.0
+end
+```
+
+The reason this function exists is that this causes a ton of allocations and dynamic dispatch:
+```julia
+for name in propertynames(du.mass_fractions[1])
+    getproperty(du.mass_fractions, name)[cell_id] += 1.0 
+end
+```
+
+However, with how this function works, there are sometimes cases where it does not behave as you would expect.
+For example, let's say you have these two vectors and wanted to iterate through both of them:
+```julia
+mass_fractions = ComponentVector(
+    methane = 0.5,
+    water = 0.5
+)
+
+elemental_compositions = ComponentVector(
+    methane = (
+        C = 1,
+        H = 4,
+        O = 0
+    ),
+    water = (
+        C = 0,
+        H = 2,
+        O = 1
+    )
+)
+```
+\n
+If you just do:
+```julia
+foreach_field_at!(cell_id, mass_fractions, elemental_compositions) do species, mass_fractions, elemental_compositions
+    mass_fractions[species[cell_id]] += 1.0
+    elemental_compositions[species[cell_id]] += 1.0
+end
+```
+**species** will just be [1], [2] etc.
+\n
+This will not index [elemental_compositions] properly because it needs be indexed as [1:3], [4:6]
+thus, **elemental_compositions[species]** will just return the value for **elemental_compositions.methane.C** and nothing else
+
+To make this this doesn't happen, do this:
+```julia
+mass_fractions_species_idx = 1
+
+foreach_field_at!(cell_id, elemental_compositions) do species, elemental_compositions
+    view(mass_fractions, cell_id)[mass_fractions_species_idx] += 1.0
+    elemental_compositions[species[cell_id]] += 1.0
+    mass_fractions_species_idx += 1
+end
+```
+While this is not the most ideal, it's pretty much the best option avaliable without introducing even more bloated looping functions
+"""
 @generated function foreach_field_at!(f, cell_id::Int, groups::Vararg{Any, N}) where {N}
     G1 = groups[1]
     local properties
@@ -49,6 +117,21 @@
     end
 end
 
+"""
+    for_fields!(f, groups::Vararg{Any, N}) where {N}
+
+    Iterates over the elements of each field
+
+    # Example:
+    ```julia
+    for_fields!(du.mass_fractions) do species, du_mass_fractions
+        du_mass_fractions[species] += 1.0 
+    end
+    ```
+
+    Similar to for_fields_at! this function exists because looping using propertynames() causes a significant amount of 
+    allocations and dynamic dispatch
+"""
 @generated function for_fields!(f, groups::Vararg{Any, N}) where {N}
     G1 = groups[1]
     exprs = []
@@ -104,4 +187,4 @@ end
     end
 end
 
-const foreach_field_at! = for_fields!
+#const foreach_field_at! = for_fields!
