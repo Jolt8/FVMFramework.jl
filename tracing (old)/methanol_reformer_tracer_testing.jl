@@ -1,3 +1,4 @@
+#=
 using Revise
 using Logging
 
@@ -49,43 +50,6 @@ config = create_fvm_config(grid)
 #TODO: Another thing I'd like to implement in my eventual optimizaiton pipeline is a method to extract a very basic
 #correlation between the average_temperature measured in the reforming_area cellset to another temp_sensor cellset 
 #that could be fed into an arduino to extrapolate sensor data to the reactor's actual internal reforming temp
-add_controller!(config, "temp_controller";
-    monitored_cellset="reforming_area",
-    affected_cellset="heating_areas",
-    controller_function=
-    function pid_temp_controller(du, u, controller_id, monitored_cells, affected_cells, cell_volumes)
-        measured_vec = u.temp
-        measured_du_vec = du.heat
-
-        measured_avg = 0.0
-        measured_du_avg = 0.0
-
-        for monitored_cell_id in monitored_cells
-            measured_avg += measured_vec[monitored_cell_id]
-            measured_du_avg += measured_du_vec[monitored_cell_id]
-        end
-
-        measured_avg /= length(monitored_cells)
-        measured_du_avg /= length(monitored_cells)
-
-        error = measured_avg - u.controllers.desired_value[controller_id]
-
-        du.integral_error[controller_id] = error
-
-        corrected_volumetric_addition = (
-            u.controllers.initial_volumetric_input[controller_id] +
-            (u.controllers.proportional_gain[controller_id] * error) +
-            (u.controllers.integral_time[controller_id] * u.integral_error[controller_id]) +
-            (u.controllers.derivative_time[controller_id] * measured_du_avg)
-        )
-
-        corrected_volumetric_addition = clamp(corrected_volumetric_addition, u.controllers.min_volumetric_input[controller_id], u.controllers.max_volumetric_input[controller_id])
-
-        for affected_cell_id in affected_cells
-            du.heat[affected_cell_id] += corrected_volumetric_addition * cell_volumes[affected_cell_id]
-        end
-    end
-)
 
 n_faces = length(config.geo.cell_neighbor_areas[1])
 
@@ -382,16 +346,6 @@ for conn in system.connection_groups
     )
 end
 
-#Controller Loops
-#only controller_funciton, monitored_cells, and affected_cells are needed now
-for cont in system.controller_groups
-    fake_cell_volumes = Dict(cont.monitored_name => geo.cell_volumes[cont.monitored_cells[1]], cont.affected_name => geo.cell_volumes[cont.affected_cells[1]])
-    cont.controller_function!(
-        du_tracer, u_tracer, cont.name, [cont.monitored_name], [cont.affected_name], #we swap out cont.it for cont.name for the tracer
-        fake_cell_volumes
-    )
-end
-
 #Internal Physics, Sources, Boundary Conditions, and Capacities Loops 
 #oh wait, now we don't even need the other fields for the different regions, we only need the region function
 for reg in system.region_groups
@@ -406,24 +360,19 @@ var_access_logs, encountered_paths = merge_trace_results(ctx.access_logs)
 
 state_vars, cache_vars, fixed_vars = classify_variables(var_access_logs)
 
-keys(fixed_vars)
-
-fixed_vars[[:controllers, :min_volumetric_input, :temp_controller]]
-
 n_cells = length(grid.cells)
 
 region_symbols = Set([Symbol(reg.name) for reg in system.region_groups])
-controller_symbols = Set([Symbol(cont.name) for cont in system.controller_groups])
 
 n_faces = length(geo.cell_neighbor_areas[1])
 
 #NOTE: if you ever get an error like no method matching setindex!(::Symbol, ::Symbol, ::Symbol), it's probably because there's conflicting useage of a variable name 
 
 # ── Step 1: Build the per-region setup templates ─────────────────────────
-# region_setup gives us a ComponentVector where each top-level key is a region/controller name
+# region_setup gives us a ComponentVector where each top-level key is a region name
 # and the values underneath are scalars that the user fills in
-state_setup = region_setup(state_vars, region_symbols, n_cells, controller_symbols, n_faces)
-fixed_setup = region_setup(fixed_vars, region_symbols, n_cells, controller_symbols, n_faces)
+state_setup = region_setup(state_vars, region_symbols, n_cells, n_faces)
+fixed_setup = region_setup(fixed_vars, region_symbols, n_cells, n_faces)
 
 # ── Step 2: Build the flat merged vectors (per-cell) ─────────────────────
 # These are the actual runtime vectors with zeros(n_cells)
@@ -469,7 +418,7 @@ f_closure_implicit = (du, u, p, t) -> methanol_reformer_f_test!(
     geo.cell_volumes, geo.cell_centroids,
     geo.cell_neighbor_areas, geo.cell_neighbor_normals, geo.cell_neighbor_distances,
     geo.unconnected_cell_face_map, geo.cell_face_areas, geo.cell_face_normals,
-    system.connection_groups, system.controller_groups, system.region_groups,
+    system.connection_groups, system.region_groups,
     du_fixed, u_fixed,
     full_axes
 )
@@ -523,3 +472,4 @@ mass_fractions_beginning - mass_fractions_end
 if record_sol == true
     sol_to_vtk(sol, u_named, grid, sim_file)
 end
+=#

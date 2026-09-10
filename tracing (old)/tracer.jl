@@ -1,7 +1,7 @@
 
 #=
 How these files flow into each other (in order)
-    - tracer.jl traces a controller_function, flux_function or region_function
+    - tracer.jl traces a flux_function or region_function
     - tracer_merging.jl merges the results from the tracer and records the times read and written to du and u as well as access history
     - tracer_classifying.jl classifies the variables as state, cache, or fixed
     - tracer_to_CompArray.jl converts the classified variables to a ComponentArray

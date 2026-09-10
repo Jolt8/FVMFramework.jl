@@ -25,7 +25,7 @@ function dict_to_component_vector(d::Dict{Symbol, Any}, n_cells::Int)
     return ComponentVector(; pairs...)
 end
 
-function region_setup(classified_vars::Dict{Vector{Symbol}, VarAccessLog}, region_symbols::Set{Symbol}, n_cells::Int, controller_symbols::Set{Symbol}, n_faces::Int)
+function region_setup(classified_vars::Dict{Vector{Symbol}, VarAccessLog}, region_symbols::Set{Symbol}, n_cells::Int, n_faces::Int)
     tree = Dict{Symbol, Any}()
 
     face_idxs = [Symbol("face_idx_$i") for i in 1:n_faces]
@@ -36,11 +36,6 @@ function region_setup(classified_vars::Dict{Vector{Symbol}, VarAccessLog}, regio
             clean_path = setdiff(path, region_symbols)
             region_symbol = filter(x -> x in region_symbols, path)[1]
             pushfirst!(clean_path, region_symbol)
-            template = :scalar
-        elseif any(in.(controller_symbols, Ref(path)))
-            clean_path = setdiff(path, controller_symbols)
-            controller_symbol = filter(x -> x in controller_symbols, path)[1]
-            pushfirst!(clean_path, controller_symbol)
             template = :scalar
         elseif any(in.(face_idxs, Ref(path)))
             clean_path = setdiff(path, face_idxs)

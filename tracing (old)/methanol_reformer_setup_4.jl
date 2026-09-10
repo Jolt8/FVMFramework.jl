@@ -52,12 +52,6 @@ state_heating_areas = ComponentVector(
     temp = 0.0
 )
 
-# Controller: temp_controller
-state_temp_controller = ComponentVector(
-    integral_error = 0.0
-)
-
-
 # ── Fixed Properties ─────────────────────────────────────────────────
 
 # Region: reforming_area (1424 cells)
@@ -119,19 +113,6 @@ fixed_heating_areas = ComponentVector(
     cp = 0.0
 )
 
-# Controller: temp_controller
-fixed_temp_controller = ComponentVector(
-        controllers = ComponentVector(
-        integral_time = 0.0,
-        initial_volumetric_input = 0.0,
-        desired_value = 0.0,
-        max_volumetric_input = 0.0,
-        min_volumetric_input = 0.0,
-        proportional_gain = 0.0,
-        derivative_time = 0.0
-    )
-)
-
 
 # ── Do not modify below this line ────────────────────────────────────
 
@@ -141,7 +122,6 @@ initial_state = Dict{Symbol, Any}(
     :outlet => state_outlet,
     :wall => state_wall,
     :heating_areas => state_heating_areas,
-    :temp_controller => state_temp_controller
 )
 
 fixed_properties = Dict{Symbol, Any}(
@@ -150,5 +130,4 @@ fixed_properties = Dict{Symbol, Any}(
     :outlet => fixed_outlet,
     :wall => fixed_wall,
     :heating_areas => fixed_heating_areas,
-    :temp_controller => fixed_temp_controller
 )

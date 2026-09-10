@@ -10,7 +10,7 @@
 
 Writes a Julia file at `filepath` that the user fills in to define:
 - Initial values for state variables per region
-- Values for fixed parameters per region/controller
+- Values for fixed parameters per region
 
 The generated file defines `get_initial_state()` and `get_fixed_properties()`
 which return the filled-in per-region ComponentVectors.
@@ -36,17 +36,6 @@ function generate_setup_script(filepath, state_setup_cv, fixed_setup_cv, system)
         end
     end
 
-    # Check for controller-level state vars
-    for cont in system.controller_groups
-        cont_sym = Symbol(cont.name)
-        if hasproperty(state_setup_cv, cont_sym)
-            controller_state = getproperty(state_setup_cv, cont_sym)
-            println(io, "# Controller: $(cont.name)")
-            _write_component_vector_template(io, "state_$(cont.name)", controller_state, "")
-            println(io, "")
-        end
-    end
-
     println(io, "")
 
     # ── Fixed Properties ──
@@ -63,16 +52,6 @@ function generate_setup_script(filepath, state_setup_cv, fixed_setup_cv, system)
         end
     end
 
-    for cont in system.controller_groups
-        cont_sym = Symbol(cont.name)
-        if hasproperty(fixed_setup_cv, cont_sym)
-            controller_fixed = getproperty(fixed_setup_cv, cont_sym)
-            println(io, "# Controller: $(cont.name)")
-            _write_component_vector_template(io, "fixed_$(cont.name)", controller_fixed, "")
-            println(io, "")
-        end
-    end
-
     # ── Return functions ──
     println(io, "")
     println(io, "# ── Do not modify below this line ────────────────────────────────────")
@@ -83,15 +62,8 @@ function generate_setup_script(filepath, state_setup_cv, fixed_setup_cv, system)
     for (i, reg) in enumerate(system.region_groups)
         reg_sym = Symbol(reg.name)
         if hasproperty(state_setup_cv, reg_sym)
-            comma = i < length(system.region_groups) || !isempty(system.controller_groups) ? "," : ""
+            comma = i < length(system.region_groups) ? "," : ""
             println(io, "    :$(reg.name) => state_$(reg.name)$(comma)")
-        end
-    end
-    for (i, cont) in enumerate(system.controller_groups)
-        cont_sym = Symbol(cont.name)
-        if hasproperty(state_setup_cv, cont_sym)
-            comma = i < length(system.controller_groups) ? "," : ""
-            println(io, "    :$(cont.name) => state_$(cont.name)$(comma)")
         end
     end
     println(io, ")")
@@ -102,15 +74,8 @@ function generate_setup_script(filepath, state_setup_cv, fixed_setup_cv, system)
     for (i, reg) in enumerate(system.region_groups)
         reg_sym = Symbol(reg.name)
         if hasproperty(fixed_setup_cv, reg_sym)
-            comma = i < length(system.region_groups) || !isempty(system.controller_groups) ? "," : ""
+            comma = i < length(system.region_groups) ? "," : ""
             println(io, "    :$(reg.name) => fixed_$(reg.name)$(comma)")
-        end
-    end
-    for (i, cont) in enumerate(system.controller_groups)
-        cont_sym = Symbol(cont.name)
-        if hasproperty(fixed_setup_cv, cont_sym)
-            comma = i < length(system.controller_groups) ? "," : ""
-            println(io, "    :$(cont.name) => fixed_$(cont.name)$(comma)")
         end
     end
     println(io, ")")
@@ -170,16 +135,6 @@ function populate_merged_vector!(merged_cv, setup_dict, system)
         _populate_region_cells!(merged_cv, region_values, reg.region_cells)
     end
 
-    for cont in system.controller_groups
-        cont_sym = Symbol(cont.name)
-        if !haskey(setup_dict, cont_sym)
-            continue
-        end
-        controller_values = setup_dict[cont_sym]
-        # Controllers typically use controller_id as index, not cell_id
-        _populate_controller!(merged_cv, controller_values, cont.id)
-    end
-
     return merged_cv
 end
 
@@ -203,25 +158,6 @@ function _populate_region_cells!(merged_cv, region_values, region_cells)
             end
         elseif val isa Number && merged_field isa Number
             # Scalar to scalar
-            setproperty!(merged_cv, pname, val)
-        end
-    end
-end
-
-
-"""
-Helper: populates controller-indexed values.
-"""
-function _populate_controller!(merged_cv, controller_values, controller_id)
-    for pname in propertynames(controller_values)
-        val = getproperty(controller_values, pname)
-        merged_field = getproperty(merged_cv, pname)
-
-        if val isa ComponentVector && merged_field isa ComponentVector
-            _populate_controller!(merged_field, val, controller_id)
-        elseif val isa Number && merged_field isa AbstractVector
-            merged_field[controller_id] = val
-        elseif val isa Number && merged_field isa Number
             setproperty!(merged_cv, pname, val)
         end
     end
