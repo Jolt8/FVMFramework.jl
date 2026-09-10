@@ -140,7 +140,7 @@ function Base.show(io::IO, A::VirtualFVMArray)
     ax = getfield(A, :axes)
     #println(keys(ax))
     #println(keys(A))
-    #(:mass_fractions, :pressure, :temp, :molar_concentrations, :mw_avg, :species_mass_flows, :net_rates, :Pr, :rho, :heat, :mass_face, :mass)
+    #(:mass_fractions, :pressure, :temp, :molar_concentrations, :mw_avg, :species_masses, :net_rates, :Pr, :rho, :heat, :mass_face, :mass)
     for name in keys(ax)
         println(io, name, " = ", getproperty(A, name)[:])
         val = ax[name]
