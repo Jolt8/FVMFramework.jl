@@ -83,7 +83,7 @@ add_region!(
         ), #species_molecular_weights [kg/mol]
     ), 
     optimized_syms = [],
-    cache_syms = [:heat, :molar_concentrations, :mass, :species_mass_flows, :mw_avg, :rho], 
+    cache_syms = [:heat, :molar_concentrations, :mass, :species_masses, :mw_avg, :rho], 
     region_function =
     function reforming_area!(du, u, cell_id, vol)
         #property updating/retrieval
@@ -137,7 +137,7 @@ add_region!(
     ),
     properties = surrounding_fluid_properties,
     optimized_syms = [],
-    cache_syms = [:heat, :molar_concentrations, :mass, :species_mass_flows, :mw_avg, :rho], 
+    cache_syms = [:heat, :molar_concentrations, :mass, :species_masses, :mw_avg, :rho], 
     region_function =
     function surrounding_fluid!(du, u, cell_id, vol)
         #property updating/retrieval
@@ -239,7 +239,7 @@ species_names = keys(config.regions[1].properties.species_ids)
 #species caches are for things like mass_face, which has an entry for every face of every cell rather than entries for each cell
 special_caches = (
     molar_concentrations = NamedTuple{species_names}(fill(zeros(n_cells), length(species_names))), #I'm starting to really enjoy these NamedTuple constructors
-    species_mass_flows = NamedTuple{species_names}(fill(zeros(n_cells), length(species_names)))
+    species_masses = NamedTuple{species_names}(fill(zeros(n_cells), length(species_names)))
 )
 
 du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, special_caches);
@@ -250,20 +250,71 @@ u_test = (; create_views_inline(u0_vec, system.u_proto_axes)..., create_views_in
 du_test = (; create_views_inline(du0_vec, system.du_proto_axes)..., create_views_inline(get_tmp(system.du_diff_cache_vec, 0.0), system.du_cache_axes)...
 )
 
-f_closure_implicit = (du, u, p, t) -> methanol_reformer_f_test!(
-    du, u, p, t, 
+function solve_system!(du, u, p, t, geo, system)
+    properties = ComponentVector(system.properties_vec, system.properties_axes)
 
-    geo.cell_volumes, geo.cell_centroids,
-    geo.cell_neighbor_areas, geo.cell_neighbor_normals, geo.cell_neighbor_distances,
-    geo.unconnected_cell_face_map, geo.cell_face_areas, geo.cell_face_normals,
+    u.rho .= properties.rho
 
-    system.connection_groups, system.controller_groups, system.region_groups, system.patch_groups,
-    system.merged_properties,
+    u.temp[:] .= temp(t)
 
-    system.du_diff_cache_vec, system.u_diff_cache_vec,
-    system.du_proto_axes, system.u_proto_axes,
-    system.du_cache_axes, system.u_cache_axes
-)
+    p_named = create_views_inline(p, system.p_axes)
+
+    u.diffusion_pre_exponential_factor .= p_named.diffusion_pre_exponential_factor
+    u.diffusion_activation_energy .= p_named.diffusion_activation_energy
+
+    solve_connection_groups!(du, u, geo, system)
+    solve_patch_groups!(du, u, geo, system)
+    solve_region_groups!(du, u, geo, system)
+
+    for reg in region_groups
+        if reg.name == "surrounding_fluid"
+            total_methylene_blue_dm_dt = 0.0
+            total_water_dm_dt = 0.0
+            total_reservoir_mass = 0.0
+            total_reservoir_volume = 0.0
+
+            for cell_id in reg.region_cells
+                total_methylene_blue_dm_dt += du.mass_fractions.methylene_blue[cell_id] * u.rho[cell_id] * cell_volumes[cell_id]
+                total_water_dm_dt += du.mass_fractions.water[cell_id] * u.rho[cell_id] * cell_volumes[cell_id]
+
+                total_reservoir_mass += u.rho[cell_id] * cell_volumes[cell_id]
+                total_reservoir_volume += cell_volumes[cell_id]
+            end
+
+            well_mixed_methylene_blue_dt = total_methylene_blue_dm_dt / total_reservoir_mass
+            well_mixed_water_dt = total_water_dm_dt / total_reservoir_mass
+            
+            for cell_id in reg.region_cells
+                du.mass_fractions.methylene_blue[cell_id] = well_mixed_methylene_blue_dt
+                du.mass_fractions.water[cell_id] = well_mixed_water_dt
+            end
+        end
+        if reg.name == "dialysis_tubing_interior"
+            total_methylene_blue_dm_dt = 0.0
+            total_water_dm_dt = 0.0
+            total_reservoir_mass = 0.0
+            total_reservoir_volume = 0.0
+
+            for cell_id in reg.region_cells
+                total_methylene_blue_dm_dt += du.mass_fractions.methylene_blue[cell_id] * u.rho[cell_id] * cell_volumes[cell_id]
+                total_water_dm_dt += du.mass_fractions.water[cell_id] * u.rho[cell_id] * cell_volumes[cell_id]
+
+                total_reservoir_mass += u.rho[cell_id] * cell_volumes[cell_id]
+                total_reservoir_volume += cell_volumes[cell_id]
+            end
+
+            well_mixed_methylene_blue_dt = total_methylene_blue_dm_dt / total_reservoir_mass
+            well_mixed_water_dt = total_water_dm_dt / total_reservoir_mass
+            
+            for cell_id in reg.region_cells
+                du.mass_fractions.methylene_blue[cell_id] = well_mixed_methylene_blue_dt
+                du.mass_fractions.water[cell_id] = well_mixed_water_dt
+            end
+        end
+    end
+end
+
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
 #just remove t from the above closure function and from methanol_reformer_f_test! itself to NonlinearSolve this system
 
 p_guess = 0.0

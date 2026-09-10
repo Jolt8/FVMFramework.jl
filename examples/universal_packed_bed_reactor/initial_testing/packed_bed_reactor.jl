@@ -179,7 +179,7 @@ end
 #you could also add any of these functions individually
 
 function sum_and_cap_fluxes!(du, u, cell_id, vol)
-    sum_mass_flux_face_to_cell!(du, u, cell_id) #this always has to go before cap_mass_flux_to_pressure_change!
+    sum_mass_flux_face_to_cell!(du, u, cell_id, vol) #this always has to go before cap_mass_flux_to_pressure_change!
 
     cap_heat_flux_to_temp_change!(du, u, cell_id, vol)
     cap_mass_flux_to_pressure_change!(du, u, cell_id, vol)
@@ -199,7 +199,7 @@ add_setup_syms!(config;
     mw_avg = u"kg/mol",
     rho = u"kg/m^3",
     molar_concentrations = u"mol/m^3",
-    species_mass_flows = u"kg/s",
+    species_masses = u"kg",
     net_rates = u"mol/s",
     mass = u"kg",
     mass_face = u"kg",
@@ -216,7 +216,7 @@ add_setup_syms!(config;
         molar_concentrations = NamedTuple{species_names}(
             Tuple(zeros(n_cells)u"mol/m^3" for _ in 1:length(species_names))
         ),
-        species_mass_flows = NamedTuple{species_names}(
+        species_masses = NamedTuple{species_names}(
             Tuple(zeros(n_cells)u"kg" for _ in 1:length(species_names))
         )
     ),
@@ -281,8 +281,8 @@ add_patch!(
         #    du_mass_fractions[species[idx_a]] *= 0.0
         #end
 
-        for_fields!(u.mass_fractions, du.species_mass_flows) do species, u_mass_fractions, du_species_mass_flows
-            du_species_mass_flows[species[idx_a]] += mass_in * u_mass_fractions[species[idx_a]]
+        for_fields!(u.mass_fractions, du.species_masses) do species, u_mass_fractions, du_species_mass
+            du_species_mass[species[idx_a]] += mass_in * u_mass_fractions[species[idx_a]]
         end
     end
 )
@@ -355,8 +355,8 @@ add_patch!(
 
         du.mass_face[idx_a, face_idx] -= mass_out
 
-        for_fields!(u.mass_fractions, du.species_mass_flows) do species, u_mass_fractions, du_species_mass_flows
-            du_species_mass_flows[species[idx_a]] -= mass_out * u_mass_fractions[species[idx_a]]
+        for_fields!(u.mass_fractions, du.species_masses) do species, u_mass_fractions, du_species_mass
+            du_species_mass[species[idx_a]] -= mass_out * u_mass_fractions[species[idx_a]]
         end
         #this is to prevent the concentration of all species from building up at the outlet
 
@@ -417,7 +417,6 @@ function solve_system!(du, u, p, t, geo, system)
     end
 
     solve_connection_groups!(du, u, geo, system)
-    #solve_controller_groups!(du, u, geo, system)
     solve_patch_groups!(du, u, geo, system)
     solve_region_groups!(du, u, geo, system)
 end

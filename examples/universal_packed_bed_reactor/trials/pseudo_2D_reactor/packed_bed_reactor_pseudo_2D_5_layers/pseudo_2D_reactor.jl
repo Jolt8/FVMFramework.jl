@@ -149,7 +149,7 @@ end
 #you could also add any of these functions individually
 
 function fluid_sum_and_cap_fluxes!(du, u, p, t, cell_id, vol)
-    sum_mass_flux_face_to_cell!(du, u, cell_id) #this always has to go before cap_mass_flux_to_pressure_change!
+    sum_mass_flux_face_to_cell!(du, u, cell_id, vol) #this always has to go before cap_mass_flux_to_pressure_change!
 
     cap_heat_flux_to_temp_change!(du, u, cell_id, vol)
     cap_mass_flux_to_pressure_change!(du, u, cell_id, vol)
@@ -232,7 +232,7 @@ add_setup_syms!(config;
         thermocouple_to_heating_wire_thermal_resistance = u"K/W",
         wattage_received_per_m = u"W/m",
         molar_concentrations = u"mol/m^3",
-        species_mass_flows = u"kg/s",
+        species_masses = u"kg",
         net_rates = u"mol/s",
         mass = u"kg",
         mass_face = u"kg",
@@ -251,11 +251,10 @@ add_setup_syms!(config;
         molar_concentrations = NamedTuple{species_names}(
             Tuple(zeros(n_cells)u"mol/m^3" for _ in 1:length(species_names))
         ),
-        species_mass_flows = NamedTuple{species_names}(
+        species_masses = NamedTuple{species_names}(
             Tuple(zeros(n_cells)u"kg" for _ in 1:length(species_names))
         )
     ),
-    second_order_syms = [],
     optimized_parameters = ComponentVector(
         insulation_to_air_overall_heat_transfer_coefficient_to_environment = 0.0u"W/(m^2*K)",
         pipe_endcaps_to_air_thermal_conductance = 0.0u"W/K",
@@ -374,8 +373,8 @@ add_region!(
         du.mass_face[cell_id, 6] -= u.pipe_mass_flow[cell_id]
 
         #this is to prevent the concentration of all species from building up at the outlet
-        for_fields!(u.mass_fractions, du.species_mass_flows) do species, u_mass_fractions, du_species_mass_flows
-            du_species_mass_flows[species[cell_id]] -= u.pipe_mass_flow[cell_id] * u_mass_fractions[species[cell_id]]
+        for_fields!(u.mass_fractions, du.species_masses) do species, u_mass_fractions, du_species_mass
+            du_species_mass[species[cell_id]] -= u.pipe_mass_flow[cell_id] * u_mass_fractions[species[cell_id]]
         end
 
         #du.heat[cell_id] *= 0.0
@@ -961,7 +960,6 @@ function trial_independent_solve_system!(du, u, p_vec, t, geo, system)
     end
 
     solve_connection_groups!(du, u, p, t, geo, system)
-    solve_controller_groups!(du, u, p, t, geo, system)
     solve_patch_groups!(du, u, p, t, geo, system)
     solve_region_groups!(du, u, p, t, geo, system)
 end

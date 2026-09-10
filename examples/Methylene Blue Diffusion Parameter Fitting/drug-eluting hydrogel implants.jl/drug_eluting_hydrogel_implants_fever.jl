@@ -83,7 +83,7 @@ add_region!(
         ), #species_molecular_weights [kg/mol]
     ), 
     optimized_syms = [],
-    cache_syms = [:heat, :molar_concentrations, :mass, :species_mass_flows, :mw_avg, :rho], 
+    cache_syms = [:heat, :molar_concentrations, :mass, :species_masses, :mw_avg, :rho], 
     region_function =
     function reforming_area!(du, u, cell_id, vol)
         #property updating/retrieval
@@ -137,7 +137,7 @@ add_region!(
     ),
     properties = surrounding_fluid_properties,
     optimized_syms = [],
-    cache_syms = [:heat, :molar_concentrations, :mass, :species_mass_flows, :mw_avg, :rho], 
+    cache_syms = [:heat, :molar_concentrations, :mass, :species_masses, :mw_avg, :rho], 
     region_function =
     function surrounding_fluid!(du, u, cell_id, vol)
         #property updating/retrieval
@@ -239,7 +239,7 @@ species_names = keys(config.regions[1].properties.species_ids)
 #species caches are for things like mass_face, which has an entry for every face of every cell rather than entries for each cell
 special_caches = (
     molar_concentrations = NamedTuple{species_names}(fill(zeros(n_cells), length(species_names))), #I'm starting to really enjoy these NamedTuple constructors
-    species_mass_flows = NamedTuple{species_names}(fill(zeros(n_cells), length(species_names)))
+    species_masses = NamedTuple{species_names}(fill(zeros(n_cells), length(species_names)))
 )
 
 du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, special_caches);
@@ -257,7 +257,7 @@ f_closure_implicit = (du, u, p, t) -> methanol_reformer_f_test!(
     geo.cell_neighbor_areas, geo.cell_neighbor_normals, geo.cell_neighbor_distances,
     geo.unconnected_cell_face_map, geo.cell_face_areas, geo.cell_face_normals,
 
-    system.connection_groups, system.controller_groups, system.region_groups, system.patch_groups,
+    system.connection_groups, system.region_groups, system.patch_groups,
     system.merged_properties,
 
     system.du_diff_cache_vec, system.u_diff_cache_vec,

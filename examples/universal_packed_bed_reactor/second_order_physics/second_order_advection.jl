@@ -58,7 +58,7 @@ function second_order_all_species_advection!(
         limiter_function
     )
 
-    du.species_mass_flows.methanol[idx_a] += (du.mass_face[idx_a, face_idx] * upwinded_methanol_mass_fraction)
+    du.species_masses.methanol[idx_a] += (du.mass_face[idx_a, face_idx] * upwinded_methanol_mass_fraction)
 
     upwinded_water_mass_fraction = second_order_upwind(
         du, u, 
@@ -71,7 +71,7 @@ function second_order_all_species_advection!(
         limiter_function
     )
 
-    du.species_mass_flows.water[idx_a] += (du.mass_face[idx_a, face_idx] * upwinded_water_mass_fraction)
+    du.species_masses.water[idx_a] += (du.mass_face[idx_a, face_idx] * upwinded_water_mass_fraction)
 
     upwinded_carbon_monoxide_mass_fraction = second_order_upwind(
         du, u, 
@@ -84,7 +84,7 @@ function second_order_all_species_advection!(
         limiter_function
     )
 
-    du.species_mass_flows.carbon_monoxide[idx_a] += (du.mass_face[idx_a, face_idx] * upwinded_carbon_monoxide_mass_fraction)
+    du.species_masses.carbon_monoxide[idx_a] += (du.mass_face[idx_a, face_idx] * upwinded_carbon_monoxide_mass_fraction)
 
     upwinded_hydrogen_mass_fraction = second_order_upwind(
         du, u, 
@@ -97,7 +97,7 @@ function second_order_all_species_advection!(
         limiter_function
     )
 
-    du.species_mass_flows.hydrogen[idx_a] += (du.mass_face[idx_a, face_idx] * upwinded_hydrogen_mass_fraction)
+    du.species_masses.hydrogen[idx_a] += (du.mass_face[idx_a, face_idx] * upwinded_hydrogen_mass_fraction)
 
     upwinded_carbon_dioxide_mass_fraction = second_order_upwind(
         du, u, 
@@ -110,7 +110,7 @@ function second_order_all_species_advection!(
         limiter_function
     )
 
-    du.species_mass_flows.carbon_dioxide[idx_a] += (du.mass_face[idx_a, face_idx] * upwinded_carbon_dioxide_mass_fraction)
+    du.species_masses.carbon_dioxide[idx_a] += (du.mass_face[idx_a, face_idx] * upwinded_carbon_dioxide_mass_fraction)
 
     upwinded_air_mass_fraction = second_order_upwind(
         du, u, 
@@ -123,7 +123,7 @@ function second_order_all_species_advection!(
         limiter_function
     )
 
-    du.species_mass_flows.air[idx_a] += (du.mass_face[idx_a, face_idx] * upwinded_air_mass_fraction)
+    du.species_masses.air[idx_a] += (du.mass_face[idx_a, face_idx] * upwinded_air_mass_fraction)
 end
 
 function second_order_enthalpy_advection!(

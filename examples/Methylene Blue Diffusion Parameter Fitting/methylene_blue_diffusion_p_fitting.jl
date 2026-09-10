@@ -460,8 +460,7 @@ input_experimental_data(trials, xf, "T3";
 
 du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, special_caches)
 
-u_test = (; create_views_inline(u0_vec, system.u_proto_axes)..., create_views_inline(get_tmp(system.u_diff_cache_vec, 0.0), system.u_cache_axes)...
-)
+u_test = (; create_views_inline(u0_vec, system.u_proto_axes)..., create_views_inline(get_tmp(system.u_diff_cache_vec, 0.0), system.u_cache_axes)...)
 
 f_closure_implicit_pre = (du, u, p, t, state_data, state_time) -> 
 methylene_blue_diffuion_parameter_fitting_f!(
@@ -474,7 +473,7 @@ methylene_blue_diffuion_parameter_fitting_f!(
     geo.cell_neighbor_areas, geo.cell_neighbor_normals, geo.cell_neighbor_distances,
     geo.unconnected_cell_face_map, geo.cell_face_areas, geo.cell_face_normals, 
 
-    system.connection_groups, system.controller_groups, system.patch_groups, system.region_groups,
+    system.connection_groups, system.patch_groups, system.region_groups,
 
     system.merged_properties, system.du_diff_cache_vec, system.u_diff_cache_vec,
     system.du_proto_axes, system.u_proto_axes,

@@ -212,7 +212,7 @@ add_setup_syms!(config;
         mw_avg = u"kg/mol",
         rho = u"kg/m^3",
         molar_concentrations = u"mol/m^3",
-        species_mass = u"kg",
+        species_masses = u"kg",
         net_rates = u"mol/s",
         mass = u"kg",
         mass_face = u"kg",
@@ -229,7 +229,7 @@ add_setup_syms!(config;
         molar_concentrations = NamedTuple{species_names}(
             Tuple(zeros(n_cells)u"mol/m^3" for _ in 1:length(species_names))
         ),
-        species_mass = NamedTuple{species_names}(
+        species_masses = NamedTuple{species_names}(
             Tuple(zeros(n_cells)u"kg" for _ in 1:length(species_names))
         )
     ),
@@ -337,7 +337,7 @@ add_region!(
         du.mass_face[cell_id, 6] -= u.pipe_mass_flow[cell_id]
         #this is simulating the mass flow out of the system
 
-        for_fields!(u.mass_fractions, du.species_mass) do species, u_mass_fractions, du_species_mass
+        for_fields!(u.mass_fractions, du.species_masses) do species, u_mass_fractions, du_species_mass
             du_species_mass[species[cell_id]] -= u.pipe_mass_flow[cell_id] * u_mass_fractions[species[cell_id]]
         end
         #this is to prevent the concentration of all species from building up at the outlet

@@ -23,6 +23,6 @@ function arrenhius_mass_fraction_diffusion_meth_blue_and_water!(
     meth_blue_concentration_gradient = (u.mass_fractions.methylene_blue[idx_b] - u.mass_fractions.methylene_blue[idx_a]) / dist
     meth_blue_diffusion = -rho_avg * meth_blue_species_diffusion_coefficient * meth_blue_concentration_gradient * area
 
-    du.species_mass_flows.methylene_blue[idx_a] -= meth_blue_diffusion
-    du.species_mass_flows.water[idx_a] += meth_blue_diffusion
+    du.species_masses.methylene_blue[idx_a] -= meth_blue_diffusion
+    du.species_masses.water[idx_a] += meth_blue_diffusion
 end
