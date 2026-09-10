@@ -187,7 +187,6 @@ function solve_system!(du, u, p, t, geo, system)
     end
 
     solve_connection_groups!(du, u, p, t, geo, system)
-    solve_controller_groups!(du, u, p, t, geo, system)
     solve_patch_groups!(du, u, p, t, geo, system)
     solve_region_groups!(du, u, p, t, geo, system)
 end
