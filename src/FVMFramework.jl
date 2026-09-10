@@ -49,13 +49,6 @@ export build_fvm_geo_into_struct, FVMGeometry, FVMGeometryTetra, FVMGeometryHexa
 include("geometry/topology_checking.jl")
 export check_cellset_connectivity, check_grid_connectivity
 
-# ----- Misc. Tools
-include("named_tuple_interface/axes_generator.jl")
-export create_axes
-
-include("named_tuple_interface/inline_views.jl")
-export create_views_inline
-
 # ----- ComponentArray Addons -----
 include("component_arrays_addons/simple_merge.jl")
 export merge_properties
@@ -73,29 +66,22 @@ export AbstractPhysics
 
 #   ---- Flux Methods ----
 #       --- Flux Physics ---
-include("physics/flux_methods/flux_physics/advection.jl")
+include("physics/flux_physics/advection.jl")
 export species_advection!, all_species_advection!, enthalpy_advection!
 
-include("physics/flux_methods/flux_physics/darcy_flow.jl")
+include("physics/flux_physics/darcy_flow.jl")
 export get_darcy_mass_flux, pressure_driven_mass_flux!
 
-include("physics/flux_methods/flux_physics/diffusion.jl")
+include("physics/flux_physics/diffusion.jl")
 export species_numerical_flux, mass_fraction_diffusion!
 
-include("physics/flux_methods/flux_physics/heat_transfer.jl")
+include("physics/flux_physics/heat_transfer.jl")
 export get_k_effective, numerical_flux, heat_diffusion!
 
 #   ---- Internal Methods ----
 #       --- Internal Capacities ---
-include("physics/internal_methods/capacity_helper_functions.jl")
+include("physics/capacity_helper_functions.jl")
 export cap_heat_flux_to_temp_change!, cap_mass_flux_to_pressure_change!, cap_species_mass_flux_to_mass_fraction_change!
-
-#       --- Internal Physics ---
-include("physics/internal_methods/internal_physics/chemistry.jl")
-export power_law_react_cell!
-
-include("physics/internal_methods/internal_physics/PAM_reforming.jl")
-export PAM_reforming_react_cell!
 
 #   ---- Helper Functions ----
 include("physics/physics_helper_functions.jl")
@@ -132,9 +118,6 @@ export add_region!, update_region!
 include("setup/sim_config_patches.jl")
 export add_patch!, update_patch!
 
-include("setup/sim_config_controllers.jl")
-export add_controller!
-
 include("setup/sim_config_units.jl")
 export run_and_check_units
 
@@ -163,32 +146,12 @@ include("solvers/common_operator_methods/unpack_fvm_state.jl")
 export unpack_fvm_state
 
 include("solvers/common_operator_methods/shared_group_functions.jl")
-export solve_connection_group!, solve_controller_group!, update_region_group!, solve_region_group!, solve_patch_group!
+export solve_connection_group!, update_region_group!, solve_region_group!, solve_patch_group!
 
 include("solvers/common_operator_methods/further_simplified_group_functions.jl")
-export solve_connection_groups!, solve_controller_groups!, update_region_groups!, solve_region_groups!, solve_patch_groups!
-export default_order_solve_all_groups!
+export solve_connection_groups!, update_region_groups!, solve_region_groups!, solve_patch_groups!
 
 #   ---- FVM Operators ----
-include("solvers/fvm_operators/methanol_reformer_op_different_connections.jl")
-export methanol_reformer_f_test!
-
-include("solvers/fvm_operators/methanol_reformer_op_steady_state.jl")
-export methanol_reformer_f_steady_state!
-
-include("solvers/fvm_operators/parameter_fitting_operator.jl")
-export methylene_blue_diffuion_parameter_fitting_f!
-
-include("solvers/fvm_operators/heat_transfer_minimal_allocs.jl")
-export heat_transfer_f_test!
-
-include("solvers/fvm_operators/pipe_f!.jl")
-export pipe_f!
-
-include("solvers/fvm_operators/generic_operator.jl")
+include("solvers/fvm_operators/fvm_operator.jl")
 export fvm_operator!
-
-#   ---- Solver Debugging ----
-include("solvers/solver_debugging.jl")
-export debug_region!
 end
