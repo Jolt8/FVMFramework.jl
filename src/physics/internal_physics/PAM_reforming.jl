@@ -2,7 +2,28 @@ function unit_independent_max(val, min_val)
     return max(ustrip(val), min_val) * unit(val)
 end
 
+function van_t_hoff(A, dH, T, R)
+    #K = A * exp(dH/RT)
+    return A * exp(-dH / (R * T))
+end
+
 #this is for Peppley-Amphlett methanol steam reforming (MSR) kinetics
+
+"""
+    PAM_reforming_react_cell!(du, u, cell_id, vol)
+
+    Calculates the net reaction rates using the Peppley-Amphlett methanol steam reforming kinetics.
+    Note that this is likely not accurate beacuse I think some unit discrepancies between this package and the original source causes it to be innacurate.
+    Thus, this likely needs more testing and more validation, but I'm not working on methanol reforming right now, so I'll just leave it for now.
+    This does serve as a good example of the kind of complicated physics that are possible in this package.
+
+    
+    Parameters:
+    - du - The residual array to be updated
+    - u - The state array
+    - cell_id - The ID of the cell to calculate the reaction rates for
+    - vol - The volume of the cell
+"""
 function PAM_reforming_react_cell!(du, u, cell_id, vol)
     mw_avg!(u, cell_id)
     rho_ideal!(u, cell_id)
