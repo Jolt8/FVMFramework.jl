@@ -101,11 +101,34 @@ function write_to_vtk_helper!(vtk, named_step, n_cells, geo; prev_field = "", pr
     end
 end
 
+
+"""
+    sol_to_vtk(sol, du_named, u_named, grid, geo, sim_file, root_dir; include_zeros_fields = true)
+
+This function takes in the solver's output, and the the two vectors produced by 'regenerate_fvm_state' (du_named and u_named)
+and writes them to a vtk file. The simulation file is requied to automatically name the folder and the root_dir is required as the place to output
+the vtk files. 
+
+include_zeros_fields = true will write all fields including those that are zero across all cells
+This is useful for if you're unsure if a field is actually getting updated properly.
+
+Otherwise, it will only write write fields that have non-zero values somewhere.
+
+Parameters
+    - sol: The output of the solver. 
+    - du_named: The output of 'regenerate_fvm_state'. 
+    - u_named: The output of 'regenerate_fvm_state'.
+    - grid: The grid. 
+    - geo: The geometry. 
+    - sim_file: The simulation file. 
+    - root_dir: The root directory. 
+    - include_zeros_fields: Whether to include fields that are zero.
+
+Returns
+    None
+"""
 function sol_to_vtk(sol, du_named, u_named, grid, geo, sim_file, root_dir; include_zeros_fields = true)
     date_and_time = Dates.format(now(), "I.MM.SS p yyyy-mm-dd")
-    #date_and_time = Dates.format(now(), "I.MM.SS p")
-
-    #root_dir = "C://Users//wille//Desktop//Julia_cfd_output_files"
 
     project_name = replace(basename(sim_file), r".jl" => "")
 
