@@ -15,7 +15,7 @@ Regenerates the FVM state from a solution object.
 - `du_list`: List of derivative vectors
 - `u_list`: List of state vectors
 """
-function regenerate_fvm_state(sol, system, solve_system!, geo, p_guess; u_additional_information = ComponentVector())
+function regenerate_fvm_state(sol, system, solve_system!, geo, p_guess; u_additional_information = ComponentVector(), track_progress = false)
     #we don't need an du_additional_information because we're not updating any new fields each time and because we can just put derivatives in u_additional_information
     du_list = ComponentVector[]
     u_list = ComponentVector[]
@@ -69,6 +69,10 @@ function regenerate_fvm_state(sol, system, solve_system!, geo, p_guess; u_additi
         end
 
         t_last = t
+
+        if track_progress == true
+            println("regenerating timestep $t of $(sol.t[end]), remaining steps = $(length(sol.t)-i)")
+        end
     end
 
     return du_list, u_list

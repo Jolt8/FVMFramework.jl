@@ -24,7 +24,7 @@ using FVMFramework
 L = 1.0u"m"
 H = 0.1u"m"
 Nx = 100
-Ny = 200
+Ny = 10
 Nz = 1
 
 grid_dimensions = (Nx, Ny, Nz)
@@ -48,7 +48,8 @@ u_proto = ComponentVector(
     pressure = zeros(n_cells)u"Pa",
 )
 
-config = create_fvm_config(grid, u_proto)
+config = create_fvm_config(grid, u_proto);
+
 
 # Fluid parameters (Re = 100)
 Re = 100.0
@@ -69,6 +70,7 @@ fluid_properties = ComponentVector(
     dy = dy_val,
     dz = dz_val,
 )
+
 
 add_setup_syms!(
     config;
@@ -156,20 +158,11 @@ end
 
 # Boundary patch flux
 function wall_patch_flux_generic!(
-    du,
-    u,
-    p,
-    t,
-    idx_a,
-    idx_b,
-    face_idx,
-    cell_face_areas,
-    cell_face_normals,
-    cell_neighbor_distances,
-    cell_volumes,
-    u_bc,
-    v_bc,
-    w_bc,
+    du, u, p, t,
+    idx_a, idx_b, face_idx,
+    cell_face_areas, cell_face_normals,
+    cell_neighbor_distances, cell_volumes,
+    u_bc, v_bc, w_bc
 )
     area = cell_face_areas[idx_a][face_idx]
     norm = cell_face_normals[idx_a][face_idx]
@@ -204,59 +197,29 @@ end
 
 # Specialized patch functions (unitless)
 stationary_wall_flux!(
-    du,
-    u,
-    p,
-    t,
-    idx_a,
-    idx_b,
-    face_idx,
-    cell_face_areas,
-    cell_face_normals,
-    cell_neighbor_distances,
-    cell_volumes,
+    du, u, p, t,
+    idx_a, idx_b, face_idx,
+    cell_face_areas, cell_face_normals,
+    cell_neighbor_distances, cell_volumes,
 ) = wall_patch_flux_generic!(
-    du,
-    u,
-    p,
-    t,
-    idx_a,
-    idx_b,
-    face_idx,
-    cell_face_areas,
-    cell_face_normals,
-    cell_neighbor_distances,
-    cell_volumes,
-    0.0,
-    0.0,
-    0.0,
+    du, u, p, t,
+    idx_a, idx_b, face_idx,
+    cell_face_areas, cell_face_normals,
+    cell_neighbor_distances, cell_volumes,
+    0.0, 0.0, 0.0
 )
 
 moving_lid_flux!(
-    du,
-    u,
-    p,
-    t,
-    idx_a,
-    idx_b,
-    face_idx,
-    cell_face_areas,
-    cell_face_normals,
-    cell_neighbor_distances,
-    cell_volumes,
+    du, u, p, t,
+    idx_a, idx_b, face_idx,
+    cell_face_areas, cell_face_normals,
+    cell_neighbor_distances, cell_volumes,
 ) = wall_patch_flux_generic!(
-    du,
-    u,
-    idx_a,
-    idx_b,
-    face_idx,
-    cell_face_areas,
-    cell_face_normals,
-    cell_neighbor_distances,
-    cell_volumes,
-    1.0,
-    0.0,
-    0.0,
+    du, u, p, t,
+    idx_a, idx_b, face_idx,
+    cell_face_areas, cell_face_normals,
+    cell_neighbor_distances, cell_volumes,
+    1.0, 0.0, 0.0
 )
 
 # Mapping connection functions
@@ -313,8 +276,7 @@ add_patch!(
 )
 
 # Finish FVM configuration
-du0_vec, u0_vec, geo, system =
-    finish_fvm_config(config, connection_map_function, check_units = false)
+du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, check_units = false)
 
 # System solver function
 function solve_system!(du, u, p, t, geo, system)
@@ -332,10 +294,7 @@ f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)
 
 # Detect Jacobian sparsity for NonlinearProblem
 nl_jac_sparsity = ADTypes.jacobian_sparsity(
-    (du, u) -> f_closure_steady(du, u, p_guess),
-    du0_vec,
-    u0_vec,
-    detector,
+    (du, u) -> f_closure_steady(du, u, p_guess), du0_vec, u0_vec, detector
 ) 
 #this scales absolutely abysmally as the number of cells goes up
 #for example, a 10x increase in the amount of cells made this take around 100x longer! 
@@ -351,6 +310,12 @@ println("Solving the Navier-Stokes ODE system...")
 @time sol = solve(
     implicit_prob,
     FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
+    callback = approximate_time_to_finish_cb,
+)
+
+@time sol = solve(
+    implicit_prob,
+    FBDF(linsolve = SparspakFactorization()),
     callback = approximate_time_to_finish_cb,
 )
 #for 100000 seconds of sim time:
@@ -369,18 +334,24 @@ println("Solving the Navier-Stokes ODE system...")
 println("ODE solving complete. Rebuilding state for VTK output...")
 
 u_named = []
-for i in eachindex(sol.u)
-    step_u = ComponentVector(sol.u[i], system.state_axes)
+
+du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_guess, track_progress = true)
+
+for i in eachindex(u_named)
+    step_u = u_named[i]
     vel_vec = [
-        SVector{3,Float64}(step_u.u_vel[c], step_u.v_vel[c], step_u.w_vel[c]) for
+        [ [step_u.u_vel[c], step_u.v_vel[c], step_u.w_vel[c]] for c = 1:n_cells ]
+    ]
+    u_named[i] = merge_properties(u_named[i], ComponentVector(velocity = vel_vec, ))
+
+    flow_vec = [
+        SVector{3,Float64}(step_u.u_flow[c], step_u.v_flow[c], step_u.w_flow[c]) for
         c = 1:n_cells
     ]
-    push!(u_named, (velocity = vel_vec, pressure = step_u.pressure))
+    u_named[i] = merge_properties(u_named[i], ComponentVector(flow = flow_vec, ))
 end
-
-du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_guess)
 
 root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
 println("Saving VTK files to: ", root_dir)
-sol_to_vtk(sol, u_named, grid, @__FILE__, root_dir)
+sol_to_vtk(sol, du_named, u_named, grid, geo, @__FILE__, root_dir, track_progress = true)
 println("VTK export complete!")
