@@ -6,5 +6,3 @@ end
 
 greet("World")
 ```
-
-
