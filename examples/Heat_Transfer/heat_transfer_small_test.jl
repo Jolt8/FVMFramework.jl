@@ -38,51 +38,25 @@ n_faces = length(config.geo.cell_neighbor_areas[1])
 
 struct Solid <: AbstractPhysics end
 
-#property updating/retrieval
-
-#variable summation
-
-#internal physics
-
-#sources
-
-#boundary conditions
-
-#capacities
-
 add_setup_syms!(
     config;
-    cache_syms_and_units = (heat = u"J",),
+    cache_syms_and_units = (
+        heat = u"J",
+        cache_test = u"s",
+        optimial_parameters_test = u"1/1",
+    ),
     special_caches = ComponentVector(),
-    optimized_parameters = ComponentVector()
+    optimized_parameters = ComponentVector(
+        optimial_parameters_test = 1.0
+    )
 )
 
 function cap_heat_flux_to_temp_change!(du, u, cell_id, vol)
     # J/s /= m^3 * kg*m^3 * J/(kg*K)
     # = K/s
-    #@show du.heat[cell_id]
-    #@show vol
-    #@show u.rho[cell_id]
-    #@show u.cp[cell_id]
     du.temp[cell_id] += du.heat[cell_id] / (vol * u.rho[cell_id] * u.cp[cell_id])
-    #@show du.temp[cell_id]
 end
 
-function cap_mass_flux_to_pressure_change!(du, u, cell_id, vol)
-    # kg/s /= (m^3 / (J/(mol*K) * K))
-    #remember: J = Pa*m^3
-    # = Pa/s
-    du_moles = du.mass[cell_id] / u.mw_avg[cell_id]
-    du.pressure[cell_id] += (du_moles * u.R_gas[cell_id] * u.temp[cell_id]) / vol
-end
-
-function cap_species_mass_flux_to_mass_fraction_change!(du, u, cell_id, vol)
-    total_mass = vol * u.rho[cell_id]
-
-    for_fields!(du.mass_fractions, u.mass_fractions, du.species_mass_flows) do species, du_mass_fractions, u_mass_fractions, species_mass_flows
-        du_mass_fractions[species[cell_id]] += (species_mass_flows[species[cell_id]] - u_mass_fractions[species[cell_id]] * du.mass[cell_id]) / total_mass
-    end
-end
 
 add_region!(
     config, "copper";
@@ -95,7 +69,7 @@ add_region!(
         rho = 2700.0u"kg/m^3",
         cp = 921.0u"J/(kg*K)",
     ),
-    property_update_function = function copper_property_update!(properties, u)
+    property_update_function = function copper_property_update!(du, u, p, t, cell_id, vol, system)
         
     end,
     region_function =
@@ -115,7 +89,7 @@ add_region!(
         rho = 7800.0u"kg/m^3",
         cp = 450.0u"J/(kg*K)",
     ),
-    property_update_function = function steel_property_update!(properties, u)
+    property_update_function = function steel_property_update!(du, u, p, t, cell_id, vol, system)
         
     end,
     region_function =
@@ -161,17 +135,16 @@ end
 du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, check_units = false);
 
 function solve_system!(du, u, p, t, geo, system)
+    append_fixed_properties_and_p_to_u!(u, p, system)
+
     solve_connection_groups!(du, u, p, t, geo, system)
-    solve_controller_groups!(du, u, p, t, geo, system)
     solve_patch_groups!(du, u, p, t, geo, system)
     solve_region_groups!(du, u, p, t, geo, system)
 end
 
 f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
 
-p_guess = 0.0
-
-test_prob = ODEProblem(f_closure_implicit, u0_vec, (0.0, 1000.0), p_guess)
+test_prob = ODEProblem(f_closure_implicit, u0_vec, (0.0, 1000.0), system.p_vec)
 sol = solve(test_prob, Tsit5(), tspan = (0.0, 10.0))
 
 t0 = 0.0
@@ -182,17 +155,17 @@ detector = SparseConnectivityTracer.TracerLocalSparsityDetector()
 #not sure if pure TracerSparsityDetector is faster
 
 jac_sparsity = ADTypes.jacobian_sparsity(
-    (du, u) -> f_closure_implicit(du, u, p_guess, 0.0), du0_vec, u0_vec, detector
+    (du, u) -> f_closure_implicit(du, u, system.p_vec, 0.0), du0_vec, u0_vec, detector
 )
 
 ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
 
-implicit_prob = ODEProblem(ode_func, u0_vec, tspan, p_guess)
+implicit_prob = ODEProblem(ode_func, u0_vec, tspan, system.p_vec)
 
 desired_steps = 100
 save_interval = (tspan[end] / desired_steps)
 
-@time sol = solve(implicit_prob, FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true), callback = approximate_time_to_finish_cb)
+@time sol = solve(implicit_prob, FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true), callback = approximate_time_to_finish_cb, saveat = save_interval)
 @time sol = solve(implicit_prob, FBDF(linsolve = KLUFactorization(), precs = iluzero, concrete_jac = true), callback = approximate_time_to_finish_cb)
 @time sol = solve(implicit_prob, FBDF(precs = iluzero, concrete_jac = true), callback = approximate_time_to_finish_cb)
 #728.605 ms (341178 allocations: 1.08 GiB) (non-multithreaded)
@@ -208,7 +181,7 @@ record_sol = true
 
 sim_file = @__FILE__
 
-du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_guess)
+du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, system.p_vec)
 
 if record_sol == true
     sol_to_vtk(sol, u_named, grid, sim_file)
