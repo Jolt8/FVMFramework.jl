@@ -1,16 +1,18 @@
 function solve_connection_group!(
     du, u, p, t,
     flux!::F, cell_neighbors,
-    cell_neighbor_areas, cell_neighbor_normals, cell_neighbor_distances,
+    cell_face_areas, cell_face_normals, cell_face_distances,
+    cell_neighbor_normals, cell_neighbor_distances, 
     cell_volumes
 ) where {F}
 
     for (idx_a, neighbor_list) in cell_neighbors
         for (idx_b, face_idx) in neighbor_list
             flux!(
-                du, u, p, t, 
+                du, u, p, t,
                 idx_a, idx_b, face_idx,
-                cell_neighbor_areas, cell_neighbor_normals, cell_neighbor_distances,
+                cell_face_areas, cell_face_normals, cell_face_distances,
+                cell_neighbor_normals, cell_neighbor_distances, 
                 cell_volumes
             )
         end
