@@ -32,6 +32,11 @@ getcellset(grid, "supersonic_inlet")
 addcellset!(grid, "supersonic_outlet", xyz -> xyz[1] >= (1.0 - 1.0 / n_cells))
 getcellset(grid, "supersonic_outlet")
 
+addfacetset!(grid, "y_min_wall", xyz -> abs(xyz[2] - 0.0) < 1e-8)
+addfacetset!(grid, "y_max_wall", xyz -> abs(xyz[2] - 1.0) < 1e-8)
+addfacetset!(grid, "z_min_wall", xyz -> abs(xyz[3] - 0.0) < 1e-8)
+addfacetset!(grid, "z_max_wall", xyz -> abs(xyz[3] - 1.0) < 1e-8)
+
 u_proto = ComponentVector(
     density = zeros(n_cells)u"kg/m^3",
     momentum_density_u = zeros(n_cells)u"kg/(m^2*s)",
@@ -211,34 +216,45 @@ add_region!(
     region_function = 
     function fluid_physics!(du, u, p, t, cell_id, vol)
         du.density *= 0.0
-        du.
+        du.momentum_density_u *= 0.0
+        du.momentum_density_v *= 0.0
+        du.momentum_density_w *= 0.0
+        du.volumetric_energy *= 0.0
         cap_navier_stokes_flow!(du, u, p, t, cell_id, vol)
     end,
 )
 
-function slip_wall_flux!(
-    du, u, p, t,
-    idx_a,
-    area,
-    normal
-)
-    gamma = u.cp[idx_a] / u.cv[idx_a]
+for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
+    add_patch!(
+        config, name;
+        properties = ComponentVector(),
+        patch_function = 
+        function wall_patch_flux!(
+            du, u, p, t,
+            idx_a, idx_b, face_idx,
+            cell_face_areas, cell_face_normals, cell_face_distances,
+            cell_neighbor_normals, cell_neighbor_distances, 
+            cell_volumes
+        )
+            gamma = u.cp[idx_a] / u.cv[idx_a]
 
-    _, _, _, pressure, _ = primitive_from_conservative(
-        u.density[idx_a],
-        u.momentum_density_u[idx_a],
-        u.momentum_density_v[idx_a],
-        u.momentum_density_w[idx_a],
-        u.volumetric_energy[idx_a],
-        gamma,
+            _, _, _, pressure, _ = primitive_from_conservative(
+                u.density[idx_a],
+                u.momentum_density_u[idx_a],
+                u.momentum_density_v[idx_a],
+                u.momentum_density_w[idx_a],
+                u.volumetric_energy[idx_a],
+                gamma,
+            )
+
+            du.momentum_density_u_flow[idx_a] -= cell_face_areas[idx_a][face_idx] * pressure * cell_face_normals[idx_a][face_idx][1]
+            du.momentum_density_v_flow[idx_a] -= cell_face_areas[idx_a][face_idx] * pressure * cell_face_normals[idx_a][face_idx][2]
+            du.momentum_density_w_flow[idx_a] -= cell_face_areas[idx_a][face_idx] * pressure * cell_face_normals[idx_a][face_idx][3]
+
+            du.density_flow[idx_a] = 0.0
+            du.volumetric_energy_flow[idx_a] = 0.0
+        end
     )
-
-    du.momentum_density_u_flow[idx_a] -= area * pressure * normal[1]
-    du.momentum_density_v_flow[idx_a] -= area * pressure * normal[2]
-    du.momentum_density_w_flow[idx_a] -= area * pressure * normal[3]
-
-    # mass flux = 0
-    # energy flux = 0
 end
 
 # Finish FVM configuration
