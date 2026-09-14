@@ -14,28 +14,34 @@ using StaticArrays
 using FVMFramework
 
 
+grid_x_length = 1.0
+grid_y_length = 0.1
+grid_z_length = 0.1
+
 grid_dimensions = (100, 1, 1)
 left = Ferrite.Vec{3}((0.0, 0.0, 0.0))
-right = Ferrite.Vec{3}((1.0, 1.0, 1.0))
+right = Ferrite.Vec{3}((grid_x_length, grid_y_length, grid_z_length))
 grid = generate_grid(Hexahedron, grid_dimensions, left, right)
 
 n_cells = length(grid.cells)
 n_faces = nfacets(grid.cells[1])
 
 # Grid sets
-addcellset!(grid, "fluid", xyz -> xyz[1] >= (1.0 / n_cells) && xyz[1] <= (1.0 - 1.0 / n_cells))
+addcellset!(grid, "fluid", xyz -> xyz[1] >= (grid_x_length / n_cells) && xyz[1] <= (grid_x_length - grid_x_length / n_cells))
 getcellset(grid, "fluid")
 
-addcellset!(grid, "supersonic_inlet", xyz -> xyz[1] <= (1.0 / n_cells))
+addcellset!(grid, "supersonic_inlet", xyz -> xyz[1] <= (grid_x_length / n_cells) + 1e-8)
 getcellset(grid, "supersonic_inlet")
 
-addcellset!(grid, "supersonic_outlet", xyz -> xyz[1] >= (1.0 - 1.0 / n_cells))
+addcellset!(grid, "supersonic_outlet", xyz -> xyz[1] >= (grid_x_length - grid_x_length / n_cells))
 getcellset(grid, "supersonic_outlet")
 
+addfacetset!(grid, "x_min_wall", xyz -> abs(xyz[1] - 0.0) < 1e-8)
+addfacetset!(grid, "x_max_wall", xyz -> abs(xyz[1] - grid_x_length) < 1e-8)
 addfacetset!(grid, "y_min_wall", xyz -> abs(xyz[2] - 0.0) < 1e-8)
-addfacetset!(grid, "y_max_wall", xyz -> abs(xyz[2] - 1.0) < 1e-8)
+addfacetset!(grid, "y_max_wall", xyz -> abs(xyz[2] - grid_y_length) < 1e-8)
 addfacetset!(grid, "z_min_wall", xyz -> abs(xyz[3] - 0.0) < 1e-8)
-addfacetset!(grid, "z_max_wall", xyz -> abs(xyz[3] - 1.0) < 1e-8)
+addfacetset!(grid, "z_max_wall", xyz -> abs(xyz[3] - grid_z_length) < 1e-8)
 
 u_proto = ComponentVector(
     density = zeros(n_cells)u"kg/m^3",
@@ -145,7 +151,7 @@ function construct_initial_conditions_from_intuitive_inputs(u)
     )
 end
 
-inital_conditions, properties = construct_initial_conditions_from_intuitive_inputs(
+fluid_initial_conditions, fluid_properties = construct_initial_conditions_from_intuitive_inputs(
     ComponentVector(
         vel_u = 0.0u"m/s",
         vel_v = 0.0u"m/s",
@@ -163,10 +169,10 @@ inital_conditions, properties = construct_initial_conditions_from_intuitive_inpu
 add_region!(
     config, "fluid";
     type = Fluid(),
-    initial_conditions = initial_conditions,
-    properties = properties,
+    initial_conditions = fluid_initial_conditions,
+    properties = fluid_properties,
     property_update_function = 
-    function update_fluid_properties!(du, u, p, t, cell_id, vol)
+    function update_fluid_properties!(du, u, p, t, cell_id, vol, system)
         overall_navier_stokes_property_update!(du, u, p, t, cell_id, vol)
     end,
     region_function = 
@@ -175,7 +181,7 @@ add_region!(
     end,
 )
 
-inital_conditions, properties = construct_initial_conditions_from_intuitive_inputs(
+supersonic_inlet_initial_conditions, supersonic_inlet_properties = construct_initial_conditions_from_intuitive_inputs(
     ComponentVector(
         vel_u = 600.0u"m/s",
         vel_v = 0.0u"m/s",
@@ -192,35 +198,40 @@ inital_conditions, properties = construct_initial_conditions_from_intuitive_inpu
 add_region!(
     config, "supersonic_inlet";
     type = Fluid(),
-    initial_conditions = initial_conditions,
-    properties = properties,
+    initial_conditions = supersonic_inlet_initial_conditions,
+    properties = supersonic_inlet_properties,
     property_update_function = 
-    function update_fluid_properties!(du, u, p, t, cell_id, vol)
+    function update_fluid_properties!(du, u, p, t, cell_id, vol, system)
         overall_navier_stokes_property_update!(du, u, p, t, cell_id, vol)
     end,
     region_function = 
     function fluid_physics!(du, u, p, t, cell_id, vol)
         cap_navier_stokes_flow!(du, u, p, t, cell_id, vol)
+        du.density[cell_id] = 0.0
+        du.momentum_density_u[cell_id] = 0.0
+        du.momentum_density_v[cell_id] = 0.0
+        du.momentum_density_w[cell_id] = 0.0
+        du.volumetric_energy[cell_id] = 0.0
     end,
 )
 
 add_region!(
     config, "supersonic_outlet";
     type = Fluid(),
-    initial_conditions = initial_conditions,
-    properties = properties,
+    initial_conditions = fluid_initial_conditions,
+    properties = fluid_properties,
     property_update_function = 
-    function update_fluid_properties!(du, u, p, t, cell_id, vol)
+    function update_fluid_properties!(du, u, p, t, cell_id, vol, system)
         overall_navier_stokes_property_update!(du, u, p, t, cell_id, vol)
     end,
     region_function = 
     function fluid_physics!(du, u, p, t, cell_id, vol)
-        du.density *= 0.0
-        du.momentum_density_u *= 0.0
-        du.momentum_density_v *= 0.0
-        du.momentum_density_w *= 0.0
-        du.volumetric_energy *= 0.0
         cap_navier_stokes_flow!(du, u, p, t, cell_id, vol)
+        du.density[cell_id] *= 0.0
+        du.momentum_density_u[cell_id] *= 0.0
+        du.momentum_density_v[cell_id] *= 0.0
+        du.momentum_density_w[cell_id] *= 0.0
+        du.volumetric_energy[cell_id] *= 0.0
     end,
 )
 
@@ -250,9 +261,6 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
             du.momentum_density_u_flow[idx_a] -= cell_face_areas[idx_a][face_idx] * pressure * cell_face_normals[idx_a][face_idx][1]
             du.momentum_density_v_flow[idx_a] -= cell_face_areas[idx_a][face_idx] * pressure * cell_face_normals[idx_a][face_idx][2]
             du.momentum_density_w_flow[idx_a] -= cell_face_areas[idx_a][face_idx] * pressure * cell_face_normals[idx_a][face_idx][3]
-
-            du.density_flow[idx_a] = 0.0
-            du.volumetric_energy_flow[idx_a] = 0.0
         end
     )
 end
@@ -262,6 +270,7 @@ du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function
 
 # System solver function
 function solve_system!(du, u, p, t, geo, system)
+    update_region_groups!(du, u, p, t, geo, system)
     solve_connection_groups!(du, u, p, t, geo, system)
     solve_patch_groups!(du, u, p, t, geo, system)
     solve_region_groups!(du, u, p, t, geo, system)
@@ -293,4 +302,13 @@ println("Solving the Navier-Stokes ODE system...")
     implicit_prob,
     FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
     callback = approximate_time_to_finish_cb,
+    maxiters = 273
 )
+
+du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_guess, track_progress = true);
+
+root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
+println("Saving VTK files to: ", root_dir)
+sol_to_vtk(sol, du_named, u_named, grid, geo, @__FILE__, root_dir, track_progress = true)
+println("VTK export complete!")
+

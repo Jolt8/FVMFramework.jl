@@ -25,7 +25,7 @@ using FVMFramework
 L = 1.0u"m"
 H = 0.1u"m"
 Nx = 100
-Ny = 100
+Ny = 1000
 Nz = 1
 
 grid_dimensions = (Nx, Ny, Nz)
@@ -252,8 +252,10 @@ println("Solving the Navier-Stokes ODE system...")
     =#
 #for 100000 seconds of sim time:
     #- 10000 cells takes: 114 seconds (500.50 k allocations: 4.071 GiB, 1.55% gc time)
+    #- 20000 cells takes: 300.863069 seconds (150.22 M allocations: 15.861 GiB, 1.01% gc time, 81.24% compilation time) (ignore the compilation time and allocations, I don't think those actually had an effect on the solve time)
 #algebraicmultigrid sucks ass, it got stuck at a sim time of 5.8 seconds and then it just stalled 
 #I also tested out FBDF with the default solver and it just stalls at around 6.8 seconds in, so gradient based optimization with navier stokes would likely be impossible :(
+
 
 #nl_func = NonlinearFunction(f_closure_steady, jac_prototype = float.(nl_jac_sparsity))
 #nl_prob = NonlinearProblem(nl_func, u0_vec, p_guess)

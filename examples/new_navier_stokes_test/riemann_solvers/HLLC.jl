@@ -74,7 +74,7 @@ function hllc_flux(
     volumetric_energy_b,
     gamma_b,
 
-    normal
+    cell_face_normal
 )
     vel_u_a, vel_v_a, vel_w_a, pressure_a, speed_of_sound_a = primitive_from_conservative(
         density_a,
@@ -82,7 +82,7 @@ function hllc_flux(
         momentum_density_v_a,
         momentum_density_w_a,
         volumetric_energy_a,
-        (u.cp[idx_a] / u.cv[idx_b])
+        gamma_a
     )
 
     vel_u_b, vel_v_b, vel_w_b, pressure_b, speed_of_sound_b = primitive_from_conservative(
@@ -91,7 +91,7 @@ function hllc_flux(
         momentum_density_v_b,
         momentum_density_w_b,
         volumetric_energy_b,
-        (u.cp[idx_a] / u.cv[idx_b])
+        gamma_b
     )
 
     normal_velocity_a = 
