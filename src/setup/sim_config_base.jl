@@ -56,7 +56,6 @@ function create_fvm_config(grid, u_proto)
         top, 
         RegionSetupInfo[],
         PatchSetupInfo[],
-        ControllerSetupInfo[],
         NamedTuple(), 
         ComponentVector(),
         Symbol[],

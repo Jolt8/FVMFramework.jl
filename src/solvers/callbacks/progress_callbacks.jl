@@ -45,13 +45,13 @@ approx_time_left_affect_closure! = (integrator) -> approx_time_left_affect!(inte
 
 
 """
-    approximate_time_to_finish_cb(x)
+    approximate_time_to_finish_cb_docs(x)
 
 This is a discrete callback that can be used to approximate the time unti a simulation is finished
 
 Note that this uses a global variable (last_print_time_FVMFramework_approx_time_to_finish_cb)
 """
-function approximate_time_to_finish_cb(x) end
+function approximate_time_to_finish_cb_docs(x) end
 approximate_time_to_finish_cb = DiscreteCallback(every_step, approx_time_left_affect_closure!, save_positions=(false, false))
 
 #Update: this is so much more useful than I ever would've guessed, getting an approximate time until finished is amazing

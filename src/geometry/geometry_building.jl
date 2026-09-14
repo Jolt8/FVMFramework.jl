@@ -10,6 +10,7 @@ struct FVMGeometryTetra{T, CoordType} <: FVMGeometry
     unconnected_cell_face_map::Vector{Tuple{Int, Int}}
     cell_face_areas::Vector{MVector{4, T}}
     cell_face_normals::Vector{MVector{4, CoordType}}
+    cell_face_distances::Vector{MVector{4, T}}
 end
 
 struct FVMGeometryHexa{T, CoordType} <: FVMGeometry
@@ -22,13 +23,15 @@ struct FVMGeometryHexa{T, CoordType} <: FVMGeometry
     unconnected_cell_face_map::Vector{Tuple{Int, Int}}
     cell_face_areas::Vector{MVector{6, T}}
     cell_face_normals::Vector{MVector{6, CoordType}}
+    cell_face_distances::Vector{MVector{6, T}}
 end
 
 function compress_geo_to_struct(
         grid::Grid{3, Tetrahedron, Float64}, top,
         cell_volumes, cell_centroids,
         cell_neighbor_areas, cell_neighbor_normals, cell_neighbor_distances,
-        cell_face_areas, cell_face_normals, initial_node_coordinates, nodes_of_cells,
+        cell_face_areas, cell_face_normals, cell_face_distances,
+        initial_node_coordinates, nodes_of_cells,
         cell_neighbors, cell_neighbors_node_ids,
         cell_face_map, map_respective_node_ids
     )
@@ -37,7 +40,7 @@ function compress_geo_to_struct(
         #mutated vars
         cell_volumes, cell_centroids,
         cell_neighbor_areas, cell_neighbor_normals, cell_neighbor_distances,
-        cell_face_areas, cell_face_normals,
+        cell_face_areas, cell_face_normals, cell_face_distances,
 
         #non-mutated vars
         initial_node_coordinates, nodes_of_cells,
@@ -51,7 +54,7 @@ function compress_geo_to_struct(
         cell_volumes, cell_centroids,
         cell_neighbors,
         cell_neighbor_areas, cell_neighbor_normals, cell_neighbor_distances,
-        unconnected_cell_face_map, cell_face_areas, cell_face_normals
+        unconnected_cell_face_map, cell_face_areas, cell_face_normals, cell_face_distances
     )
 end
 
@@ -59,7 +62,8 @@ function compress_geo_to_struct(
         grid::Grid{3, Hexahedron, Float64}, top,
         cell_volumes, cell_centroids,
         cell_neighbor_areas, cell_neighbor_normals, cell_neighbor_distances,
-        cell_face_areas, cell_face_normals, initial_node_coordinates, nodes_of_cells,
+        cell_face_areas, cell_face_normals, cell_face_distances, 
+        initial_node_coordinates, nodes_of_cells,
         cell_neighbors, cell_neighbors_node_ids,
         cell_face_map, map_respective_node_ids
     )
@@ -68,7 +72,7 @@ function compress_geo_to_struct(
         #mutated vars
         cell_volumes, cell_centroids,
         cell_neighbor_areas, cell_neighbor_normals, cell_neighbor_distances,
-        cell_face_areas, cell_face_normals,
+        cell_face_areas, cell_face_normals, cell_face_distances,
 
         #non-mutated vars
         initial_node_coordinates, nodes_of_cells,
@@ -82,7 +86,7 @@ function compress_geo_to_struct(
         cell_volumes, cell_centroids,
         cell_neighbors,
         cell_neighbor_areas, cell_neighbor_normals, cell_neighbor_distances,
-        unconnected_cell_face_map, cell_face_areas, cell_face_normals
+        unconnected_cell_face_map, cell_face_areas, cell_face_normals, cell_face_distances
     )
 end
 
@@ -110,6 +114,7 @@ function build_fvm_geo_into_struct(grid, top)
 
     cell_face_areas = [zero(MVector{n_facets, T}) for _ in 1:n_cells]
     cell_face_normals = [zero(MVector{n_facets, CoordType}) for _ in 1:n_cells]
+    cell_face_distances = [zero(MVector{n_facets, T}) for _ in 1:n_cells]
 
     #we use the dynamic dispatch of compress_geo_to_struct to prevent having to check the grid's type with if statements
     #the reason this mutates is that it will be later used for geometry optimization which is one of the biggest applications of this framework
@@ -117,7 +122,8 @@ function build_fvm_geo_into_struct(grid, top)
         grid, top,
         cell_volumes, cell_centroids,
         cell_neighbor_areas, cell_neighbor_normals, cell_neighbor_distances,
-        cell_face_areas, cell_face_normals, initial_node_coordinates, nodes_of_cells,
+        cell_face_areas, cell_face_normals, cell_face_distances,
+        initial_node_coordinates, nodes_of_cells,
         cell_neighbors, cell_neighbors_node_ids,
         cell_face_map, map_respective_node_ids
     )
