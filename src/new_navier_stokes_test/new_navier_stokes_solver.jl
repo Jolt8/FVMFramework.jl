@@ -21,32 +21,23 @@ using LinearAlgebra
 using StaticArrays
 using FVMFramework
 
-# Parameters
-L = 1.0u"m"
-H = 0.1u"m"
-Nx = 100
-Ny = 100
-Nz = 1
 
-grid_dimensions = (Nx, Ny, Nz)
+grid_dimensions = (10, 10, 10)
 left = Ferrite.Vec{3}((0.0, 0.0, 0.0))
-right = Ferrite.Vec{3}((ustrip(L), ustrip(L), ustrip(H)))
+right = Ferrite.Vec{3}((1.0, 1.0, 1.0))
 grid = generate_grid(Hexahedron, grid_dimensions, left, right)
 
 # Grid sets
 addcellset!(grid, "fluid", xyz -> true)
-addfacetset!(grid, "left_wall", xyz -> abs(xyz[1] - 0.0) < 1e-6)
-addfacetset!(grid, "right_wall", xyz -> abs(xyz[1] - ustrip(L)) < 1e-6)
-addfacetset!(grid, "bottom_wall", xyz -> abs(xyz[2] - 0.0) < 1e-6)
-addfacetset!(grid, "top_lid", xyz -> abs(xyz[2] - ustrip(L)) < 1e-6)
 
 n_cells = length(grid.cells)
 
 u_proto = ComponentVector(
-    u_vel = zeros(n_cells)u"m/s",
-    v_vel = zeros(n_cells)u"m/s",
-    w_vel = zeros(n_cells)u"m/s",
-    pressure = zeros(n_cells)u"Pa",
+    density = zeros(n_cells)u"kg/m^3",
+    momentum_density_u = zeros(n_cells)u"kg/(m^2*s)",
+    momentum_density_v = zeros(n_cells)u"kg/(m^2*s)",
+    momentum_density_w = zeros(n_cells)u"kg/(m^2*s)",
+    volumetric_energy = zeros(n_cells)u"J/m^3"
 )
 
 config = create_fvm_config(grid, u_proto);
@@ -54,15 +45,19 @@ config = create_fvm_config(grid, u_proto);
 add_setup_syms!(
     config;
     cache_syms_and_units = (
-        u_flow = u"m^4/s^2",
-        v_flow = u"m^4/s^2",
-        w_flow = u"m^4/s^2",
-        p_flow = u"Pa*m^3/s",
+        vel_u = u"m/s",
+        vel_v = u"m/s",
+        vel_w = u"m/s",
+        pressure = u"Pa",
+        temperature = u"K",
+        speed_of_sound = u"m/s",
+        #specific_internal_energy = u"J/kg", #not cached right now, just a property
     ),
     special_caches = ComponentVector(),
     second_order_syms = [],
     optimized_parameters = ComponentVector(),
 )
+
 
 struct Fluid <: AbstractPhysics end
 
@@ -83,15 +78,16 @@ add_region!(
     config, "fluid";
     type = Fluid(),
     initial_conditions = ComponentVector(
-        u_vel = 0.0u"m/s",
-        v_vel = 0.0u"m/s",
-        w_vel = 0.0u"m/s",
-        pressure = 0.0u"Pa"
+        density = 1.0u"kg/m^3",
+        momentum_density_u = 0.0u"kg/(m^2*s)",
+        momentum_density_v = 0.0u"kg/(m^2*s)",
+        momentum_density_w = 0.0u"kg/(m^2*s)",
+        volumetric_energy = 0.0u"J/m^3",
     ),
     properties = ComponentVector(
-        rho = 1.0u"kg/m^3",
-        nu = (U_lid * L) / Re,
-        beta = 10.0u"Pa"
+        specific_internal_energy = 0.0u"J/kg",
+        cp = 1.005e3u"J/(kg*K)",
+        cv = 718.0u"J/(kg*K)",
     ),
     property_update_function = 
     function update_fluid_properties!(properties, u)
@@ -241,112 +237,3 @@ println("Solving the Navier-Stokes ODE system...")
     FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
     callback = approximate_time_to_finish_cb,
 )
-
-#1718 seconds (12.44 M allocations, 55.6 GiB, 1.86 gc time, 0.21 compilation time) for 100 * 1000 cells
-#=
-@time sol = solve(
-    implicit_prob,
-    FBDF(linsolve = SparspakFactorization()),
-    callback = approximate_time_to_finish_cb,
-)
-    =#
-#for 100000 seconds of sim time:
-    #- 10000 cells takes: 114 seconds (500.50 k allocations: 4.071 GiB, 1.55% gc time)
-#algebraicmultigrid sucks ass, it got stuck at a sim time of 5.8 seconds and then it just stalled 
-#I also tested out FBDF with the default solver and it just stalls at around 6.8 seconds in, so gradient based optimization with navier stokes would likely be impossible :(
-
-#nl_func = NonlinearFunction(f_closure_steady, jac_prototype = float.(nl_jac_sparsity))
-#nl_prob = NonlinearProblem(nl_func, u0_vec, p_guess)
-
-#println("Solving for steady state directly using NonlinearSolve NewtonRaphson...")
-#@time nl_sol = solve(nl_prob, NewtonRaphson(concrete_jac = true))
-
-println("ODE solving complete. Rebuilding state for VTK output...")
-
-du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_guess, track_progress = true)
-
-u_named[200].u_vel[300]
-
-u_named_test = []
-
-for i in eachindex(sol.u)
-    sol_state_named = ComponentVector(sol.u[i], system.state_axes)
-
-    vel_vec = SVector{3, Float64}[
-        SVector{3, Float64}(
-            #why must we do this cursedness just to get it to look right?
-            sol_state_named.w_vel[c],
-            -sol_state_named.v_vel[c], 
-            sol_state_named.u_vel[c], 
-        ) for c in 1:n_cells
-    ]
-
-    vel_matrix = reduce(hcat, vel_vec)
-    vel_matrix = transpose(vel_matrix)
-
-    if i == 200
-        @show vel_vec[300]
-        @show vel_matrix[300, :] 
-    end
-    
-    u_named[i] = merge_properties(u_named[i], ComponentVector(velocity = vel_matrix,))
-
-    #=
-    step_u = ComponentVector(sol.u[i], system.state_axes)
-    vel_vec = [
-        SVector{3,Float64}(
-            getproperty(step_u, :u_vel)[c],
-            getproperty(step_u, :v_vel)[c],
-            getproperty(step_u, :w_vel)[c]
-        ) for c = 1:n_cells
-    ]
-    push!(u_named_test, ComponentVector(velocity = vel_vec, pressure = step_u.pressure))
-    =#
-
-    #u_named[i] = merge_properties(u_named[i], u_named_test[i])
-    
-    #merge_properties(u_named[i], (velocity = vel_vec, pressure = step_u.pressure))
-
-    #=
-    flow_vec = [SVector{3, Float64}(sol_state_named.u_flow[c], sol_state_named.v_flow[c], sol_state_named.w_flow[c]) for c = 1:n_cells]
-    u_named[i] = merge_properties(u_named[i], ComponentVector(flow = flow_vec, ))
-    =#
-end
-
-u_named_test
-u_named[200].velocity
-
-du_named = ComponentVector()
-u_named = [ComponentVector(sol.u, system.state_axes) for i in eachindex(sol.u)]
-
-du_named = []
-u_named = []
-
-for i in eachindex(sol.u)
-    push!(du_named, ComponentVector(sol.u[i], system.state_axes))
-    push!(u_named, ComponentVector(sol.u[i], system.state_axes))
-end
-
-for i in eachindex(sol.u)
-    sol_state_named = ComponentVector(sol.u[i], system.state_axes)
-    vel_vec = SVector{3, Float64}[
-        SVector{3, Float64}(
-            #why must we do this cursedness just to get it to look right?
-            sol_state_named.w_vel[c],
-            -sol_state_named.v_vel[c], 
-            sol_state_named.u_vel[c], 
-        ) for c in 1:n_cells
-    ]
-
-    vel_matrix = reduce(hcat, vel_vec)
-    vel_matrix = transpose(vel_matrix)
-    
-    u_named[i] = merge_properties(u_named[i], ComponentVector(velocity = vel_matrix,))
-end
-
-u_named[1].velocity
-
-root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
-println("Saving VTK files to: ", root_dir)
-sol_to_vtk(sol, du_named, u_named, grid, geo, @__FILE__, root_dir, track_progress = true)
-println("VTK export complete!")
