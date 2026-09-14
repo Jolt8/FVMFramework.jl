@@ -50,7 +50,7 @@ class TomographyADCAcquisitionMaster:
     def __init__(self, vref=1.0, safety_factor=0.10, min_cooldown_ms=5.0,
                  serial_port=None, runs_dir=None,
                  initial_target_tof_us=70.0, tolerance_pct=0.25,
-                 pre_trigger_offset_us=5.0):
+                 pre_trigger_offset_us=5.0, gain_code=None):
         """
         Args:
             vref: AD9226 reference voltage (±V).
@@ -61,12 +61,15 @@ class TomographyADCAcquisitionMaster:
             initial_target_tof_us: Expected ToF for grounding the acceptance filter.
             tolerance_pct: ±percentage around baseline ToF for acceptance window.
             pre_trigger_offset_us: Estimated time from capture start to TX pulse.
+            gain_code: Optional MCP4161 volatile wiper code (0-256). If None,
+                       leave the firmware's current wiper setting unchanged.
         """
         self.adc = PicoADCInterface(port=serial_port, vref=vref)
         self.vref = vref
         self.safety_factor = safety_factor
         self.min_cooldown_ms = min_cooldown_ms
         self.pre_trigger_offset_us = pre_trigger_offset_us
+        self.gain_code = gain_code
         
         script_dir = os.path.dirname(os.path.abspath(__file__))
         self.runs_dir = runs_dir if runs_dir else os.path.join(script_dir, "runs")
@@ -99,8 +102,15 @@ class TomographyADCAcquisitionMaster:
         status = self.adc.get_status()
         if status:
             print(f"[+] Pico status: {status}")
+
+        if self.gain_code is not None:
+            if not self.adc.set_gain(self.gain_code):
+                print("[X] Could not configure the MCP4161 wiper.")
+                self.adc.close()
+                return False
         
         print(f"[+] AD9226 ADC system connected and ready.")
+        print(f"    MCP4161 volatile wiper code: {self.adc.last_wiper_code}")
         print(f"    Resolution: 12-bit | V_ref: ±{self.vref}V")
         return True
     
@@ -335,6 +345,14 @@ class TomographyADCAcquisitionMaster:
         return self.tof_results
 
 
+def parse_gain_code(value):
+    """Argparse type for the MCP4161's 257-position wiper."""
+    code = int(value)
+    if not 0 <= code <= 256:
+        raise argparse.ArgumentTypeError("gain code must be from 0 to 256")
+    return code
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='AD9226 ADC Automated Tomography Acquisition',
@@ -350,6 +368,9 @@ def main():
                         help='Minimum cooldown in ms (default: 5.0)')
     parser.add_argument('--vref', type=float, default=1.0,
                         help='AD9226 reference voltage in V (default: 1.0)')
+    parser.add_argument('--gain-code', type=parse_gain_code, default=None,
+                        metavar='0..256',
+                        help='set MCP4161 volatile wiper (unchanged by default)')
     parser.add_argument('--pre-trigger', type=float, default=5.0,
                         help='Pre-trigger offset in µs (default: 5.0)')
     parser.add_argument('--port', type=str, default=None,
@@ -374,6 +395,7 @@ def main():
         initial_target_tof_us=tof,
         tolerance_pct=args.tolerance,
         pre_trigger_offset_us=args.pre_trigger,
+        gain_code=args.gain_code,
     )
     
     if master.connect():

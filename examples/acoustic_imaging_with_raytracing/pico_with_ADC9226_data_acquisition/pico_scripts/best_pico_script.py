@@ -26,6 +26,14 @@ Serial commands:
   GAIN <mcp4161_wiper_code>       (0-256, volatile register only)
   WIPER <mcp4161_wiper_code>      (alias for GAIN)
   STATUS
+
+
+NOTE:
+
+Validated operating ADC sample rate: 2.5 MSPS. 
+Higher rates exhibit acquisition timing instability and are unsupported. 
+Absolute ADC timestamps are corrected for the AD9226 seven-sample pipeline 
+latency using the actual generated sample clock.
 """
 
 import array
@@ -59,7 +67,7 @@ MCP_SDI = 15
 DEFAULT_N_SAMPLES = 20_000        # 2 ms capture window at 10 MSPS
 DEFAULT_SAMPLE_RATE = 10_000_000  # 10 MSPS
 DEFAULT_PIO_FREQ = 125_000_000
-DEFAULT_WIPER_CODE = 64
+DEFAULT_WIPER_CODE = 128
 MCP_SPI_HALF_PERIOD_US = 1
 
 MIN_SAMPLE_RATE = 100_000
@@ -75,9 +83,10 @@ MAX_WIPER_CODE = 256
 # =============================================================================
 @rp2.asm_pio(set_init=rp2.PIO.OUT_LOW)
 def pulse_250ns():
-    # At 4 MHz, the HIGH set instruction occupies exactly one 250 ns cycle.
-    pull(block)
-    set(pins, 1)
+    # At 125 MHz, each instruction is 8 ns.
+    # set(pins, 1) takes 1 cycle + 30 delay cycles = 31 cycles = 248 ns pulse.
+    wait(1, irq, 0)
+    set(pins, 1) [30]
     set(pins, 0)
 
 
@@ -86,11 +95,23 @@ def pulse_250ns():
     autopush=True,
     push_thresh=12,
 )
-def adc_capture_12bit():
-    # Sample the parallel bus on the falling edge of the continuous ADC clock.
+def adc_capture_12bit_sync():
+    pull(block)
+    mov(x, osr)
+    
+    label("pre_trigger_loop")
     wait(1, gpio, 12)
     wait(0, gpio, 12)
     in_(pins, 12)
+    jmp(x_dec, "pre_trigger_loop")
+    
+    irq(0)
+    
+    label("post_trigger_loop")
+    wait(1, gpio, 12)
+    wait(0, gpio, 12)
+    in_(pins, 12)
+    jmp("post_trigger_loop")
 
 
 # =============================================================================
@@ -101,7 +122,7 @@ tx_pin = machine.Pin(TX_TRIGGER, machine.Pin.OUT, value=0)
 sm0 = rp2.StateMachine(
     0,
     pulse_250ns,
-    freq=4_000_000,
+    freq=DEFAULT_PIO_FREQ,
     set_base=tx_pin,
 )
 sm0.active(1)
@@ -118,7 +139,7 @@ for gpio in range(ADC_DATA_BASE, ADC_DATA_BASE + 12):
 
 sm1 = rp2.StateMachine(
     1,
-    adc_capture_12bit,
+    adc_capture_12bit_sync,
     freq=DEFAULT_PIO_FREQ,
     in_base=adc_data_pin,
 )
@@ -142,7 +163,7 @@ DREQ_PIO0_RX1 = 5
 dma = rp2.DMA()
 
 n_samples = DEFAULT_N_SAMPLES
-sample_rate_hz = DEFAULT_SAMPLE_RATE
+sample_rate_hz = adc_clk_pwm.freq()
 wiper_code = None
 capture_buf = array.array("I", [0] * n_samples)
 send_buf = bytearray(n_samples * 2)
@@ -201,7 +222,8 @@ for raw_code in range(4096):
 
 
 def fire_tx_pulse():
-    sm0.put(1)
+    # SM0 now waits for the PIO IRQ from SM1, so we don't trigger it manually here.
+    pass
 
 
 def reallocate_buffers():
@@ -213,16 +235,20 @@ def reallocate_buffers():
 def reconfigure_adc(new_rate_hz, new_n_samples):
     global n_samples, sample_rate_hz
     n_samples = new_n_samples
-    sample_rate_hz = new_rate_hz
     adc_clk_pwm.freq(new_rate_hz)
+    sample_rate_hz = adc_clk_pwm.freq()
     reallocate_buffers()
 
 
-def capture_adc():
+def capture_adc(pretrigger_samples):
     sm1.active(0)
     sm1.restart()  # Clear the PIO instruction state and input shift register.
     while sm1.rx_fifo() > 0:
         sm1.get()
+
+    # Pre-trigger samples must be at least 1 for the jmp(x_dec) logic.
+    pretrigger_count = max(1, min(pretrigger_samples, n_samples - 1))
+    sm1.put(pretrigger_count - 1)
 
     dma.config(
         read=sm1,
@@ -239,7 +265,8 @@ def capture_adc():
 
     dma.active(1)
     sm1.active(1)
-    fire_tx_pulse()
+    # SM0 is already active and will block on IRQ0 from SM1.
+    # fire_tx_pulse() is no longer needed here.
 
     # Allow at least twice the ideal capture duration, with a 1 ms floor.
     timeout_us = max((n_samples * 2_000_000) // sample_rate_hz, 1_000)
@@ -248,18 +275,18 @@ def capture_adc():
         if time.ticks_diff(time.ticks_us(), start_us) > timeout_us:
             dma.active(0)
             sm1.active(0)
-            return None
+            return None, pretrigger_count
 
     sm1.active(0)
-    return capture_buf
+    return capture_buf, pretrigger_count
 
 
-def pack_and_send(buf, count):
+def pack_and_send(buf, count, t0_sample_index):
     for i in range(count):
         value = adc_reverse_lut[buf[i] & 0x0FFF]
         send_buf[i * 2] = value & 0xFF
         send_buf[i * 2 + 1] = (value >> 8) & 0xFF
-    sys.stdout.write("DATA {} {}\n".format(count, sample_rate_hz))
+    sys.stdout.write("DATA {} {} {}\n".format(count, sample_rate_hz, t0_sample_index))
     sys.stdout.buffer.write(send_buf[: count * 2])
     sys.stdout.write("END\n")
 
@@ -310,19 +337,22 @@ def main():
                 if command == "PING" and len(parts) == 1:
                     print("PONG")
 
-                elif command == "TRIG" and len(parts) == 3:
+                elif command == "TRIG" and len(parts) >= 3:
                     tx_channel = parse_int(parts[1])
                     rx_channel = parse_int(parts[2])
+                    pretrigger_samples = parse_int(parts[3]) if len(parts) > 3 else 0
+                    
                     set_mux(tx_mux_pins, tx_channel)
                     set_mux(rx_mux_pins, rx_channel)
                     time.sleep_us(10)
                     print("TRIG_ACK {} {}".format(tx_channel, rx_channel))
 
-                    buf = capture_adc()
-                    if buf is None:
+                    result = capture_adc(pretrigger_samples)
+                    if result[0] is None:
                         print("ERR ADC capture timeout")
                     else:
-                        pack_and_send(buf, n_samples)
+                        buf, t0_index = result
+                        pack_and_send(buf, n_samples, t0_index)
 
                 elif command == "CONF" and len(parts) == 3:
                     new_rate = parse_int(parts[1])
@@ -362,13 +392,10 @@ def main():
 
             continue
 
-        # Standalone continuous-fire mode retained from the previous firmware.
-        for tx_channel, rx_channel in transducer_send_receive_ordering:
-            set_mux(tx_mux_pins, tx_channel)
-            set_mux(rx_mux_pins, rx_channel)
-            fire_tx_pulse()
-            time.sleep_us(250)
+        # Standalone continuous-fire mode removed for acquisition mode.
+        time.sleep_us(100)
 
 
 if __name__ == "__main__":
     main()
+

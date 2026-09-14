@@ -1,0 +1,11 @@
+Scan_Index,Timestamp_s,RayPath_ID,Tx_Channel,Rx_Channel,TimeOfFlight_us,Method,Status
+1,1789340486.034,1,1,2,65.6037,HilbertEnvelope,OK
+2,1789340488.348,1,1,2,51.1014,HilbertEnvelope,OK
+3,1789340490.536,1,1,2,53.6682,HilbertEnvelope,OK
+4,1789340492.739,1,1,2,52.9256,HilbertEnvelope,OK
+5,1789340494.931,1,1,2,57.0010,HilbertEnvelope,OK
+6,1789340497.131,1,1,2,58.4344,HilbertEnvelope,OK
+7,1789340499.273,1,1,2,52.5797,HilbertEnvelope,OK
+8,1789340501.308,1,1,2,53.0208,HilbertEnvelope,OK
+9,1789340503.348,1,1,2,52.4325,HilbertEnvelope,OK
+10,1789340505.386,1,1,2,56.2032,HilbertEnvelope,OK
