@@ -177,25 +177,19 @@ function hllc_flux(
         cell_face_normal
     )
 
-    F_density_hllc = 0.0
-    F_momentum_density_u_hllc = 0.0
-    F_momentum_density_v_hllc = 0.0
-    F_momentum_density_w_hllc = 0.0
-    F_volumetric_energy_hllc = 0.0
-
-    if 0.0 <= S_a
+    if zero(S_a) <= S_a
         F_density_hllc = F_density_a
         F_momentum_density_u_hllc = F_momentum_density_u_a
         F_momentum_density_v_hllc = F_momentum_density_v_a
         F_momentum_density_w_hllc = F_momentum_density_w_a
         F_volumetric_energy_hllc = F_volumetric_energy_a
-    elseif S_a < 0.0 && 0.0 <= S_M
+    elseif S_a < zero(S_a) && zero(S_M) <= S_M
         F_density_hllc = F_density_a + S_a * (density_star_a - density_a)
         F_momentum_density_u_hllc = F_momentum_density_u_a + S_a * (momentum_density_u_star_a - momentum_density_u_a)
         F_momentum_density_v_hllc = F_momentum_density_v_a + S_a * (momentum_density_v_star_a - momentum_density_v_a)
         F_momentum_density_w_hllc = F_momentum_density_w_a + S_a * (momentum_density_w_star_a - momentum_density_w_a)
         F_volumetric_energy_hllc = F_volumetric_energy_a + S_a * (volumetric_energy_star_a - volumetric_energy_a)
-    elseif S_M <= 0.0 && 0.0 <= S_b
+    elseif S_M <= zero(S_M) && zero(S_b) <= S_b
         F_density_hllc = F_density_b + S_b * (density_star_b - density_b)
         F_momentum_density_u_hllc = F_momentum_density_u_b + S_b * (momentum_density_u_star_b - momentum_density_u_b)
         F_momentum_density_v_hllc = F_momentum_density_v_b + S_b * (momentum_density_v_star_b - momentum_density_v_b)
@@ -217,6 +211,42 @@ function hllc_flux(
         F_volumetric_energy_hllc
     )
 end
+#=
+hllc_flux(
+    1.18u"kg/m^3",
+    600.0u"m/s" * 1.18u"kg/m^3",
+    0.0u"kg/(m^2*s)",
+    0.0u"kg/(m^2*s)",
+    466572.0u"J/m^3",
+    1.4,
+
+    1.18u"kg/m^3",
+    600.0u"m/s" * 1.18u"kg/m^3",
+    0.0u"kg/(m^2*s)",
+    0.0u"kg/(m^2*s)",
+    466572.0u"J/m^3",
+    1.4,
+
+    Ferrite.Vec{3}((1.0, 0.0, 0.0))
+) 
+
+hllc_flux(
+    1.18u"kg/m^3",
+    600.0u"m/s" * 1.18u"kg/m^3",
+    0.0u"kg/(m^2*s)",
+    0.0u"kg/(m^2*s)",
+    466572.0u"J/m^3",
+    1.4,
+
+    1.18u"kg/m^3",
+    600.0u"m/s" * 1.18u"kg/m^3",
+    0.0u"kg/(m^2*s)",
+    0.0u"kg/(m^2*s)",
+    466572.0u"J/m^3",
+    1.4,
+
+    Ferrite.Vec{3}((-1.0, 0.0, 0.0))
+)=#
 
 function HLLC!(
     du, u, p, t,
@@ -255,7 +285,7 @@ function HLLC!(
         momentum_density_v_a,
         momentum_density_w_a,
         volumetric_energy_a,
-        (u.cp[idx_a] / u.cv[idx_b]),
+        (u.cp[idx_a] / u.cv[idx_a]),
 
         density_b,
         momentum_density_u_b,

@@ -27,17 +27,11 @@ n_cells = length(grid.cells)
 n_faces = nfacets(grid.cells[1])
 
 # Grid sets
-addcellset!(grid, "fluid", xyz -> xyz[1] >= (grid_x_length / n_cells) && xyz[1] <= (grid_x_length - grid_x_length / n_cells))
+addcellset!(grid, "fluid", xyz -> true)
 getcellset(grid, "fluid")
 
-addcellset!(grid, "supersonic_inlet", xyz -> xyz[1] <= (grid_x_length / n_cells) + 1e-8)
-getcellset(grid, "supersonic_inlet")
-
-addcellset!(grid, "supersonic_outlet", xyz -> xyz[1] >= (grid_x_length - grid_x_length / n_cells))
-getcellset(grid, "supersonic_outlet")
-
-addfacetset!(grid, "x_min_wall", xyz -> abs(xyz[1] - 0.0) < 1e-8)
-addfacetset!(grid, "x_max_wall", xyz -> abs(xyz[1] - grid_x_length) < 1e-8)
+addfacetset!(grid, "supersonic_inlet", xyz -> abs(xyz[1] - 0.0) < 1e-8)
+addfacetset!(grid, "supersonic_outlet", xyz -> abs(xyz[1] - grid_x_length) < 1e-8)
 addfacetset!(grid, "y_min_wall", xyz -> abs(xyz[2] - 0.0) < 1e-8)
 addfacetset!(grid, "y_max_wall", xyz -> abs(xyz[2] - grid_y_length) < 1e-8)
 addfacetset!(grid, "z_min_wall", xyz -> abs(xyz[3] - 0.0) < 1e-8)
@@ -195,44 +189,116 @@ supersonic_inlet_initial_conditions, supersonic_inlet_properties = construct_ini
     )
 )
 
-add_region!(
+supersonic_inlet_initial_conditions_stripped = ustrip.(upreferred.(supersonic_inlet_initial_conditions))
+
+add_patch!(
     config, "supersonic_inlet";
-    type = Fluid(),
-    initial_conditions = supersonic_inlet_initial_conditions,
-    properties = supersonic_inlet_properties,
-    property_update_function = 
-    function update_fluid_properties!(du, u, p, t, cell_id, vol, system)
-        overall_navier_stokes_property_update!(du, u, p, t, cell_id, vol)
-    end,
-    region_function = 
-    function fluid_physics!(du, u, p, t, cell_id, vol)
-        cap_navier_stokes_flow!(du, u, p, t, cell_id, vol)
-        du.density[cell_id] = 0.0
-        du.momentum_density_u[cell_id] = 0.0
-        du.momentum_density_v[cell_id] = 0.0
-        du.momentum_density_w[cell_id] = 0.0
-        du.volumetric_energy[cell_id] = 0.0
-    end,
+    properties = ComponentVector(),
+    patch_function = 
+    function supersonic_inlet_flux!(
+        du, u, p, t,
+        idx_a, idx_b, face_idx,
+        cell_face_areas, cell_face_normals, cell_face_distances,
+        cell_neighbor_normals, cell_neighbor_distances, 
+        cell_volumes
+    )
+        area = cell_face_areas[idx_a][face_idx]
+        normal = cell_face_normals[idx_a][face_idx]
+
+        density_bc = supersonic_inlet_initial_conditions_stripped.density
+        momentum_density_u_bc = supersonic_inlet_initial_conditions_stripped.momentum_density_u
+        momentum_density_v_bc = supersonic_inlet_initial_conditions_stripped.momentum_density_v
+        momentum_density_w_bc = supersonic_inlet_initial_conditions_stripped.momentum_density_w
+        volumetric_energy_bc = supersonic_inlet_initial_conditions_stripped.volumetric_energy
+
+        gamma_bc = u.cp[idx_a] / u.cv[idx_a]
+
+        _, _, _, pressure_bc, _ =
+            primitive_from_conservative(
+                density_bc,
+                momentum_density_u_bc,
+                momentum_density_v_bc,
+                momentum_density_w_bc,
+                volumetric_energy_bc,
+                gamma_bc,
+            )
+
+        (
+            F_density,
+            F_momentum_density_u,
+            F_momentum_density_v,
+            F_momentum_density_w,
+            F_volumetric_energy,
+        ) = physical_flux(
+            density_bc,
+            momentum_density_u_bc,
+            momentum_density_v_bc,
+            momentum_density_w_bc,
+            volumetric_energy_bc,
+            pressure_bc,
+            normal,
+        )
+
+        du.density_flow[idx_a] -= area * F_density
+
+        du.momentum_density_u_flow[idx_a] -= area * F_momentum_density_u
+        du.momentum_density_v_flow[idx_a] -= area * F_momentum_density_v
+        du.momentum_density_w_flow[idx_a] -= area * F_momentum_density_w
+
+        du.volumetric_energy_flow[idx_a] -= area * F_volumetric_energy
+    end
 )
 
-add_region!(
+add_patch!(
     config, "supersonic_outlet";
-    type = Fluid(),
-    initial_conditions = fluid_initial_conditions,
-    properties = fluid_properties,
-    property_update_function = 
-    function update_fluid_properties!(du, u, p, t, cell_id, vol, system)
-        overall_navier_stokes_property_update!(du, u, p, t, cell_id, vol)
-    end,
-    region_function = 
-    function fluid_physics!(du, u, p, t, cell_id, vol)
-        cap_navier_stokes_flow!(du, u, p, t, cell_id, vol)
-        du.density[cell_id] *= 0.0
-        du.momentum_density_u[cell_id] *= 0.0
-        du.momentum_density_v[cell_id] *= 0.0
-        du.momentum_density_w[cell_id] *= 0.0
-        du.volumetric_energy[cell_id] *= 0.0
-    end,
+    properties = ComponentVector(),
+    patch_function = 
+    function supersonic_outlet_flux!(
+        du, u, p, t,
+        idx_a, idx_b, face_idx,
+        cell_face_areas, cell_face_normals, cell_face_distances,
+        cell_neighbor_normals, cell_neighbor_distances, 
+        cell_volumes
+    )
+        area = cell_face_areas[idx_a][face_idx]
+        normal = cell_face_normals[idx_a][face_idx]
+
+        gamma = u.cp[idx_a] / u.cv[idx_a]
+
+        _, _, _, pressure, _ =
+            primitive_from_conservative(
+                u.density[idx_a],
+                u.momentum_density_u[idx_a],
+                u.momentum_density_v[idx_a],
+                u.momentum_density_w[idx_a],
+                u.volumetric_energy[idx_a],
+                gamma,
+            )
+
+        (
+            F_density,
+            F_momentum_density_u,
+            F_momentum_density_v,
+            F_momentum_density_w,
+            F_volumetric_energy,
+        ) = physical_flux(
+            u.density[idx_a],
+            u.momentum_density_u[idx_a],
+            u.momentum_density_v[idx_a],
+            u.momentum_density_w[idx_a],
+            u.volumetric_energy[idx_a],
+            pressure,
+            normal,
+        )
+
+        du.density_flow[idx_a] -= area * F_density
+
+        du.momentum_density_u_flow[idx_a] -= area * F_momentum_density_u
+        du.momentum_density_v_flow[idx_a] -= area * F_momentum_density_v
+        du.momentum_density_w_flow[idx_a] -= area * F_momentum_density_w
+
+        du.volumetric_energy_flow[idx_a] -= area * F_volumetric_energy
+    end
 )
 
 for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
@@ -277,38 +343,72 @@ function solve_system!(du, u, p, t, geo, system)
 end
 
 f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
+
 p_guess = 0.0
+
 detector = SparseConnectivityTracer.TracerLocalSparsityDetector()
 
-# 1. Direct steady-state solve using NonlinearSolve.jl
-f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)
-
 # Detect Jacobian sparsity for NonlinearProblem
-nl_jac_sparsity = ADTypes.jacobian_sparsity(
-    (du, u) -> f_closure_steady(du, u, p_guess), du0_vec, u0_vec, detector
+jac_sparsity = ADTypes.jacobian_sparsity(
+    (du, u) -> f_closure_implicit(du, u, p_guess, 0.0), du0_vec, u0_vec, detector
 ) 
 #this scales absolutely abysmally as the number of cells goes up
 #for example, a 10x increase in the amount of cells made this take around 100x longer! 
 
+#transient
 t0 = 0.0
 tMax = 100000.0
 tspan = (t0, tMax)
 
-ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(nl_jac_sparsity))
+ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
 implicit_prob = ODEProblem(ode_func, u0_vec, tspan, p_guess)
+
+function state_is_invalid(u, system)
+    U = ComponentVector(u, system.state_axes)
+
+    for i in eachindex(U.density)
+        rho = U.density[i]
+
+        rho <= 0 && return true
+
+        mx = U.momentum_density_u[i]
+        my = U.momentum_density_v[i]
+        mz = U.momentum_density_w[i]
+        rhoE = U.volumetric_energy[i]
+
+        kinetic_energy_density =
+            0.5 * (mx^2 + my^2 + mz^2) / rho
+
+        internal_energy_density =
+            rhoE - kinetic_energy_density
+
+        internal_energy_density <= 0 && return true
+    end
+
+    return false
+end
 
 println("Solving the Navier-Stokes ODE system...")
 @time sol = solve(
     implicit_prob,
+    #FBDF(linsolve = SparspakFactorization()),
     FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
     callback = approximate_time_to_finish_cb,
-    maxiters = 273
+    #saveat = (tMax / 300)
 )
 
-du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_guess, track_progress = true);
+f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)
+
+nl_func = NonlinearFunction(f_closure_steady, jac_prototype = float.(jac_sparsity))
+
+prob = NonlinearProblem(nl_func, u0_vec, p_guess)
+
+@time sol_steady = solve(prob, NonlinearSolve.NewtonRaphson(concrete_jac = true))
+
+du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_guess, track_progress = false);
 
 root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
 println("Saving VTK files to: ", root_dir)
-sol_to_vtk(sol, du_named, u_named, grid, geo, @__FILE__, root_dir, track_progress = true)
+sol_to_vtk(sol, du_named, u_named, grid, geo, @__FILE__, root_dir, track_progress = false)
 println("VTK export complete!")
 

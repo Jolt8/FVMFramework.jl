@@ -32,6 +32,18 @@ function get_temperature_ideal(u, cell_id)
 
     internal_energy_density = u.volumetric_energy[cell_id] - KE_per_vol
 
+    #=
+    if cell_id == 4
+        @show u.momentum_density_u[cell_id]
+        @show u.momentum_density_v[cell_id]
+        @show u.momentum_density_w[cell_id]
+        @show u.volumetric_energy[cell_id]
+        @show u.cv[cell_id]
+        @show KE_per_vol
+        @show internal_energy_density
+    end
+    =#
+
     return internal_energy_density / (u.density[cell_id] * u.cv[cell_id])
 end
 
@@ -52,6 +64,19 @@ end
 #speed of sound
 function get_speed_of_sound_ideal(u, cell_id)
     specific_heat_ratio = u.cp[cell_id] / u.cv[cell_id]
+
+    #=
+    if u.pressure[cell_id] <= 0.0 || u.density[cell_id] <= 0.0 || cell_id == 4
+        @show u.temperature[cell_id]
+        @show specific_heat_ratio
+        @show u.pressure[cell_id]
+        @show u.density[cell_id]
+        @show cell_id
+
+        @show u.pressure[:]
+        @show u.density[:]
+    end
+    =#
 
     return sqrt(specific_heat_ratio * u.pressure[cell_id] / u.density[cell_id])
 end
