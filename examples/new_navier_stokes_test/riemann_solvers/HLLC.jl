@@ -40,6 +40,8 @@ function primitive_from_conservative(
     volumetric_energy,
     specific_heat_ratio
 )
+    density = max(density, 1e-10)
+
     vel_u = momentum_density_u / density
     vel_v = momentum_density_v / density
     vel_w = momentum_density_w / density
@@ -50,9 +52,9 @@ function primitive_from_conservative(
         momentum_density_w^2
     ) / density
 
-    pressure = (specific_heat_ratio - 1) * (
-        volumetric_energy - kinetic_energy_density
-    )
+    internal_energy_density = max((volumetric_energy - kinetic_energy_density), 1e-10) 
+
+    pressure = (specific_heat_ratio - 1) * internal_energy_density
 
     speed_of_sound = sqrt(specific_heat_ratio * pressure / density)
 

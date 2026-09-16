@@ -78,20 +78,22 @@ struct Fluid <: AbstractPhysics end
 Revise.includet(joinpath(@__DIR__, "face_reconstructors/first_order_face_reconstruction.jl"))
 Revise.includet(joinpath(@__DIR__, "riemann_solvers/HLLC.jl"))
 
-HLLC_closure! = (
+function HLLC_closure!(
     du, u, p, t,
     idx_a, idx_b, face_idx,
     cell_face_areas, cell_face_normals, cell_face_distances,
     cell_neighbor_normals, cell_neighbor_distances, 
     cell_volumes
-) -> HLLC!(
-    du, u, p, t,
-    idx_a, idx_b, face_idx,
-    cell_face_areas, cell_face_normals, cell_face_distances,
-    cell_neighbor_normals, cell_neighbor_distances, 
-    cell_volumes,
-    first_order_face_reconstruction!
 )
+    HLLC!(
+        du, u, p, t,
+        idx_a, idx_b, face_idx,
+        cell_face_areas, cell_face_normals, cell_face_distances,
+        cell_neighbor_normals, cell_neighbor_distances, 
+        cell_volumes,
+        first_order_face_reconstruction!
+    )
+end
 
 function fluid_fluid_flux!(
     du, u, p, t,
@@ -344,6 +346,12 @@ end
 
 f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
 
+#=
+function f_closure_implicit(du, u, p, t)
+    fvm_operator!(du, u, p, t, solve_system!, geo, system)
+end
+=#
+
 p_guess = 0.0
 
 detector = SparseConnectivityTracer.TracerLocalSparsityDetector()
@@ -355,46 +363,80 @@ jac_sparsity = ADTypes.jacobian_sparsity(
 #this scales absolutely abysmally as the number of cells goes up
 #for example, a 10x increase in the amount of cells made this take around 100x longer! 
 
-#transient
-t0 = 0.0
-tMax = 100000.0
-tspan = (t0, tMax)
 
-ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
-implicit_prob = ODEProblem(ode_func, u0_vec, tspan, p_guess)
+function state_is_invalid(u, p, t, system)
+    u_named = ComponentVector(u, system.state_axes)
 
-function state_is_invalid(u, system)
-    U = ComponentVector(u, system.state_axes)
+    for i in 1:n_cells
+        kinetic_energy_density = 0.5 * (
+            u_named.momentum_density_u[i]^2 +
+            u_named.momentum_density_v[i]^2 +
+            u_named.momentum_density_w[i]^2
+        ) / u_named.density[i]
+        
+        internal_energy_density = u_named.volumetric_energy[i] - kinetic_energy_density
 
-    for i in eachindex(U.density)
-        rho = U.density[i]
-
-        rho <= 0 && return true
-
-        mx = U.momentum_density_u[i]
-        my = U.momentum_density_v[i]
-        mz = U.momentum_density_w[i]
-        rhoE = U.volumetric_energy[i]
-
-        kinetic_energy_density =
-            0.5 * (mx^2 + my^2 + mz^2) / rho
-
-        internal_energy_density =
-            rhoE - kinetic_energy_density
-
-        internal_energy_density <= 0 && return true
+        if !all(
+            isfinite, (
+                u_named.density[i],
+                u_named.momentum_density_u[i],
+                u_named.momentum_density_v[i],
+                u_named.momentum_density_w[i],
+                u_named.volumetric_energy[i],
+                internal_energy_density,
+            )) || u_named.density[i] <= 0.0 || internal_energy_density <= 0.0
+            return true
+        end
     end
 
     return false
 end
 
+state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
+
+#transient
+t0 = 0.0
+tMax = 1000.0
+tspan = (t0, tMax)
+
+ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
+implicit_prob = ODEProblem(ode_func, u0_vec, tspan, p_guess)
+
+early_dtmax = 100.0
+late_dtmax  = 1000.0
+switch_time = 400.0
+
+function increase_dtmax!(integrator)
+    integrator.opts.dtmax = late_dtmax
+
+    # We changed solver settings, not the state vector.
+    u_modified!(integrator, false)
+
+    println("Raised dtmax to $late_dtmax at t = $(integrator.t)")
+end
+
+increase_dtmax_cb = DiscreteCallback(
+    (u, t, integrator) -> t >= switch_time && integrator.opts.dtmax < late_dtmax,
+    increase_dtmax!;
+    save_positions = (false, false),
+)
+
+callbacks = CallbackSet(
+    approximate_time_to_finish_cb,
+    increase_dtmax_cb,
+)
+
 println("Solving the Navier-Stokes ODE system...")
 @time sol = solve(
     implicit_prob,
-    #FBDF(linsolve = SparspakFactorization()),
+    #FBDF(linsolve = SparspakFactorization(), nlsolve = NLNewton(relax = 0.5)),
     FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
-    callback = approximate_time_to_finish_cb,
+    #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
+    callback = callbacks,
+    isoutofdomain = state_is_invalid_closure,
     #saveat = (tMax / 300)
+    #dtmax = 100
+    #dtmax = early_dtmax
 )
 
 f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)
