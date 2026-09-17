@@ -441,7 +441,7 @@ function connection_map_function(phys_a, phys_b)
 end
 
 #you can check units by setting check_units = true and du0_vec and u0_vec will be returned as unitful ComponentVectors
-du0_vec, u0_vec, state_axes, geo, system = finish_fvm_config(config, connection_map_function, check_units = false);
+du0_vec, u0_vec, state_axes, system, geo = finish_fvm_config(config, connection_map_function, check_units = false);
 
 function update_gradient!(u, grad, idx_a, idx_b, face_idx, geo)
     u_average = (u[idx_a] + u[idx_b]) / 2
@@ -460,7 +460,7 @@ function update_min_max(u_vec, u_min_vec, u_max_vec, idx_a, idx_b)
     u_max_vec[idx_a] = max(u_max_vec[idx_a], u_vec[idx_b])
 end
 
-function reconstruct_gradients(du, u, p, t, geo, system)
+function reconstruct_gradients(du, u, p, t, system, geo)
     for cell_id in eachindex(geo.cell_volumes)
         for_fields!(u.mass_fractions, u.mass_fractions_grad, u.mass_fractions_min, u.mass_fractions_max) do species, u_species_mass_fractions, u_species_mass_fractions_grad, u_species_mass_fractions_min, u_species_mass_fractions_max
             u_species_mass_fractions_min[species[cell_id]] = u_species_mass_fractions[species[cell_id]]
@@ -554,7 +554,7 @@ function temporary_solve_connection_group!(
     end
 end
 
-function solve_system!(du, u, p, t, geo, system)
+function solve_system!(du, u, p, t, system, geo)
     #sus_cell_id = 5162
     #VERY IMPORTANT: since most software uses 0-based indexing, you need to adjust the cell id by +1
     #for example, if you mouse over cell_id 5161 in paraview, you need to use 5162 in the code because 
@@ -563,7 +563,7 @@ function solve_system!(du, u, p, t, geo, system)
         update_properties!(du, u, cell_id, geo.cell_volumes[cell_id])
     end
 
-    reconstruct_gradients(du, u, p, t, geo, system)
+    reconstruct_gradients(du, u, p, t, system, geo)
 
     #=for cell_id in 1:length(geo.cell_volumes)-1
         du.mass_face[cell_id, 6] -= u.pipe_mass_flow[cell_id]
@@ -578,14 +578,14 @@ function solve_system!(du, u, p, t, geo, system)
             geo.cell_face_normals, geo.cell_volumes
         )
     end
-    solve_patch_groups!(du, u, geo, system)
-    solve_region_groups!(du, u, geo, system)
+    solve_patch_groups!(du, u, p, t, system, geo)
+    solve_region_groups!(du, u, p, t, system, geo)
 end
 
 geo.cell_neighbors[1]
 geo.cell_neighbors[5]
 
-f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
 
 p_guess = 0.0
 

@@ -14,7 +14,7 @@ function update_region_group!(
 end
 
 function solve_connection_group!(
-    du, u, p, t,
+    du, u, p, t, system,
     flux!::F, cell_neighbors,
     cell_face_areas, cell_face_normals, cell_face_distances,
     cell_neighbor_normals, cell_neighbor_distances, 

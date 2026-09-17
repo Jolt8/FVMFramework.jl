@@ -275,7 +275,7 @@ function conneciton_map_function(type_a, type_b)
     type_a <: Solid && type_b <: Fluid && return solid_fluid_flux!
 end
 
-geo, system = finish_fvm_config(config, conneciton_map_function)
+system, geo = finish_fvm_config(config, conneciton_map_function)
 
 system.connection_groups
 #FIXME: inlet, outlet, and heating_areas are not being recorded in connection groups

@@ -24,15 +24,15 @@ function add_patch!(
 
     n_cells = length(config.grid.cells)
     
-    cell_neighbors = [(cell_id, Vector{Tuple{Int, Int}}()) for cell_id in 1:n_cells]
+    cell_neighbors = [(cell_id, Vector{Tuple{Int, Int, Int}}()) for cell_id in 1:n_cells]
 
-    for (cell_id, face_idx) in cell_ids_and_face_idxs
-        neighbor_id, neighbor_face_idx = get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_idx, config.top)
+    for (cell_id, face_idx_a) in cell_ids_and_face_idxs
+        neighbor_id, neighbor_face_idx = get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_idx_a, config.top)
         if !isnothing(neighbor_id)
-            push!(cell_neighbors[cell_id][2], (neighbor_id, face_idx))
+            push!(cell_neighbors[cell_id][2], (neighbor_id, face_idx_a, face_idx_b))
             #push!(cell_neighbors[neighbor_id][2], (cell_id, neighbor_face_idx)) #This is not necessary
         else
-            push!(cell_neighbors[cell_id][2], (0, face_idx))
+            push!(cell_neighbors[cell_id][2], (0, face_idx_a, 0))
         end
     end
 
@@ -66,15 +66,15 @@ function update_patch!(config, name)
 
     n_cells = length(config.grid.cells)
     
-    cell_neighbors = [(cell_id, Vector{Tuple{Int, Int}}()) for cell_id in 1:n_cells]
+    cell_neighbors = [(cell_id, Vector{Tuple{Int, Int, Int}}()) for cell_id in 1:n_cells]
 
-    for (cell_id, face_idx) in cell_ids_and_face_idxs
-        neighbor_id, neighbor_face_idx = get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_idx, config.top)
+    for (cell_id, face_idx_a) in cell_ids_and_face_idxs
+        neighbor_id, neighbor_face_idx = get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_idx_a, config.top)
         if !isnothing(neighbor_id)
-            push!(cell_neighbors[cell_id][2], (neighbor_id, face_idx))
+            push!(cell_neighbors[cell_id][2], (neighbor_id, face_idx_a, face_idx_b))
             #push!(cell_neighbors[neighbor_id][2], (cell_id, neighbor_face_idx)) #This is not necessary
         else
-            push!(cell_neighbors[cell_id][2], (0, face_idx))
+            push!(cell_neighbors[cell_id][2], (0, face_idx_a, 0))
         end
     end
 

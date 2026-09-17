@@ -458,7 +458,7 @@ input_experimental_data(trials, xf, "T3";
 
 #END OF OPTIMIZATION SETUP
 
-du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, special_caches)
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, special_caches)
 
 u_test = (; create_views_inline(u0_vec, system.u_proto_axes)..., create_views_inline(get_tmp(system.u_diff_cache_vec, 0.0), system.u_cache_axes)...)
 

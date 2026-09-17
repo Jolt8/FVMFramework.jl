@@ -24,13 +24,15 @@ end
 
 #temperature
 function get_temperature_ideal(u, cell_id)
+    density = max(u.density[cell_id], 1e-10)
+
     KE_per_vol = 0.5 * (
         u.momentum_density_u[cell_id]^2 +
         u.momentum_density_v[cell_id]^2 +
         u.momentum_density_w[cell_id]^2
-    ) / u.density[cell_id]
+    ) / density
 
-    internal_energy_density = u.volumetric_energy[cell_id] - KE_per_vol
+    internal_energy_density = max((u.volumetric_energy[cell_id] - KE_per_vol), 1e-10)
 
     #=
     if cell_id == 4
@@ -44,7 +46,7 @@ function get_temperature_ideal(u, cell_id)
     end
     =#
 
-    return internal_energy_density / (u.density[cell_id] * u.cv[cell_id])
+    return internal_energy_density / (density * u.cv[cell_id])
 end
 
 function update_temperature_ideal!(du, u, p, t, cell_id, vol)

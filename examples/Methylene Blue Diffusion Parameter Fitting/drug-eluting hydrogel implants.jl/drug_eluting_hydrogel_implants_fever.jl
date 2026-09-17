@@ -242,7 +242,7 @@ special_caches = (
     species_masses = NamedTuple{species_names}(fill(zeros(n_cells), length(species_names)))
 )
 
-du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, special_caches);
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, special_caches);
 
 u_test = (; create_views_inline(u0_vec, system.u_proto_axes)..., create_views_inline(get_tmp(system.u_diff_cache_vec, 0.0), system.u_cache_axes)...
 )

@@ -130,6 +130,7 @@ function fluid_fluid_flux!(
 end
 
 # Mapping connection functions
+#IMPORTANT: when we switch to evaluating only one flux update per face rather than two, this will determine which idx_a will be and idx_b will be
 function connection_map_function(phys_a, phys_b)
     typeof(phys_a) <: Fluid && typeof(phys_b) <: Fluid && return fluid_fluid_flux!
 end
@@ -227,7 +228,7 @@ add_patch!(
     properties = ComponentVector(),
     patch_function = 
     function supersonic_inlet_flux!(
-        du, u, p, t,
+        du, u, p, t, system, 
         idx_a, idx_b, face_idx,
         cell_face_areas, cell_face_normals, cell_face_distances,
         cell_neighbor_normals, cell_neighbor_distances, 
@@ -285,7 +286,7 @@ add_patch!(
     properties = ComponentVector(),
     patch_function = 
     function supersonic_outlet_flux!(
-        du, u, p, t,
+        du, u, p, t, system, 
         idx_a, idx_b, face_idx,
         cell_face_areas, cell_face_normals, cell_face_distances,
         cell_neighbor_normals, cell_neighbor_distances, 
@@ -338,7 +339,7 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
         properties = ComponentVector(),
         patch_function = 
         function wall_patch_flux!(
-            du, u, p, t,
+            du, u, p, t, system,
             idx_a, idx_b, face_idx,
             cell_face_areas, cell_face_normals, cell_face_distances,
             cell_neighbor_normals, cell_neighbor_distances, 
@@ -370,18 +371,31 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
     )
 end
 
-du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, check_units = false);
+#I think we're going to add an additional_data field of the system so that arbitrary data can be passed into any function without allocations
+additional_data = (
+    #You could put a neural network in here, custom structs, interpolations, just any useful data in general. 
+    #This does require that every function have system in its arguments though
+)
+
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, additional_data, check_units = false);
 WLS_STENCIL = build_weighted_least_squares_stencil(geo)
 
-function solve_system!(du, u, p, t, geo, system)
-    update_region_groups!(du, u, p, t, geo, system)
+# System solver function
+function solve_system!(du, u, p, t, system, geo)
+    update_region_groups!(du, u, p, t, system, geo)
     update_weighted_least_squares_gradients!(u, WLS_STENCIL)
-    solve_connection_groups!(du, u, p, t, geo, system)
-    solve_patch_groups!(du, u, p, t, geo, system)
-    solve_region_groups!(du, u, p, t, geo, system)
+    solve_connection_groups!(du, u, p, t, system, geo)
+    solve_patch_groups!(du, u, p, t, system, geo)
+    solve_region_groups!(du, u, p, t, system, geo)
 end
 
-f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
+
+#=
+function f_closure_implicit(du, u, p, t)
+    fvm_operator!(du, u, p, t, system, geo, solve_system!)
+end
+=#
 
 p_guess = 0.0
 
@@ -394,34 +408,30 @@ jac_sparsity = ADTypes.jacobian_sparsity(
 #this scales absolutely abysmally as the number of cells goes up
 #for example, a 10x increase in the amount of cells made this take around 100x longer! 
 
-#transient
-t0 = 0.0
-tMax = 100000.0
-tspan = (t0, tMax)
-
-ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
-implicit_prob = ODEProblem(ode_func, u0_vec, tspan, p_guess)
 
 function state_is_invalid(u, p, t, system)
-    U = ComponentVector(u, system.state_axes)
+    u_named = ComponentVector(u, system.state_axes)
 
-    for i in eachindex(U.density)
-        rho = U.density[i]
+    for i in 1:n_cells
+        kinetic_energy_density = 0.5 * (
+            u_named.momentum_density_u[i]^2 +
+            u_named.momentum_density_v[i]^2 +
+            u_named.momentum_density_w[i]^2
+        ) / u_named.density[i]
+        
+        internal_energy_density = u_named.volumetric_energy[i] - kinetic_energy_density
 
-        rho <= 0 && return true
-
-        mx = U.momentum_density_u[i]
-        my = U.momentum_density_v[i]
-        mz = U.momentum_density_w[i]
-        rhoE = U.volumetric_energy[i]
-
-        kinetic_energy_density =
-            0.5 * (mx^2 + my^2 + mz^2) / rho
-
-        internal_energy_density =
-            rhoE - kinetic_energy_density
-
-        internal_energy_density <= 0 && return true
+        if !all(
+            isfinite, (
+                u_named.density[i],
+                u_named.momentum_density_u[i],
+                u_named.momentum_density_v[i],
+                u_named.momentum_density_w[i],
+                u_named.volumetric_energy[i],
+                internal_energy_density,
+            )) || u_named.density[i] <= 0.0 || internal_energy_density <= 0.0
+            return true
+        end
     end
 
     return false
@@ -429,14 +439,49 @@ end
 
 state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
 
+#transient
+t0 = 0.0
+tMax = 1000.0
+tspan = (t0, tMax)
+
+ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
+implicit_prob = ODEProblem(ode_func, u0_vec, tspan, p_guess)
+
+early_dtmax = 100.0
+late_dtmax  = 1000.0
+switch_time = 400.0
+
+function increase_dtmax!(integrator)
+    integrator.opts.dtmax = late_dtmax
+
+    # We changed solver settings, not the state vector.
+    u_modified!(integrator, false)
+
+    println("Raised dtmax to $late_dtmax at t = $(integrator.t)")
+end
+
+increase_dtmax_cb = DiscreteCallback(
+    (u, t, integrator) -> t >= switch_time && integrator.opts.dtmax < late_dtmax,
+    increase_dtmax!;
+    save_positions = (false, false),
+)
+
+callbacks = CallbackSet(
+    approximate_time_to_finish_cb,
+    increase_dtmax_cb,
+)
+
 println("Solving the Navier-Stokes ODE system...")
 @time sol = solve(
     implicit_prob,
-    #FBDF(linsolve = SparspakFactorization()),
+    #FBDF(linsolve = SparspakFactorization(), nlsolve = NLNewton(relax = 0.5)),
     FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
-    callback = approximate_time_to_finish_cb,
+    #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
+    callback = callbacks,
+    isoutofdomain = state_is_invalid_closure,
     #saveat = (tMax / 300)
-    isoutofdomain = state_is_invalid
+    #dtmax = 100
+    #dtmax = early_dtmax
 )
 
 f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)

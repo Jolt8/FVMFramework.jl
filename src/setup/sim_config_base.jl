@@ -12,7 +12,7 @@ mutable struct PatchSetupInfo #this must be defined before SimulationConfigInfo
     name::String
     properties::ComponentVector
     patch_function::Function
-    cell_neighbors::Vector{Tuple{Int, Vector{Tuple{Int, Int}}}}
+    cell_neighbors::Vector{Tuple{Int, Vector{Tuple{Int, Int, Int}}}}
 end
 
 mutable struct SimulationConfigInfo

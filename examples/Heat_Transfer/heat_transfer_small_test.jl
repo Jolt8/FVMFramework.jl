@@ -132,17 +132,17 @@ function connection_map_function(type_a, type_b)
     typeof(type_a) <: Solid && typeof(type_b) <: Solid && return solid_solid_flux!
 end
 
-du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, check_units = false);
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, check_units = false);
 
-function solve_system!(du, u, p, t, geo, system)
+function solve_system!(du, u, p, t, system, geo)
     append_fixed_properties_and_p_to_u!(u, p, system)
 
-    solve_connection_groups!(du, u, p, t, geo, system)
-    solve_patch_groups!(du, u, p, t, geo, system)
-    solve_region_groups!(du, u, p, t, geo, system)
+    solve_connection_groups!(du, u, p, t, system, geo)
+    solve_patch_groups!(du, u, p, t, system, geo)
+    solve_region_groups!(du, u, p, t, system, geo)
 end
 
-f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
 
 test_prob = ODEProblem(f_closure_implicit, u0_vec, (0.0, 1000.0), system.p_vec)
 sol = solve(test_prob, Tsit5(), tspan = (0.0, 10.0))
@@ -181,7 +181,7 @@ record_sol = true
 
 sim_file = @__FILE__
 
-du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, system.p_vec)
+du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, system, geo.p_vec)
 
 if record_sol == true
     sol_to_vtk(sol, u_named, grid, sim_file)

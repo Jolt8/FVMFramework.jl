@@ -919,7 +919,7 @@ end
 fluid_regions = ["pipe_inlet", "silicon_carbide_preheater", "copper_mesh_reformer", "pipe_outlet"]
 advecting_fluid_cells = vcat(collect(grid.cellsets["pipe_inlet"]), collect(grid.cellsets["silicon_carbide_preheater"]), collect(grid.cellsets["copper_mesh_reformer"]), collect(grid.cellsets["pipe_outlet"]))
 
-function trial_independent_solve_system!(du, u, p_vec, t, geo, system)
+function trial_independent_solve_system!(du, u, p_vec, t, system, geo)
     p = ComponentVector(p_vec, system.p_axes)
 
     #TODO: Automate this process of applying the guessed values to the actual variables
@@ -930,7 +930,7 @@ function trial_independent_solve_system!(du, u, p_vec, t, geo, system)
         u.steel_thermal_mass_multiplier[cell_id] = p.steel_thermal_mass_multiplier[1]
     end
 
-    update_region_groups!(du, u, p, t, geo, system)
+    update_region_groups!(du, u, p, t, system, geo)
 
     for cell_id in TC1_cells
         u.thermocouple_to_heating_wire_thermal_resistance[cell_id] = p.TC1_thermal_resistance[1]
@@ -959,9 +959,9 @@ function trial_independent_solve_system!(du, u, p_vec, t, geo, system)
         du.mass_face[idx_b, 1] += u.pipe_mass_flow[idx_a]
     end
 
-    solve_connection_groups!(du, u, p, t, geo, system)
-    solve_patch_groups!(du, u, p, t, geo, system)
-    solve_region_groups!(du, u, p, t, geo, system)
+    solve_connection_groups!(du, u, p, t, system, geo)
+    solve_patch_groups!(du, u, p, t, system, geo)
+    solve_region_groups!(du, u, p, t, system, geo)
 end
 
 dry_run_config, dry_run_properties, dry_run_thermocouple_data, 
@@ -977,7 +977,7 @@ hot_water_du0_vec, hot_water_u0_vec, hot_water_geo, hot_water_system = finish_fv
 
 p_axes = hot_water_system.p_axes
 
-function dry_run_solve_system!(du, u, p_vec, t, geo, system)
+function dry_run_solve_system!(du, u, p_vec, t, system, geo)
     p = ComponentVector(p_vec, p_axes)
 
     for cell_id in heater_1_cells
@@ -1000,10 +1000,10 @@ function dry_run_solve_system!(du, u, p_vec, t, geo, system)
         du.heat[cell_id] += dry_run_heater_5_wattage_per_cell(p, t)
     end
 
-    trial_independent_solve_system!(du, u, p_vec, t, geo, system)
+    trial_independent_solve_system!(du, u, p_vec, t, system, geo)
 end
 
-function hot_water_solve_system!(du, u, p_vec, t, geo, system)
+function hot_water_solve_system!(du, u, p_vec, t, system, geo)
     p = ComponentVector(p_vec, p_axes)
 
     for cell_id in advecting_fluid_cells
@@ -1030,7 +1030,7 @@ function hot_water_solve_system!(du, u, p_vec, t, geo, system)
         du.heat[cell_id] += hot_water_heater_5_wattage_per_cell(p, t)
     end
     
-    trial_independent_solve_system!(du, u, p_vec, t, geo, system)
+    trial_independent_solve_system!(du, u, p_vec, t, system, geo)
 end
 
 function build_trial_implicit_prob(f_closure, du0_vec, u0_vec, thermocouple_data, p_guess)

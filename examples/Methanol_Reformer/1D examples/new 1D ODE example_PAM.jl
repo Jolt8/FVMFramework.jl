@@ -406,7 +406,7 @@ special_caches = (
     species_mass_flows = NamedTuple{species_names}(fill(zeros(n_cells), length(species_names))),
 )
 
-du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, special_caches)
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, special_caches)
 
 system.connection_groups[1].cell_neighbors[end]
 

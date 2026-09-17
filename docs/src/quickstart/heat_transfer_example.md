@@ -118,7 +118,7 @@ add_setup_syms!(
 #cap_heat_flux_to_temp_change! is a function already included in this framework,
 #we're just showing it here to show the purpose of cap functions
 
-function cap_heat_flux_to_temp_change!(du, u, cell_id, vol)
+function cap_heat_flux_to_temp_change!(du, u, p, t, system, cell_id, vol)
     #K/s = J/s / (m^3 * kg/m^3 * J/(kg*K))
     du.temp[cell_id] += du.heat[cell_id] / (vol * u.rho[cell_id] * u.cp[cell_id])
 end
@@ -165,17 +165,17 @@ add_region!(
         #if you want, you can also make per_cell_heating a property
         #per_cell_heating = (1000.0u"W" / n_copper_cells)
     ),
-    property_update_function = function copper_property_update!(du, u, p, t, cell_id, vol, system)
+    property_update_function = function copper_property_update!(du, u, p, t, system, cell_id, vol)
 
     end,
     region_function =
-    function heat_transfer!(du, u, cell_id, vol)
+    function heat_transfer!(du, u, p, t, system, cell_id, vol)
         du.heat[cell_id] += per_cell_heating
 
         #the alternative is this:
         #du.heat[cell_id] += u.per_cell_heating[cell_id]
 
-        cap_heat_flux_to_temp_change!(du, u, cell_id, vol)
+        cap_heat_flux_to_temp_change!(du, u, p, t, system, cell_id, vol)
     end
 )
 ```
@@ -229,6 +229,7 @@ function heat_diffusion!(
     grad_T = (u.temp[idx_b] - u.temp[idx_a]) / dist
 
     du.heat[idx_a] -= -k_effective * grad_T * area
+    du.heat[idx_b] += -k_effective * grad_T * area
 end
 ```
 
@@ -271,13 +272,14 @@ add_patch!(
         grad_T = (u.temp[idx_b] - u.temp[idx_a]) / cell_neighbor_distances[idx_a][face_idx]
 
         du.heat[idx_a] -= -u.weld_k[idx_a] * grad_T * cell_neighbor_areas[idx_a][face_idx]
+        du.heat[idx_b] += -u.weld_k[idx_a] * grad_T * cell_neighbor_areas[idx_a][face_idx]
     end
 )
 ```
 
 Now we compile all the information we've provided to create the internal data structures needed to solve the system
 ```julia
-du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, check_units = false);
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, check_units = false);
 ```
 
 Now we define a function that will be passed into the ODE problem
@@ -288,16 +290,16 @@ you could create an `add_patch!()` that **overwrites** something like `du.mass_f
 However, if you wanted to apply a flux to a patch of faces that **modifies** a normally happening flux you could write: `du.mass_face -= 0.1`
 
 ```julia
-function solve_system!(du, u, p, t, geo, system)
-    solve_connection_groups!(du, u, p, t, geo, system)
-    solve_patch_groups!(du, u, p, t, geo, system)
-    solve_region_groups!(du, u, p, t, geo, system)
+function solve_system!(du, u, p, t, system, geo)
+    solve_connection_groups!(du, u, p, t, system, geo)
+    solve_patch_groups!(du, u, p, t, system, geo)
+    solve_region_groups!(du, u, p, t, system, geo)
 end
 ```
 
 Create a closure self-containing solve_system!, geo, and system into a single function to be used by the ODE solver
 ```julia
-f_closure = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
+f_closure = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
 ```
 
 
