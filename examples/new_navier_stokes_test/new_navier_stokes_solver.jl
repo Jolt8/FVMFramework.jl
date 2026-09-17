@@ -63,35 +63,33 @@ add_setup_syms!(
         momentum_density_v_flow = u"N",
         momentum_density_w_flow = u"N",
         volumetric_energy_flow = u"W",
+        k = u"W/(m*K)",
         
         #specific_internal_energy = u"J/kg", #not cached right now, just a property
     ),
     special_caches = ComponentVector(
+        grad_vel_u = zeros(n_cells, 3)u"m/(s*m)",
+        grad_vel_v = zeros(n_cells, 3)u"m/(s*m)",
+        grad_vel_w = zeros(n_cells, 3)u"m/(s*m)",
+        grad_temperature = zeros(n_cells, 3)u"K/m",
+
+        
+        vel_u_face = zeros(n_cells, n_faces)u"m/s",
+        vel_v_face = zeros(n_cells, n_faces)u"m/s",
+        vel_w_face = zeros(n_cells, n_faces)u"m/s",
+        temperature_face = zeros(n_cells, n_faces)u"J/m^3",
     ),
     second_order_syms = [],
     optimized_parameters = ComponentVector(),
 )
 
-
 struct Fluid <: AbstractPhysics end
 
 Revise.includet(joinpath(@__DIR__, "face_reconstructors/first_order_face_reconstruction.jl"))
 Revise.includet(joinpath(@__DIR__, "riemann_solvers/HLLC.jl"))
-
-HLLC_closure! = (
-    du, u, p, t,
-    idx_a, idx_b, face_idx,
-    cell_face_areas, cell_face_normals, cell_face_distances,
-    cell_neighbor_normals, cell_neighbor_distances, 
-    cell_volumes
-) -> HLLC!(
-    du, u, p, t,
-    idx_a, idx_b, face_idx,
-    cell_face_areas, cell_face_normals, cell_face_distances,
-    cell_neighbor_normals, cell_neighbor_distances, 
-    cell_volumes,
-    first_order_face_reconstruction!
-)
+Revise.includet(joinpath(@__DIR__, "weighted_least_squares/weighted_least_squares.jl"))
+Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/fluid_viscous_and_diffusive_fluxes.jl"))
+Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/wall_viscous_and_diffusive_fluxes.jl"))
 
 function fluid_fluid_flux!(
     du, u, p, t,
@@ -100,12 +98,34 @@ function fluid_fluid_flux!(
     cell_neighbor_normals, cell_neighbor_distances, 
     cell_volumes
 )
-    HLLC_closure!(
+    #=
+    populate_weighted_least_squares_face_values!(
+        du, u, p, t,
+        idx_a, idx_b, face_idx,
+        cell_face_areas, cell_face_normals, cell_face_distances,
+        cell_neighbor_normals, cell_neighbor_distances,
+        cell_volumes
+    ) #this is to update vel_u_face, vel_v_face, vel_w_face, and temperature_face
+    #IMPORTANT: if more face values are needed, this function needs to be changed
+    =#
+    #NOTE: we only need this if we get tired of calculating grad_u_face values inside different functions
+    #right now, all grad_u_face values are only required in fluid_viscous_and_diffusive_flux!
+
+    HLLC!(
         du, u, p, t,
         idx_a, idx_b, face_idx,
         cell_face_areas[idx_a][face_idx], cell_face_normals[idx_a][face_idx], cell_face_distances[idx_a][face_idx],
         cell_neighbor_normals[idx_a][face_idx], cell_neighbor_distances[idx_a][face_idx],
         cell_volumes[idx_a],
+        first_order_face_reconstruction!
+    )
+
+    fluid_viscous_and_diffusive_flux!(
+        du, u, p, t,
+        idx_a, idx_b, face_idx,
+        cell_face_areas[idx_a][face_idx], cell_face_normals[idx_a][face_idx], cell_face_distances[idx_a][face_idx],
+        cell_neighbor_normals[idx_a][face_idx], cell_neighbor_distances[idx_a][face_idx],
+        cell_volumes[idx_a]
     )
 end
 
@@ -115,6 +135,7 @@ function connection_map_function(phys_a, phys_b)
 end
 
 Revise.includet(joinpath(@__DIR__, "navier_stokes_fluid_property_update_functions/fluid_property_update_functions.jl"))
+Revise.includet(joinpath(@__DIR__, "navier_stokes_fluid_property_update_functions/non_standard_fluid_property_update_functions.jl"))
 Revise.includet(joinpath(@__DIR__, "sum_and_cap_functions/cap_functions.jl"))
 
 function construct_initial_conditions_from_intuitive_inputs(u)
@@ -127,7 +148,8 @@ function construct_initial_conditions_from_intuitive_inputs(u)
     
     volumetric_energy = u.density * (internal_energy + kinetic_energy)
 
-    pressure = (u.R_gas / u.mw) * u.density * u.temperature
+    R_specific = u.cp - u.cv
+    pressure = u.density * R_specific * u.temperature
 
     @show speed_of_sound = sqrt((u.cp / u.cv) * pressure / u.density) |> u"m/s"
 
@@ -141,7 +163,9 @@ function construct_initial_conditions_from_intuitive_inputs(u)
         cp = u.cp,
         cv = u.cv,
         R_gas = u.R_gas,
-        mw = u.mw
+        mw = u.mw,
+        mu = u.mu, 
+        prandtl_number = u.prandtl_number,
     )
 end
 
@@ -155,7 +179,10 @@ fluid_initial_conditions, fluid_properties = construct_initial_conditions_from_i
         cp = 1.005e3u"J/(kg*K)",
         cv = 718.0u"J/(kg*K)",
         R_gas = 8.314u"J/(mol*K)",
-        mw = 28.97u"g/mol"
+        mw = 28.97u"g/mol",
+        mu = 1e-5u"Pa*s",
+        #k = 0.026u"W/(m*K)",
+        prandtl_number = 0.705,
     )
 )
 
@@ -167,6 +194,7 @@ add_region!(
     properties = fluid_properties,
     property_update_function = 
     function update_fluid_properties!(du, u, p, t, cell_id, vol, system)
+        update_k_from_prandtl!(du, u, p, t, cell_id, vol)
         overall_navier_stokes_property_update!(du, u, p, t, cell_id, vol)
     end,
     region_function = 
@@ -185,7 +213,10 @@ supersonic_inlet_initial_conditions, supersonic_inlet_properties = construct_ini
         cp = 1.005e3u"J/(kg*K)",
         cv = 718.0u"J/(kg*K)",
         R_gas = 8.314u"J/(mol*K)",
-        mw = 28.97u"g/mol"
+        mw = 28.97u"g/mol",
+        mu = 1e-5u"Pa*s",
+        #k = 0.026u"W/(m*K)",
+        prandtl_number = 0.705,
     )
 )
 
@@ -327,16 +358,24 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
             du.momentum_density_u_flow[idx_a] -= cell_face_areas[idx_a][face_idx] * pressure * cell_face_normals[idx_a][face_idx][1]
             du.momentum_density_v_flow[idx_a] -= cell_face_areas[idx_a][face_idx] * pressure * cell_face_normals[idx_a][face_idx][2]
             du.momentum_density_w_flow[idx_a] -= cell_face_areas[idx_a][face_idx] * pressure * cell_face_normals[idx_a][face_idx][3]
+
+            non_moving_wall_viscous_and_diffusive_flux!(
+                du, u, p, t,
+                idx_a, idx_b, face_idx,
+                cell_face_areas[idx_a][face_idx], cell_face_normals[idx_a][face_idx], cell_face_distances[idx_a][face_idx],
+                cell_neighbor_normals[idx_a][face_idx], cell_neighbor_distances[idx_a][face_idx],
+                cell_volumes[idx_a]
+            )
         end
     )
 end
 
-# Finish FVM configuration
 du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, check_units = false);
+WLS_STENCIL = build_weighted_least_squares_stencil(geo)
 
-# System solver function
 function solve_system!(du, u, p, t, geo, system)
     update_region_groups!(du, u, p, t, geo, system)
+    update_weighted_least_squares_gradients!(u, WLS_STENCIL)
     solve_connection_groups!(du, u, p, t, geo, system)
     solve_patch_groups!(du, u, p, t, geo, system)
     solve_region_groups!(du, u, p, t, geo, system)
@@ -363,7 +402,7 @@ tspan = (t0, tMax)
 ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
 implicit_prob = ODEProblem(ode_func, u0_vec, tspan, p_guess)
 
-function state_is_invalid(u, system)
+function state_is_invalid(u, p, t, system)
     U = ComponentVector(u, system.state_axes)
 
     for i in eachindex(U.density)
@@ -388,6 +427,8 @@ function state_is_invalid(u, system)
     return false
 end
 
+state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
+
 println("Solving the Navier-Stokes ODE system...")
 @time sol = solve(
     implicit_prob,
@@ -395,6 +436,7 @@ println("Solving the Navier-Stokes ODE system...")
     FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
     callback = approximate_time_to_finish_cb,
     #saveat = (tMax / 300)
+    isoutofdomain = state_is_invalid
 )
 
 f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)

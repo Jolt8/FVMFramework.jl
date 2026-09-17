@@ -53,7 +53,8 @@ end
 
 #pressure
 function get_pressure_ideal(u, cell_id)
-    return u.density[cell_id] * (u.R_gas[cell_id] / u.mw[cell_id]) * u.temperature[cell_id]
+    R_specific = u.cp[cell_id] - u.cv[cell_id]
+    return u.density[cell_id] * R_specific * u.temperature[cell_id]
 end
 
 function update_pressure_ideal!(du, u, p, t, cell_id, vol)
