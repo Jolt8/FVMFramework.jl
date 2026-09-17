@@ -72,7 +72,6 @@ add_setup_syms!(
     optimized_parameters = ComponentVector(),
 )
 
-
 struct Fluid <: AbstractPhysics end
 
 Revise.includet(joinpath(@__DIR__, "face_reconstructors/first_order_face_reconstruction.jl"))
@@ -112,6 +111,7 @@ function fluid_fluid_flux!(
 end
 
 # Mapping connection functions
+#IMPORTANT: when we switch to evaluating only one flux update per face rather than two, this will determine which idx_a will be and idx_b will be
 function connection_map_function(phys_a, phys_b)
     typeof(phys_a) <: Fluid && typeof(phys_b) <: Fluid && return fluid_fluid_flux!
 end
@@ -168,7 +168,7 @@ add_region!(
     initial_conditions = fluid_initial_conditions,
     properties = fluid_properties,
     property_update_function = 
-    function update_fluid_properties!(du, u, p, t, cell_id, vol, system)
+    function update_fluid_properties!(du, u, p, t, system, cell_id, vol, system)
         overall_navier_stokes_property_update!(du, u, p, t, cell_id, vol)
     end,
     region_function = 
@@ -198,7 +198,7 @@ add_patch!(
     properties = ComponentVector(),
     patch_function = 
     function supersonic_inlet_flux!(
-        du, u, p, t,
+        du, u, p, t, system, 
         idx_a, idx_b, face_idx,
         cell_face_areas, cell_face_normals, cell_face_distances,
         cell_neighbor_normals, cell_neighbor_distances, 
@@ -256,7 +256,7 @@ add_patch!(
     properties = ComponentVector(),
     patch_function = 
     function supersonic_outlet_flux!(
-        du, u, p, t,
+        du, u, p, t, system, 
         idx_a, idx_b, face_idx,
         cell_face_areas, cell_face_normals, cell_face_distances,
         cell_neighbor_normals, cell_neighbor_distances, 
@@ -309,7 +309,7 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
         properties = ComponentVector(),
         patch_function = 
         function wall_patch_flux!(
-            du, u, p, t,
+            du, u, p, t, system,
             idx_a, idx_b, face_idx,
             cell_face_areas, cell_face_normals, cell_face_distances,
             cell_neighbor_normals, cell_neighbor_distances, 
@@ -333,22 +333,28 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
     )
 end
 
+#I think we're going to add an additional_data field of the system so that arbitrary data can be passed into any function without allocations
+additional_data = (
+    #You could put a neural network in here, custom structs, interpolations, just any useful data in general. 
+    #This does require that every function have system in its arguments though
+)
+
 # Finish FVM configuration
-du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, check_units = false);
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, additional_data, check_units = false);
 
 # System solver function
-function solve_system!(du, u, p, t, geo, system)
-    update_region_groups!(du, u, p, t, geo, system)
-    solve_connection_groups!(du, u, p, t, geo, system)
-    solve_patch_groups!(du, u, p, t, geo, system)
-    solve_region_groups!(du, u, p, t, geo, system)
+function solve_system!(du, u, p, t, system, geo)
+    update_region_groups!(du, u, p, t, system, geo)
+    solve_connection_groups!(du, u, p, t, system, geo)
+    solve_patch_groups!(du, u, p, t, system, geo)
+    solve_region_groups!(du, u, p, t, system, geo)
 end
 
-f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
 
 #=
 function f_closure_implicit(du, u, p, t)
-    fvm_operator!(du, u, p, t, solve_system!, geo, system)
+    fvm_operator!(du, u, p, t, system, geo, solve_system!)
 end
 =#
 

@@ -3,7 +3,7 @@ abstract type FVMGeometry end
 struct FVMGeometryTetra{T, CoordType} <: FVMGeometry
     cell_volumes::Vector{T}
     cell_centroids::Vector{CoordType}
-    cell_neighbors::Vector{Tuple{Int64, Vector{Tuple{Int64, Int64}}}}
+    cell_neighbors::Vector{Tuple{Int64, Vector{Tuple{Int64, Int64, Int64}}}}
     cell_neighbor_areas::Vector{MVector{4, T}}
     cell_neighbor_normals::Vector{MVector{4, CoordType}}
     cell_neighbor_distances::Vector{MVector{4, T}}
@@ -16,7 +16,7 @@ end
 struct FVMGeometryHexa{T, CoordType} <: FVMGeometry
     cell_volumes::Vector{T}
     cell_centroids::Vector{CoordType}
-    cell_neighbors::Vector{Tuple{Int64, Vector{Tuple{Int64, Int64}}}}
+    cell_neighbors::Vector{Tuple{Int64, Vector{Tuple{Int64, Int64, Int64}}}}
     cell_neighbor_areas::Vector{MVector{6, T}}
     cell_neighbor_normals::Vector{MVector{6, CoordType}}
     cell_neighbor_distances::Vector{MVector{6, T}}

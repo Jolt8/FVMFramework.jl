@@ -115,22 +115,23 @@ function get_cell_neighbors(grid, top)
     n_facets_per_cell = length(Ferrite.faces(grid.cells[1]))
     n_nodes_per_face = length(get_face_nodes(grid, 1, 1))
 
-    cell_neighbors = Vector{Tuple{Int, Vector{Tuple{Int, Int}}}}()
+    cell_neighbors = Vector{Tuple{Int, Vector{Tuple{Int, Int, Int}}}}()
     #[(cell_id, Int[0, 0, 0, 0])...] for tetras for example
     cell_neighbors_node_ids = Vector{Vector{SVector{n_nodes_per_face, Int}}}()
     #cell_neighbors is accessed through cell_neighbors_node_ids[cell_id][facet_idx] = (1, 5, 27)
     #this is getting pretty complicated
 
     for cell_id in 1:n_cells
-        curr_cell_neighbors = (cell_id, Vector{Tuple{Int, Int}}())
+        curr_cell_neighbors = (cell_id, Vector{Tuple{Int, Int, Int}}())
         curr_cell_neighbors_node_ids = [SVector{n_nodes_per_face, Int}(zeros(Int, n_nodes_per_face)) for _ in 1:n_facets_per_cell]
         for face_idx in 1:nfacets(grid.cells[cell_id])
             neighbor_info = top.face_face_neighbor[cell_id, face_idx]
 
             if !isempty(neighbor_info)
                 neighbor_id = collect(neighbor_info[1].idx)[1]
+                neighbor_face_idx = collect(neighbor_info[1].idx)[2]
 
-                push!(curr_cell_neighbors[2], (neighbor_id, face_idx))
+                push!(curr_cell_neighbors[2], (neighbor_id, face_idx, neighbor_face_idx))
                 curr_cell_neighbors_node_ids[face_idx] = get_face_nodes(grid, cell_id, face_idx)
             end
         end

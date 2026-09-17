@@ -178,7 +178,7 @@ special_caches = (
     molar_concentrations = NamedTuple{species_names}(fill(zeros(n_cells)u"mol/m^3", length(species_names))), #I'm starting to really enjoy these NamedTuple constructors
 )
 
-du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, special_caches, check_units = false);
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, special_caches, check_units = false);
 
 f_closure_implicit = (du, u, p, t) -> methanol_reformer_f_test!(
     du, u, p, t, 

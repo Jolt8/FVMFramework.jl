@@ -275,7 +275,7 @@ special_caches = (
     molar_concentrations=NamedTuple{species_names}(fill(zeros(n_cells), length(species_names))), #I'm starting to really enjoy these NamedTuple constructors
 )
 
-du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, special_caches)
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, special_caches)
 
 u_test = ComponentVector(u0_vec, system.u_proto_axes)
 

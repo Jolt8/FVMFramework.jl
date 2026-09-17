@@ -431,19 +431,19 @@ special_caches = ComponentVector(
     ),=#
 )
 
-du0_vec, u0_vec, state_axes, geo, system = finish_fvm_config(config, connection_map_function, special_caches, check_units = false);
+du0_vec, u0_vec, state_axes, system, geo = finish_fvm_config(config, connection_map_function, special_caches, check_units = false);
 
-function solve_system!(du, u, p, t, geo, system)
+function solve_system!(du, u, p, t, system, geo)
     properties = ComponentVector(system.properties_vec, system.properties_axes)
     u.rho .= properties.rho
-    solve_connection_groups!(du, u, geo, system)
-    solve_controller_groups!(du, u, geo, system)
-    solve_patch_groups!(du, u, geo, system)
-    solve_region_groups!(du, u, geo, system)
+    solve_connection_groups!(du, u, p, t, system, geo)
+    solve_controller_groups!(du, u, p, t, system, geo)
+    solve_patch_groups!(du, u, p, t, system, geo)
+    solve_region_groups!(du, u, p, t, system, geo)
 end
 
 
-f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
 
 p_guess = 0.0
 

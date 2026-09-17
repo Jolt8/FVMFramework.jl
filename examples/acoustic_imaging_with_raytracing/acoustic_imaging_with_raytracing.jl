@@ -369,22 +369,22 @@ function connection_map_function(phys_a, phys_b)
     typeof(phys_a) <: Solid && typeof(phys_b) <: Solid && return solid_solid_flux!
 end
 
-function solve_system!(du, u, p_vec, t, geo, system)
+function solve_system!(du, u, p_vec, t, system, geo)
     #no=slip condition at walls to prevent liquid and gas from building up at the top and bottom cells
     u.gravity[1] = 0.0 
     u.local_gas_drift_velocity[end] = 0.0
 
     p = ComponentVector(p_vec, system.p_axes)
 
-    update_region_groups!(du, u, p, t, geo, system)
-    solve_connection_groups!(du, u, p, t, geo, system)
-    solve_patch_groups!(du, u, p, t, geo, system)
-    solve_region_groups!(du, u, p, t, geo, system)
+    update_region_groups!(du, u, p, t, system, geo)
+    solve_connection_groups!(du, u, p, t, system, geo)
+    solve_patch_groups!(du, u, p, t, system, geo)
+    solve_region_groups!(du, u, p, t, system, geo)
 end
 
-du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, check_units = false);
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, check_units = false);
 
-f_closure = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
+f_closure = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
 
 p_guess = 0.0
 

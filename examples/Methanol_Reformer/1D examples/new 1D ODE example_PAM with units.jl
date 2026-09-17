@@ -431,7 +431,7 @@ special_caches = ComponentArray(
 )
 
 #you can check units by setting check_units = true and du0_vec and u0_vec will be returned as unitful ComponentVectors
-du0_vec, u0_vec, state_axes, geo, system = finish_fvm_config(config, connection_map_function, special_caches, check_units = false);
+du0_vec, u0_vec, state_axes, system, geo = finish_fvm_config(config, connection_map_function, special_caches, check_units = false);
 
 f_closure_implicit = (du, u, p, t) -> pipe_f!(
     du, u, p, t, 

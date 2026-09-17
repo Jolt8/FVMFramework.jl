@@ -370,9 +370,9 @@ special_caches = ComponentArray(
 )
 
 #you can check units by setting check_units = true and du0_vec and u0_vec will be returned as unitful ComponentVectors
-du0_vec, u0_vec, state_axes, geo, system = finish_fvm_config(config, connection_map_function, special_caches, check_units = false);
+du0_vec, u0_vec, state_axes, system, geo = finish_fvm_config(config, connection_map_function, special_caches, check_units = false);
 
-function one_dimensional_pipe_f!(du, u, p, t, geo, system)
+function one_dimensional_pipe_f!(du, u, p, t, system, geo)
     #du, u = unpack_fvm_state(du_vec, u_vec, p, t, system) 
     #I put this here just so you know that you can modify this if you want to
     #that would probably only be useful when doing optimization 
@@ -383,19 +383,19 @@ function one_dimensional_pipe_f!(du, u, p, t, geo, system)
         du.mass_face[cell_id + 1, 5] += u.pipe_mass_flow[cell_id]
     end
 
-    solve_connection_groups!(du, u, geo, system)
-    solve_controller_groups!(du, u, geo, system)
-    solve_patch_groups!(du, u, geo, system)
-    solve_region_groups!(du, u, geo, system)
+    solve_connection_groups!(du, u, p, t, system, geo)
+    solve_controller_groups!(du, u, p, t, system, geo)
+    solve_patch_groups!(du, u, p, t, system, geo)
+    solve_region_groups!(du, u, p, t, system, geo)
 
-    #you could also just do: default_order_solve_all_groups!(du, u, p, t, geo, system),
+    #you could also just do: default_order_solve_all_groups!(du, u, p, t, system, geo),
     #but then you can't print stuff between group type loops.
     #For example, you can't do @show u.heat[1:5] after the connection groups are solved to see if some heat flux is screwing everything up.
 
     #also, if you don't need any custom logic at all, you can directly pass default_order_solve_all_groups!() to the closure instead of defining this function.
 end
 
-f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, one_dimensional_pipe_f!, geo, system)
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, one_dimensional_pipe_f!, system, geo)
 
 p_guess = 0.0
 

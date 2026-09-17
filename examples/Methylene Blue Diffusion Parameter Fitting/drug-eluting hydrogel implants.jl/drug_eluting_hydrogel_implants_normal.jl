@@ -242,7 +242,7 @@ special_caches = (
     species_masses = NamedTuple{species_names}(fill(zeros(n_cells), length(species_names)))
 )
 
-du0_vec, u0_vec, geo, system = finish_fvm_config(config, connection_map_function, special_caches);
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, special_caches);
 
 u_test = (; create_views_inline(u0_vec, system.u_proto_axes)..., create_views_inline(get_tmp(system.u_diff_cache_vec, 0.0), system.u_cache_axes)...
 )
@@ -250,7 +250,7 @@ u_test = (; create_views_inline(u0_vec, system.u_proto_axes)..., create_views_in
 du_test = (; create_views_inline(du0_vec, system.du_proto_axes)..., create_views_inline(get_tmp(system.du_diff_cache_vec, 0.0), system.du_cache_axes)...
 )
 
-function solve_system!(du, u, p, t, geo, system)
+function solve_system!(du, u, p, t, system, geo)
     properties = ComponentVector(system.properties_vec, system.properties_axes)
 
     u.rho .= properties.rho
@@ -262,9 +262,9 @@ function solve_system!(du, u, p, t, geo, system)
     u.diffusion_pre_exponential_factor .= p_named.diffusion_pre_exponential_factor
     u.diffusion_activation_energy .= p_named.diffusion_activation_energy
 
-    solve_connection_groups!(du, u, geo, system)
-    solve_patch_groups!(du, u, geo, system)
-    solve_region_groups!(du, u, geo, system)
+    solve_connection_groups!(du, u, p, t, system, geo)
+    solve_patch_groups!(du, u, p, t, system, geo)
+    solve_region_groups!(du, u, p, t, system, geo)
 
     for reg in region_groups
         if reg.name == "surrounding_fluid"
@@ -314,7 +314,7 @@ function solve_system!(du, u, p, t, geo, system)
     end
 end
 
-f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
 #just remove t from the above closure function and from methanol_reformer_f_test! itself to NonlinearSolve this system
 
 p_guess = 0.0

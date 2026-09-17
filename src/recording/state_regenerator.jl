@@ -36,7 +36,7 @@ function regenerate_fvm_state(sol, system, solve_system!, geo, p_guess; u_additi
         du = merge_properties(du_named[i], deepcopy(ComponentVector(system.cache_vec, system.cache_axes)))
         du .= 0.0
 
-        solve_system!(du, u, p_guess, t, geo, system) #solve_sytem! is extremely cheap to run once we've already solved it
+        solve_system!(du, u, p_guess, t, system, geo) #solve_sytem! is extremely cheap to run once we've already solved it
 
         #however, since it updates u_named, we need to set it back to the original
         #if this breaks in the future, we can just fallback to only running update_fluid_properties! each iteration instead of solve_system!

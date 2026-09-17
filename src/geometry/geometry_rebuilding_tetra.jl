@@ -50,7 +50,7 @@ function rebuild_fvm_geometry_tetra!(
     #for geometry optimization in the future, we might want to store a separate version of cell_neighbors that doesn't contain duplicates
     #this would only require making normals negative for the neighboring cell and would reduce the math needed
     for (cell_id, this_cell_neighbors) in cell_neighbors
-        for (neighbor_id, face_idx) in this_cell_neighbors
+        for (neighbor_id, face_idx, face_idx_b) in this_cell_neighbors
             face_node_indices = cell_neighbors_node_ids[cell_id][face_idx] #cell_neighbors_node_ids[face_idx] looks like (1, 4, 7) 
             node_1_coords = node_coordinates[face_node_indices[1]]
             node_2_coords = node_coordinates[face_node_indices[2]]

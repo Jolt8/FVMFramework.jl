@@ -11,13 +11,13 @@ struct PatchGroup{P <: ComponentVector, F <: Function}
     name::String
     properties::P
     patch_function!::F
-    cell_neighbors::Vector{Tuple{Int, Vector{Tuple{Int, Int}}}}
+    cell_neighbors::Vector{Tuple{Int, Vector{Tuple{Int, Int, Int}}}}
 end
 
 #=
 struct CellNeighbors
     idx_a::Int
-    idx_b_face_idx_vec::Vector{Tuple{Int, Int}}
+    idx_b_face_idx_vec::Vector{Tuple{Int, Int, Int}}
 end
 =#
 
@@ -25,7 +25,7 @@ struct ConnectionGroup{RA <: RegionGroup, RB <: RegionGroup, F <: Function}
     region_a::RA
     region_b::RB
     flux_function!::F
-    cell_neighbors::Vector{Tuple{Int, Vector{Tuple{Int, Int}}}} #we could probably use ::Vector{CellNeighbors} here
+    cell_neighbors::Vector{Tuple{Int, Vector{Tuple{Int, Int, Int}}}} #we could probably use ::Vector{CellNeighbors} here
 end
 
 struct FVMSystem
@@ -43,9 +43,10 @@ struct FVMSystem
     properties_axes::Tuple
     p_vec::Vector{Float64}
     p_axes::Tuple
+    additional_data::NamedTuple
 end
 
-function finish_fvm_config(config, connection_map_function; check_units::Bool)
+function finish_fvm_config(config, connection_map_function, additional_data; check_units::Bool)
     n_cells = length(config.geo.cell_volumes)
 
     connection_groups = ConnectionGroup[]
@@ -82,14 +83,21 @@ function finish_fvm_config(config, connection_map_function; check_units::Bool)
     #we specifically use strings here because checking if (region_a, region_b) == (region_b, region_a) was fragile
 
     for (idx_a, idx_a_neighbors) in config.geo.cell_neighbors
-        for (idx_b, face_idx) in idx_a_neighbors
+        for (idx_b, face_idx_a, face_idx_b) in idx_a_neighbors
             if idx_b <= 0
-                continue
+                continue #we skip this face iteration if the cell doesn't have a neighbor at a face
             end
 
             region_a = cell_regions_map[idx_a]
             region_b = cell_regions_map[idx_b]
 
+            #NOTE: since we're no longer going to be evaluating fluxes two times per face, now the conneciton map function only needs:
+            #region_a && region_b == some function
+            
+            #rather than
+
+            #region_a && region_b == some function
+            #region_b && region_a == some other function
             flux_function! = connection_map_function(cell_region_phys_map[idx_a], cell_region_phys_map[idx_b])
 
             connection_group_id = findfirst(item -> item == (region_a.name, region_b.name), unique_region_connection_pairs)
@@ -106,7 +114,7 @@ function finish_fvm_config(config, connection_map_function; check_units::Bool)
                 )
                 )
                 push!(connection_groups[new_connection_group_id].cell_neighbors[idx_a][2], (
-                    (idx_b, face_idx)
+                    (idx_b, face_idx_a, face_idx_b)
                 )
                 )
             #=elseif (region_a.name, region_b.name) in unique_region_connection_pairs && isempty(connection_groups[connection_group_id].cell_neighbors[idx_a])
@@ -114,13 +122,13 @@ function finish_fvm_config(config, connection_map_function; check_units::Bool)
                 #after using this framework for a while, I've never actually seen this trigger
                 connection_group_id = findfirst(item -> item == (region_a.name, region_b.name), unique_region_connection_pairs)
                 push!(connection_groups[connection_group_id].cell_neighbors[idx_a], (
-                    (idx_a, Vector{Tuple{Int, Int}}((idx_b, face_idx)))
+                    (idx_a, Vector{Tuple{Int, Int, Int}}((idx_b, face_idx_b, face_idx_b)))
                 )
                 )=#
             elseif !isempty(connection_groups[connection_group_id].cell_neighbors[idx_a])
                 connection_group_id = findfirst(item -> item == (region_a.name, region_b.name), unique_region_connection_pairs)
                 push!(connection_groups[connection_group_id].cell_neighbors[idx_a][2], (
-                    (idx_b, face_idx)
+                    (idx_b, face_idx_a, face_idx_b)
                 )
                 )
             end
@@ -192,11 +200,14 @@ function finish_fvm_config(config, connection_map_function; check_units::Bool)
         system = FVMSystem(
             connection_groups, patch_groups, region_groups,
             du_virtual_axes, u_virtual_axes,
-            du_diff_cache, u_diff_cache,
+            state_axes,
+            du_diff_cache, u_diff_cache, 
+            cache_vec, cache_axes,
             properties_vec, properties_axes,
-            p_vec, p_axes
+            p_vec, p_axes,
+            additional_data
         )
-        du_units, u_units = run_and_check_units(du0_vec_units, u0_vec_units, config.geo, system, du_unitful_cache_vec, u_unitful_cache_vec, properties_vec_units, p_vec_units)
+        du_units, u_units = run_and_check_units(du0_vec_units, u0_vec_units, config.system, geo, du_unitful_cache_vec, u_unitful_cache_vec, properties_vec_units, p_vec_units)
         return du_units, u_units, state_axes, 0, 0
     end
 
@@ -207,8 +218,9 @@ function finish_fvm_config(config, connection_map_function; check_units::Bool)
         du_diff_cache, u_diff_cache, 
         cache_vec, cache_axes,
         properties_vec, properties_axes,
-        p_vec, p_axes
+        p_vec, p_axes,
+        additional_data
     )
 
-    return du0_vec, u0_vec, config.geo, system
+    return du0_vec, u0_vec, system, config.geo
 end

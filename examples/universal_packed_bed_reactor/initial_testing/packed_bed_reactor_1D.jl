@@ -389,9 +389,9 @@ function connection_map_function(phys_a, phys_b)
 end
 
 #you can check units by setting check_units = true and du0_vec and u0_vec will be returned as unitful ComponentVectors
-du0_vec, u0_vec, state_axes, geo, system = finish_fvm_config(config, connection_map_function, check_units = false);
+du0_vec, u0_vec, state_axes, system, geo = finish_fvm_config(config, connection_map_function, check_units = false);
 
-function solve_system!(du, u, p, t, geo, system)
+function solve_system!(du, u, p, t, system, geo)
     #sus_cell_id = 5162
     #VERY IMPORTANT: since most software uses 0-based indexing, you need to adjust the cell id by +1
     #for example, if you mouse over cell_id 5161 in paraview, you need to use 5162 in the code because julia uses 1-based indexing 
@@ -405,12 +405,12 @@ function solve_system!(du, u, p, t, geo, system)
         du.mass_face[cell_id + 1, 1] += u.pipe_mass_flow[cell_id]
     end=#
 
-    solve_connection_groups!(du, u, geo, system)
-    solve_patch_groups!(du, u, geo, system)
-    solve_region_groups!(du, u, geo, system)
+    solve_connection_groups!(du, u, p, t, system, geo)
+    solve_patch_groups!(du, u, p, t, system, geo)
+    solve_region_groups!(du, u, p, t, system, geo)
 end
 
-f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, solve_system!, geo, system)
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
 
 p_guess = 0.0
 
