@@ -7,7 +7,7 @@ function get_velocity(u, cell_id)
     )
 end
 
-function update_velocities!(du, u, p, t, cell_id, vol)
+function update_velocities!(du, u, p, t, system, geo, cell_id)
     u.vel_u[cell_id], u.vel_v[cell_id], u.vel_w[cell_id] = get_velocity(u, cell_id)
 end
 
@@ -49,7 +49,7 @@ function get_temperature_ideal(u, cell_id)
     return internal_energy_density / (density * u.cv[cell_id])
 end
 
-function update_temperature_ideal!(du, u, p, t, cell_id, vol)
+function update_temperature_ideal!(du, u, p, t, system, geo, cell_id)
     u.temperature[cell_id] = get_temperature_ideal(u, cell_id)
 end
 
@@ -59,7 +59,7 @@ function get_pressure_ideal(u, cell_id)
     return u.density[cell_id] * R_specific * u.temperature[cell_id]
 end
 
-function update_pressure_ideal!(du, u, p, t, cell_id, vol)
+function update_pressure_ideal!(du, u, p, t, system, geo, cell_id)
     u.pressure[cell_id] = get_pressure_ideal(u, cell_id)
 end
 
@@ -84,15 +84,15 @@ function get_speed_of_sound_ideal(u, cell_id)
     return sqrt(specific_heat_ratio * u.pressure[cell_id] / u.density[cell_id])
 end
 
-function update_speed_of_sound_ideal!(du, u, p, t, cell_id, vol)
+function update_speed_of_sound_ideal!(du, u, p, t, system, geo, cell_id)
     u.speed_of_sound[cell_id] = get_speed_of_sound_ideal(u, cell_id)
 end
 
 
-function overall_navier_stokes_property_update!(du, u, p, t, cell_id, vol)
-    update_velocities!(du, u, p, t, cell_id, vol)
-    #update_specific_energy!(du, u, p, t, cell_id, vol)
-    update_temperature_ideal!(du, u, p, t, cell_id, vol)
-    update_pressure_ideal!(du, u, p, t, cell_id, vol)
-    update_speed_of_sound_ideal!(du, u, p, t, cell_id, vol)
+function overall_navier_stokes_property_update!(du, u, p, t, system, geo, cell_id)
+    update_velocities!(du, u, p, t, system, geo, cell_id)
+    #update_specific_energy!(du, u, p, t, system, geo, cell_id)
+    update_temperature_ideal!(du, u, p, t, system, geo, cell_id)
+    update_pressure_ideal!(du, u, p, t, system, geo, cell_id)
+    update_speed_of_sound_ideal!(du, u, p, t, system, geo, cell_id)
 end

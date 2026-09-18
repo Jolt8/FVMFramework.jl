@@ -1,101 +1,53 @@
 function update_region_group!(
-    du, u, p, t,
-    property_update_function!::F, region_cells,
-    cell_volumes, system
+    du, u, p, t, system, geo,
+    property_update_function!::F, region_cells
 ) where {F}
     for cell_id in region_cells
         property_update_function!(
-            du, u, p, t, 
-            cell_id,
-            cell_volumes[cell_id],
-            system
+            du, u, p, t, system, geo,
+            cell_id
         )
     end
 end
 
 function solve_connection_group!(
-    du, u, p, t, system,
-    flux!::F, cell_neighbors,
-    cell_face_areas, cell_face_normals, cell_face_distances,
-    cell_neighbor_normals, cell_neighbor_distances, 
-    cell_volumes
+    du, u, p, t, system, geo,
+    flux!::F, cell_neighbors
 ) where {F}
     for (idx_a, neighbor_list) in cell_neighbors
         for (idx_b, face_idx_a, face_idx_b) in neighbor_list
             flux!(
-                du, u, p, t, system,
+                du, u, p, t, system, geo,
                 idx_a, face_idx_a,
-                idx_b, face_idx_b,
-                cell_face_areas, cell_face_normals, cell_face_distances,
-                cell_neighbor_normals, cell_neighbor_distances, 
-                cell_volumes
+                idx_b, face_idx_b
             )
         end
     end
 end
 
-<<<<<<< HEAD
-=======
-function update_region_group!(
-    du, u, p, t, system,
-    property_update_function!::F, region_cells,
-    cell_volumes
-) where {F}
-    for cell_id in region_cells
-        property_update_function!(
-            du, u, p, t, system,
-            cell_id,
-            cell_volumes[cell_id]
-        )
-    end
-end
-
-function solve_region_group!(
-    du, u, p, t, system,
-    region_function!::G, region_cells,
-    cell_volumes
-) where {G}
-    for cell_id in region_cells
-        region_function!(
-            du, u, p, t, system,
-            cell_id,
-            cell_volumes[cell_id]
-        )
-    end
-end
-
->>>>>>> 1b3ca86ef6ee59c82e3d93370ed54ea3515395d0
 function solve_patch_group!(
-    du, u, p, t, system,
-    patch_physics!::F, cell_neighbors,
-    cell_face_areas, cell_face_normals, cell_face_distances,
-    cell_neighbor_normals, cell_neighbor_distances,
-    cell_volumes
+    du, u, p, t, system, geo,
+    patch_physics!::F, cell_neighbors
 ) where {F} 
     for (idx_a, neighbor_list) in cell_neighbors
         for (idx_b, face_idx_a, face_idx_b) in neighbor_list
             patch_physics!(
-                du, u, p, t, system,
+                du, u, p, t, system, geo,
                 idx_a, face_idx_a,
-                idx_b, face_idx_b,
-                cell_face_areas, cell_face_normals, cell_face_distances,
-                cell_neighbor_normals, cell_neighbor_distances,
-                cell_volumes
+                idx_b, face_idx_b
             )
         end
     end
 end
 
 function solve_region_group!(
-    du, u, p, t,
-    region_function!::G, region_cells,
-    cell_volumes
+    du, u, p, t, system, geo,
+    region_function!::G, region_cells
 ) where {G}
     for cell_id in region_cells
         region_function!(
-            du, u, p, t, 
-            cell_id,
-            cell_volumes[cell_id]
+            du, u, p, t, system, geo,
+            cell_id
         )
     end
 end

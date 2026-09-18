@@ -32,6 +32,8 @@ struct FVMSystem
     connection_groups::Vector{ConnectionGroup}
     patch_groups::Vector{PatchGroup}
     region_groups::Vector{RegionGroup}
+    du0_vec::Vector{Float64}
+    u0_vec::Vector{Float64}
     du_virtual_axes::NamedTuple
     u_virtual_axes::NamedTuple
     state_axes::Tuple
@@ -110,7 +112,7 @@ function finish_fvm_config(config, connection_map_function, additional_data; che
                     region_a,
                     region_b,
                     flux_function!,
-                    [(idx_a, Tuple{Int, Int}[]) for idx_a in 1:n_cells]
+                    [(idx_a, Tuple{Int, Int, Int}[]) for idx_a in 1:n_cells]
                 )
                 )
                 push!(connection_groups[new_connection_group_id].cell_neighbors[idx_a][2], (
@@ -199,6 +201,7 @@ function finish_fvm_config(config, connection_map_function, additional_data; che
     if check_units == true
         system = FVMSystem(
             connection_groups, patch_groups, region_groups,
+            du0_vec, u0_vec,
             du_virtual_axes, u_virtual_axes,
             state_axes,
             du_diff_cache, u_diff_cache, 
@@ -213,6 +216,7 @@ function finish_fvm_config(config, connection_map_function, additional_data; che
 
     system = FVMSystem(
         connection_groups, patch_groups, region_groups,
+        du0_vec, u0_vec,
         du_virtual_axes, u_virtual_axes,
         state_axes,
         du_diff_cache, u_diff_cache, 

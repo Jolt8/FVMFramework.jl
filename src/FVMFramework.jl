@@ -37,6 +37,11 @@ include("geometry/geometry_helper_functions.jl")
 export get_node_coordinates, get_cell_topology, get_nodes_of_cells, get_face_nodes
 export get_cell_neighbors, get_unconnected_map, get_cell_face_map, cross_product
 
+include("geometry/get_x_geometry_functions/interface_geometry.jl")
+include("geometry/get_x_geometry_functions/boundary_geometry.jl")
+include("geometry/get_x_geometry_functions/cell_geometry.jl")
+export interface_geometry, boundary_geometry, cell_geometry
+
 include("geometry/geometry_rebuilding_tetra.jl")
 export rebuild_fvm_geometry_tetra!
 

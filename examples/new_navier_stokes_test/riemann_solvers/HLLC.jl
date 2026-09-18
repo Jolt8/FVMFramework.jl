@@ -251,29 +251,29 @@ hllc_flux(
 )=#
 
 function HLLC!(
-    du, u, p, t,
-    idx_a, idx_b, face_idx,
-    area, cell_face_normal, dist_to_face,
-    cell_neighbor_normal, cell_neighbor_dist,
-    vol,
+    du, u, p, t, system, geo,
+    idx_a, face_a, 
+    idx_b, face_b,
     face_reconstructor!
 )
+    (
+        dist,
+        face_area_a, face_normal_a, face_distance_a, vol_a,
+        face_area_b, face_normal_b, face_distance_b, vol_b
+    ) = interface_geometry(geo, idx_a, face_a, idx_b, face_b)
+
     density_a, momentum_density_u_a, momentum_density_v_a, momentum_density_w_a, volumetric_energy_a = 
     face_reconstructor!(
-        du, u, p, t, 
-        idx_a, idx_b, face_idx, 
-        area, cell_face_normal, dist_to_face, 
-        cell_neighbor_normal, cell_neighbor_dist,
-        vol
+        du, u, p, t, system, geo,
+        idx_a, face_a, 
+        idx_b, face_b,
     )
 
     density_b, momentum_density_u_b, momentum_density_v_b, momentum_density_w_b, volumetric_energy_b = 
     face_reconstructor!(
-        du, u, p, t, 
-        idx_b, idx_a, face_idx, 
-        area, cell_face_normal, dist_to_face, 
-        cell_neighbor_normal, cell_neighbor_dist,
-        vol
+        du, u, p, t, system, geo,
+        idx_b, face_b,
+        idx_a, face_a,
     )
 
     F_density, 
@@ -296,12 +296,18 @@ function HLLC!(
         volumetric_energy_b,
         (u.cp[idx_b] / u.cv[idx_b]),
 
-        cell_face_normal
+        face_normal_a
     )
 
-    du.density_flow[idx_a] -= area * F_density
-    du.momentum_density_u_flow[idx_a] -= area * F_momentum_density_u
-    du.momentum_density_v_flow[idx_a] -= area * F_momentum_density_v
-    du.momentum_density_w_flow[idx_a] -= area * F_momentum_density_w
-    du.volumetric_energy_flow[idx_a] -= area * F_volumetric_energy
+    du.density_flow[idx_a] -= face_area_a * F_density
+    du.momentum_density_u_flow[idx_a] -= face_area_a * F_momentum_density_u
+    du.momentum_density_v_flow[idx_a] -= face_area_a * F_momentum_density_v
+    du.momentum_density_w_flow[idx_a] -= face_area_a * F_momentum_density_w
+    du.volumetric_energy_flow[idx_a] -= face_area_a * F_volumetric_energy
+
+    du.density_flow[idx_b] += face_area_a * F_density
+    du.momentum_density_u_flow[idx_b] += face_area_a * F_momentum_density_u
+    du.momentum_density_v_flow[idx_b] += face_area_a * F_momentum_density_v
+    du.momentum_density_w_flow[idx_b] += face_area_a * F_momentum_density_w
+    du.volumetric_energy_flow[idx_b] += face_area_a * F_volumetric_energy
 end

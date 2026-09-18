@@ -28,77 +28,69 @@ function _correct_wall_gradient(
 end
 
 function non_moving_wall_viscous_and_diffusive_flux!(
-    du, u, p, t,
-    idx_a, idx_b, face_idx, #idx_a should be a fluid, idx_b should be the wall
-    area, cell_face_normal, dist_to_face,
-    cell_neighbor_normal, cell_neighbor_dist,
-    cell_volume_a
+    du, u, p, t, system, geo,
+    idx_a, face_a, 
+    idx_b, face_b,
 )
     return _wall_viscous_and_diffusive_flux!(
-        du, u, p, t,
-        idx_a, idx_b, face_idx,
-        area, cell_face_normal, dist_to_face,
-        cell_neighbor_normal, cell_neighbor_dist,
-        cell_volume_a,
+        du, u, p, t, system, geo,
+        idx_a, face_a, 
+        idx_b, face_b,
         0.0, 0.0, 0.0
     )
 end
 
 
 function moving_wall_viscous_and_diffusive_flux!(
-    du, u, p, t,
-    idx_a, idx_b, face_idx, #idx_a should be a fluid, idx_b should be the wall
-    area, cell_face_normal, dist_to_face,
-    cell_neighbor_normal, cell_neighbor_dist,
-    cell_volume_a
+    du, u, p, t, system, geo,
+    idx_a, face_a, 
+    idx_b, face_b,
 )
     return _wall_viscous_and_diffusive_flux!(
-        du, u, p, t,
-        idx_a, idx_b, face_idx,
-        area, cell_face_normal, dist_to_face,
-        cell_neighbor_normal, cell_neighbor_dist,
-        cell_volume_a,
+        du, u, p, t, system, geo,
+        idx_a, face_a, 
+        idx_b, face_b,
         u.wall_vel_x[idx_b], u.wall_vel_y[idx_b], u.wall_vel_z[idx_b]
     )
 end
 
 
 function _wall_viscous_and_diffusive_flux!(
-    du, u, p, t,
-    idx_a, idx_b, face_idx,
-    area, cell_face_normal, dist_to_face,
-    cell_neighbor_normal, cell_neighbor_dist,
-    cell_volume_a,
+    du, u, p, t, system, geo,
+    idx_a, face_a, 
+    idx_b, face_b,
     wall_vel_x, wall_vel_y, wall_vel_z,
 )
+    face_area, face_normal, face_distance, vol = boundary_geometry(geo, idx_a, face_a)
+
     normal_magnitude = sqrt(
-        cell_face_normal[1]^2 +
-        cell_face_normal[2]^2 +
-        cell_face_normal[3]^2
+        face_normal[1]^2 +
+        face_normal[2]^2 +
+        face_normal[3]^2
     )
     iszero(normal_magnitude) && throw(ArgumentError("the wall normal must be nonzero"))
-    dist_to_face > zero(dist_to_face) || throw(ArgumentError(
+    face_distance > zero(face_distance) || throw(ArgumentError(
         "the cell-centroid-to-wall distance must be positive",
     ))
 
-    normal_x = cell_face_normal[1] / normal_magnitude
-    normal_y = cell_face_normal[2] / normal_magnitude
-    normal_z = cell_face_normal[3] / normal_magnitude
+    normal_x = face_normal[1] / normal_magnitude
+    normal_y = face_normal[2] / normal_magnitude
+    normal_z = face_normal[3] / normal_magnitude
 
     # Retain the tangential part of each cell-centred gradient and replace its
     # wall-normal component with the one-sided Dirichlet gradient required by
     # the no-slip condition.
     grad_vel_u_x, grad_vel_u_y, grad_vel_u_z = _correct_wall_gradient(
         u.grad_vel_u, idx_a, u.vel_u[idx_a], wall_vel_x,
-        normal_x, normal_y, normal_z, dist_to_face,
+        normal_x, normal_y, normal_z, face_distance,
     )
     grad_vel_v_x, grad_vel_v_y, grad_vel_v_z = _correct_wall_gradient(
         u.grad_vel_v, idx_a, u.vel_v[idx_a], wall_vel_y,
-        normal_x, normal_y, normal_z, dist_to_face,
+        normal_x, normal_y, normal_z, face_distance,
     )
     grad_vel_w_x, grad_vel_w_y, grad_vel_w_z = _correct_wall_gradient(
         u.grad_vel_w, idx_a, u.vel_w[idx_a], wall_vel_z,
-        normal_x, normal_y, normal_z, dist_to_face,
+        normal_x, normal_y, normal_z, face_distance,
     )
 
     dynamic_viscosity = u.mu[idx_a]
@@ -123,10 +115,10 @@ function _wall_viscous_and_diffusive_flux!(
         wall_vel_y * traction_y +
         wall_vel_z * traction_z
 
-    du.momentum_density_u_flow[idx_a] += area * traction_x
-    du.momentum_density_v_flow[idx_a] += area * traction_y
-    du.momentum_density_w_flow[idx_a] += area * traction_z
-    du.volumetric_energy_flow[idx_a] += area * viscous_energy_flux
+    du.momentum_density_u_flow[idx_a] += face_area * traction_x
+    du.momentum_density_v_flow[idx_a] += face_area * traction_y
+    du.momentum_density_w_flow[idx_a] += face_area * traction_z
+    du.volumetric_energy_flow[idx_a] += face_area * viscous_energy_flux
 
     return nothing
 end

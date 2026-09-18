@@ -1,4 +1,5 @@
-function cap_navier_stokes_flow!(du, u, p, t, cell_id, cell_volume)
+function cap_navier_stokes_flow!(du, u, p, t, system, geo, cell_id)
+    cell_volume = cell_geometry(geo, cell_id)
     du.density[cell_id] += du.density_flow[cell_id] / cell_volume
 
     du.momentum_density_u[cell_id] += du.momentum_density_u_flow[cell_id] / cell_volume

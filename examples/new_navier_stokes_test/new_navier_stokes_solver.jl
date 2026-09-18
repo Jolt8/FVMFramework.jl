@@ -92,45 +92,29 @@ Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/fluid_viscous_an
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/wall_viscous_and_diffusive_fluxes.jl"))
 
 function fluid_fluid_flux!(
-    du, u, p, t,
-    idx_a, idx_b, face_idx,
-    cell_face_areas, cell_face_normals, cell_face_distances,
-    cell_neighbor_normals, cell_neighbor_distances, 
-    cell_volumes
+    du, u, p, t, system, geo,
+    idx_a, face_a, 
+    idx_b, face_b,
 )
     #=
     populate_weighted_least_squares_face_values!(
-        du, u, p, t,
-        idx_a, idx_b, face_idx,
-        cell_face_areas, cell_face_normals, cell_face_distances,
-        cell_neighbor_normals, cell_neighbor_distances,
-        cell_volumes
+        du, u, p, t, system, geo,
+        idx_a, face_a,
+        idx_b, face_b
     ) #this is to update vel_u_face, vel_v_face, vel_w_face, and temperature_face
     #IMPORTANT: if more face values are needed, this function needs to be changed
     =#
     #NOTE: we only need this if we get tired of calculating grad_u_face values inside different functions
     #right now, all grad_u_face values are only required in fluid_viscous_and_diffusive_flux!
 
-    HLLC!(
-        du, u, p, t,
-        idx_a, idx_b, face_idx,
-        cell_face_areas[idx_a][face_idx], cell_face_normals[idx_a][face_idx], cell_face_distances[idx_a][face_idx],
-        cell_neighbor_normals[idx_a][face_idx], cell_neighbor_distances[idx_a][face_idx],
-        cell_volumes[idx_a],
-        first_order_face_reconstruction!
-    )
+    HLLC!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b, first_order_face_reconstruction!)
 
-    fluid_viscous_and_diffusive_flux!(
-        du, u, p, t,
-        idx_a, idx_b, face_idx,
-        cell_face_areas[idx_a][face_idx], cell_face_normals[idx_a][face_idx], cell_face_distances[idx_a][face_idx],
-        cell_neighbor_normals[idx_a][face_idx], cell_neighbor_distances[idx_a][face_idx],
-        cell_volumes[idx_a]
-    )
+    fluid_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
 end
 
 # Mapping connection functions
 #IMPORTANT: when we switch to evaluating only one flux update per face rather than two, this will determine which idx_a will be and idx_b will be
+#This makes sense because if we have two fluids that have the same type (flux functions should be the same) they will both be updated randomly
 function connection_map_function(phys_a, phys_b)
     typeof(phys_a) <: Fluid && typeof(phys_b) <: Fluid && return fluid_fluid_flux!
 end
@@ -194,13 +178,13 @@ add_region!(
     initial_conditions = fluid_initial_conditions,
     properties = fluid_properties,
     property_update_function = 
-    function update_fluid_properties!(du, u, p, t, cell_id, vol, system)
-        update_k_from_prandtl!(du, u, p, t, cell_id, vol)
-        overall_navier_stokes_property_update!(du, u, p, t, cell_id, vol)
+    function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
+        update_k_from_prandtl!(du, u, p, t, system, geo, cell_id)
+        overall_navier_stokes_property_update!(du, u, p, t, system, geo, cell_id)
     end,
     region_function = 
-    function fluid_physics!(du, u, p, t, cell_id, vol)
-        cap_navier_stokes_flow!(du, u, p, t, cell_id, vol)
+    function fluid_physics!(du, u, p, t, system, geo, cell_id)
+        cap_navier_stokes_flow!(du, u, p, t, system, geo, cell_id)
     end,
 )
 
@@ -225,17 +209,16 @@ supersonic_inlet_initial_conditions_stripped = ustrip.(upreferred.(supersonic_in
 
 add_patch!(
     config, "supersonic_inlet";
+    type_a = Fluid(),
+    type_b = nothing,
     properties = ComponentVector(),
     patch_function = 
     function supersonic_inlet_flux!(
-        du, u, p, t, system, 
-        idx_a, idx_b, face_idx,
-        cell_face_areas, cell_face_normals, cell_face_distances,
-        cell_neighbor_normals, cell_neighbor_distances, 
-        cell_volumes
+        du, u, p, t, system, geo,
+        idx_a, face_a, 
+        idx_b, face_b,
     )
-        area = cell_face_areas[idx_a][face_idx]
-        normal = cell_face_normals[idx_a][face_idx]
+        face_area, face_normal, face_distance, vol = boundary_geometry(geo, idx_a, face_a)
 
         density_bc = supersonic_inlet_initial_conditions_stripped.density
         momentum_density_u_bc = supersonic_inlet_initial_conditions_stripped.momentum_density_u
@@ -268,32 +251,31 @@ add_patch!(
             momentum_density_w_bc,
             volumetric_energy_bc,
             pressure_bc,
-            normal,
+            face_normal,
         )
 
-        du.density_flow[idx_a] -= area * F_density
+        du.density_flow[idx_a] -= face_area * F_density
 
-        du.momentum_density_u_flow[idx_a] -= area * F_momentum_density_u
-        du.momentum_density_v_flow[idx_a] -= area * F_momentum_density_v
-        du.momentum_density_w_flow[idx_a] -= area * F_momentum_density_w
+        du.momentum_density_u_flow[idx_a] -= face_area * F_momentum_density_u
+        du.momentum_density_v_flow[idx_a] -= face_area * F_momentum_density_v
+        du.momentum_density_w_flow[idx_a] -= face_area * F_momentum_density_w
 
-        du.volumetric_energy_flow[idx_a] -= area * F_volumetric_energy
+        du.volumetric_energy_flow[idx_a] -= face_area * F_volumetric_energy
     end
 )
 
 add_patch!(
     config, "supersonic_outlet";
+    type_a = Fluid(),
+    type_b = nothing,
     properties = ComponentVector(),
     patch_function = 
     function supersonic_outlet_flux!(
-        du, u, p, t, system, 
-        idx_a, idx_b, face_idx,
-        cell_face_areas, cell_face_normals, cell_face_distances,
-        cell_neighbor_normals, cell_neighbor_distances, 
-        cell_volumes
+        du, u, p, t, system, geo,
+        idx_a, face_a, 
+        idx_b, face_b,
     )
-        area = cell_face_areas[idx_a][face_idx]
-        normal = cell_face_normals[idx_a][face_idx]
+        face_area, face_normal, face_distance, vol = boundary_geometry(geo, idx_a, face_a)
 
         gamma = u.cp[idx_a] / u.cv[idx_a]
 
@@ -320,31 +302,33 @@ add_patch!(
             u.momentum_density_w[idx_a],
             u.volumetric_energy[idx_a],
             pressure,
-            normal,
+            face_normal
         )
 
-        du.density_flow[idx_a] -= area * F_density
+        du.density_flow[idx_a] -= face_area * F_density
 
-        du.momentum_density_u_flow[idx_a] -= area * F_momentum_density_u
-        du.momentum_density_v_flow[idx_a] -= area * F_momentum_density_v
-        du.momentum_density_w_flow[idx_a] -= area * F_momentum_density_w
+        du.momentum_density_u_flow[idx_a] -= face_area * F_momentum_density_u
+        du.momentum_density_v_flow[idx_a] -= face_area * F_momentum_density_v
+        du.momentum_density_w_flow[idx_a] -= face_area * F_momentum_density_w
 
-        du.volumetric_energy_flow[idx_a] -= area * F_volumetric_energy
+        du.volumetric_energy_flow[idx_a] -= face_area * F_volumetric_energy
     end
 )
 
 for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
     add_patch!(
         config, name;
+        type_a = Fluid(),
+        type_b = nothing,
         properties = ComponentVector(),
         patch_function = 
         function wall_patch_flux!(
-            du, u, p, t, system,
-            idx_a, idx_b, face_idx,
-            cell_face_areas, cell_face_normals, cell_face_distances,
-            cell_neighbor_normals, cell_neighbor_distances, 
-            cell_volumes
+            du, u, p, t, system, geo,
+            idx_a, face_a, 
+            idx_b, face_b,
         )
+            face_area, face_normal, face_distance, vol = boundary_geometry(geo, idx_a, face_a)
+
             gamma = u.cp[idx_a] / u.cv[idx_a]
 
             _, _, _, pressure, _ = primitive_from_conservative(
@@ -356,17 +340,11 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
                 gamma,
             )
 
-            du.momentum_density_u_flow[idx_a] -= cell_face_areas[idx_a][face_idx] * pressure * cell_face_normals[idx_a][face_idx][1]
-            du.momentum_density_v_flow[idx_a] -= cell_face_areas[idx_a][face_idx] * pressure * cell_face_normals[idx_a][face_idx][2]
-            du.momentum_density_w_flow[idx_a] -= cell_face_areas[idx_a][face_idx] * pressure * cell_face_normals[idx_a][face_idx][3]
+            du.momentum_density_u_flow[idx_a] -= face_area * pressure * face_normal[1]
+            du.momentum_density_v_flow[idx_a] -= face_area * pressure * face_normal[2]
+            du.momentum_density_w_flow[idx_a] -= face_area * pressure * face_normal[3]
 
-            non_moving_wall_viscous_and_diffusive_flux!(
-                du, u, p, t,
-                idx_a, idx_b, face_idx,
-                cell_face_areas[idx_a][face_idx], cell_face_normals[idx_a][face_idx], cell_face_distances[idx_a][face_idx],
-                cell_neighbor_normals[idx_a][face_idx], cell_neighbor_distances[idx_a][face_idx],
-                cell_volumes[idx_a]
-            )
+            non_moving_wall_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
         end
     )
 end
