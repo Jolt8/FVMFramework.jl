@@ -6,6 +6,7 @@ using NonlinearSolve
 using Sparspak
 using Ferrite
 using SparseConnectivityTracer
+using ForwardDiff
 using ComponentArrays
 import ADTypes
 using ILUZero
@@ -209,8 +210,8 @@ supersonic_inlet_initial_conditions_stripped = ustrip.(upreferred.(supersonic_in
 
 add_patch!(
     config, "supersonic_inlet";
-    type_a = Fluid(),
-    type_b = nothing,
+    #type_a = Fluid(),
+    #type_b = nothing,
     properties = ComponentVector(),
     patch_function = 
     function supersonic_inlet_flux!(
@@ -266,8 +267,8 @@ add_patch!(
 
 add_patch!(
     config, "supersonic_outlet";
-    type_a = Fluid(),
-    type_b = nothing,
+    #type_a = Fluid(),
+    #type_b = nothing,
     properties = ComponentVector(),
     patch_function = 
     function supersonic_outlet_flux!(
@@ -318,8 +319,8 @@ add_patch!(
 for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
     add_patch!(
         config, name;
-        type_a = Fluid(),
-        type_b = nothing,
+        #type_a = Fluid(),
+        #type_b = nothing,
         properties = ComponentVector(),
         patch_function = 
         function wall_patch_flux!(
@@ -346,7 +347,7 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
 
             non_moving_wall_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
         end
-    )
+    ) 
 end
 
 #I think we're going to add an additional_data field of the system so that arbitrary data can be passed into any function without allocations
@@ -446,20 +447,21 @@ increase_dtmax_cb = DiscreteCallback(
 
 callbacks = CallbackSet(
     approximate_time_to_finish_cb,
-    increase_dtmax_cb,
+    #increase_dtmax_cb,
 )
 
-println("Solving the Navier-Stokes ODE system...")
 @time sol = solve(
     implicit_prob,
-    #FBDF(linsolve = SparspakFactorization(), nlsolve = NLNewton(relax = 0.5)),
+    #FBDF(linsolve = SparspakFactorization()),
     FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
     #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
     callback = callbacks,
-    isoutofdomain = state_is_invalid_closure,
-    #saveat = (tMax / 300)
+    #isoutofdomain = state_is_invalid_closure,
+    #saveat = (tMax / 300),
     #dtmax = 100
     #dtmax = early_dtmax
+    #dt = 1e-5
+    #maxiters = 1,
 )
 
 f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)
@@ -473,7 +475,6 @@ prob = NonlinearProblem(nl_func, u0_vec, p_guess)
 du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_guess, track_progress = false);
 
 root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
-println("Saving VTK files to: ", root_dir)
+
 sol_to_vtk(sol, du_named, u_named, grid, geo, @__FILE__, root_dir, track_progress = false)
-println("VTK export complete!")
 

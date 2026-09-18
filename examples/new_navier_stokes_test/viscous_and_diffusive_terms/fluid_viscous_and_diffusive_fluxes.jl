@@ -151,12 +151,30 @@ function fluid_viscous_and_diffusive_flux!(
     # so viscous flux enters with a PLUS sign here.
     # ------------------------------------------------------------
 
-    du.momentum_density_u_flow[idx_a] += traction_x * face_area_a
-    du.momentum_density_v_flow[idx_a] += traction_y * face_area_a
-    du.momentum_density_w_flow[idx_a] += traction_z * face_area_a
+    
+    #=
+    if idx_a == 1
+        @show idx_a
+        @show traction_x
+        @show traction_y
+        @show traction_z
+        @show viscous_energy_flux
+        @show face_area_a
+    end
+    =#
 
-    du.volumetric_energy_flow[idx_a] +=
-        viscous_energy_flux * face_area_a
+    #du.momentum_density_u_flow[idx_a] += traction_x * face_area_a
+    #du.momentum_density_v_flow[idx_a] += traction_y * face_area_a
+    #du.momentum_density_w_flow[idx_a] += traction_z * face_area_a
+
+    #du.volumetric_energy_flow[idx_a] += viscous_energy_flux * face_area_a
+
+
+    #du.momentum_density_u_flow[idx_b] -= traction_x * face_area_b
+    #du.momentum_density_v_flow[idx_b] -= traction_y * face_area_b
+    #du.momentum_density_w_flow[idx_b] -= traction_z * face_area_b
+
+    #du.volumetric_energy_flow[idx_b] -= viscous_energy_flux * face_area_b
 
     return nothing
 end
