@@ -82,6 +82,7 @@ function finish_fvm_config(config, connection_map_function, additional_data; che
 
     #Connections
     unique_region_connection_pairs = Vector{Tuple{String, String}}()
+    already_accessed_cells_in_each_connection_pair = Dict{Any, Vector{SVector{2, Int}}}()
     #we specifically use strings here because checking if (region_a, region_b) == (region_b, region_a) was fragile
 
     for (idx_a, idx_a_neighbors) in config.geo.cell_neighbors
@@ -107,7 +108,11 @@ function finish_fvm_config(config, connection_map_function, additional_data; che
             #I feel bad for anyone who has to read this
             if !((region_a.name, region_b.name) in unique_region_connection_pairs)
                 push!(unique_region_connection_pairs, (region_a.name, region_b.name))
+                
+                push!(already_accessed_cells_in_each_connection_pair, (region_a.name, region_b.name) => [SVector{2, Int}(idx_a, idx_b)])
+                
                 new_connection_group_id = findfirst(item -> item == (region_a.name, region_b.name), unique_region_connection_pairs)
+                
                 push!(connection_groups, ConnectionGroup(
                     region_a,
                     region_b,
@@ -129,10 +134,14 @@ function finish_fvm_config(config, connection_map_function, additional_data; che
                 )=#
             elseif !isempty(connection_groups[connection_group_id].cell_neighbors[idx_a])
                 connection_group_id = findfirst(item -> item == (region_a.name, region_b.name), unique_region_connection_pairs)
-                push!(connection_groups[connection_group_id].cell_neighbors[idx_a][2], (
-                    (idx_b, face_idx_a, face_idx_b)
-                )
-                )
+                
+                if !(SVector{2, Int}(idx_b, idx_a) in already_accessed_cells_in_each_connection_pair[(region_a.name, region_b.name)])
+                    push!(connection_groups[connection_group_id].cell_neighbors[idx_a][2], (
+                        (idx_b, face_idx_a, face_idx_b)
+                    )
+                    )
+                    push!(already_accessed_cells_in_each_connection_pair[(region_a.name, region_b.name)], SVector{2, Int}(idx_a, idx_b))
+                end
             end
         end
     end
