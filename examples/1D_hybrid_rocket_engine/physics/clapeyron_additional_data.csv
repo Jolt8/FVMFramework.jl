@@ -1,0 +1,4 @@
+Clapeyron Database File
+custom_params [csvtype = like]
+species,Tc,Pc,Mw,acentricfactor
+hdpe vapor,282.35,5.04e6,28.05,0.089
