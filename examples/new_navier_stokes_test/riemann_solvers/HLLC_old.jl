@@ -76,8 +76,7 @@ function hllc_flux(
     volumetric_energy_b,
     gamma_b,
 
-    cell_face_normal,
-    low_mach_correction = no_low_mach_correction,
+    cell_face_normal
 )
     vel_u_a, vel_v_a, vel_w_a, pressure_a, speed_of_sound_a = primitive_from_conservative(
         density_a,
@@ -96,33 +95,6 @@ function hllc_flux(
         volumetric_energy_b,
         gamma_b
     )
-
-    (
-        vel_u_a,
-        vel_v_a,
-        vel_w_a,
-        vel_u_b,
-        vel_v_b,
-        vel_w_b,
-    ) = low_mach_correction(
-        vel_u_a,
-        vel_v_a,
-        vel_w_a,
-        speed_of_sound_a,
-        vel_u_b,
-        vel_v_b,
-        vel_w_b,
-        speed_of_sound_b,
-        cell_face_normal,
-    )
-
-    momentum_density_u_a = density_a * vel_u_a
-    momentum_density_v_a = density_a * vel_v_a
-    momentum_density_w_a = density_a * vel_w_a
-
-    momentum_density_u_b = density_b * vel_u_b
-    momentum_density_v_b = density_b * vel_v_b
-    momentum_density_w_b = density_b * vel_w_b
 
     normal_velocity_a = 
         vel_u_a * cell_face_normal[1] + 
@@ -282,8 +254,7 @@ function HLLC!(
     du, u, p, t, system, geo,
     idx_a, face_a, 
     idx_b, face_b,
-    face_reconstructor!,
-    low_mach_correction = no_low_mach_correction,
+    face_reconstructor!
 )
     (
         dist,
@@ -297,32 +268,7 @@ function HLLC!(
         idx_a, face_a, 
         idx_b, face_b,
     )
-
-    if idx_a == 0
-        @show idx_a
-        @show idx_b
-        println("density")
-        @show u.density[idx_a]
-        @show u.density[idx_b]
-        @show density_a
-        println("momentum_density_u")
-        @show u.momentum_density_u[idx_a]
-        @show u.momentum_density_u[idx_b]
-        @show momentum_density_u_a
-        println("momentum_density_v")
-        @show u.momentum_density_v[idx_a]
-        @show u.momentum_density_v[idx_b]
-        @show momentum_density_v_a
-        println("momentum_density_w")
-        @show u.momentum_density_w[idx_a]
-        @show u.momentum_density_w[idx_b]
-        @show momentum_density_w_a
-        println("volumetric_energy")
-        @show u.volumetric_energy[idx_a]
-        @show u.volumetric_energy[idx_b]
-        @show volumetric_energy_a
-    end
-
+    
     density_b, momentum_density_u_b, momentum_density_v_b, momentum_density_w_b, volumetric_energy_b = 
     face_reconstructor!(
         du, u, p, t, system, geo,
@@ -350,8 +296,7 @@ function HLLC!(
         volumetric_energy_b,
         (u.cp[idx_b] / u.cv[idx_b]),
 
-        face_normal_a,
-        low_mach_correction,
+        face_normal_a
     )
 
     du.density_flow[idx_a] -= face_area_a * F_density

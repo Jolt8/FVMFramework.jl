@@ -69,6 +69,7 @@ add_setup_syms!(
         #specific_internal_energy = u"J/kg", #not cached right now, just a property
     ),
     special_caches = ComponentVector(
+        grad_density = zeros(n_cells, 3)u"kg/m^4",
         grad_vel_u = zeros(n_cells, 3)u"m/(s*m)",
         grad_vel_v = zeros(n_cells, 3)u"m/(s*m)",
         grad_vel_w = zeros(n_cells, 3)u"m/(s*m)",
@@ -87,8 +88,10 @@ add_setup_syms!(
 struct Fluid <: AbstractPhysics end
 
 Revise.includet(joinpath(@__DIR__, "face_reconstructors/first_order_face_reconstruction.jl"))
+Revise.includet(joinpath(@__DIR__, "riemann_solvers/HLLC_low_mach_correction.jl"))
 Revise.includet(joinpath(@__DIR__, "riemann_solvers/HLLC.jl"))
 Revise.includet(joinpath(@__DIR__, "weighted_least_squares/weighted_least_squares.jl"))
+Revise.includet(joinpath(@__DIR__, "face_reconstructors/MUSCL_face_reconstruction.jl"))
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/fluid_viscous_and_diffusive_fluxes.jl"))
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/wall_viscous_and_diffusive_fluxes.jl"))
 
@@ -108,7 +111,17 @@ function fluid_fluid_flux!(
     #NOTE: we only need this if we get tired of calculating grad_u_face values inside different functions
     #right now, all grad_u_face values are only required in fluid_viscous_and_diffusive_flux!
 
-    HLLC!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b, first_order_face_reconstruction!)
+    #I think the difficulties with MUSCL_face_reconsturction! have something to do with the inlet cell, it always seems to be the 
+    #one with non-physical values
+
+    HLLC!(
+        du, u, p, t, system, geo,
+        idx_a, face_a, idx_b, face_b,
+        MUSCL_face_reconstruction!,
+        #first_order_face_reconstruction!,
+        thornber_low_mach_correction,
+    )
+    #HLLC!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b, first_order_face_reconstruction!)
 
     fluid_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
 end
@@ -363,6 +376,7 @@ WLS_STENCIL = build_weighted_least_squares_stencil(geo)
 function solve_system!(du, u, p, t, system, geo)
     update_region_groups!(du, u, p, t, system, geo)
     update_weighted_least_squares_gradients!(u, WLS_STENCIL)
+    update_MUSCL_gradients!(u, WLS_STENCIL)
     solve_connection_groups!(du, u, p, t, system, geo)
     solve_patch_groups!(du, u, p, t, system, geo)
     solve_region_groups!(du, u, p, t, system, geo)
@@ -452,8 +466,10 @@ callbacks = CallbackSet(
 
 @time sol = solve(
     implicit_prob,
+    #Tsit5(),
+    #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
     #FBDF(linsolve = SparspakFactorization()),
-    FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
+    #FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
     #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
     callback = callbacks,
     #isoutofdomain = state_is_invalid_closure,
@@ -461,8 +477,9 @@ callbacks = CallbackSet(
     #dtmax = 100
     #dtmax = early_dtmax
     #dt = 1e-5
-    #maxiters = 1,
 )
+
+sol.alg
 
 f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)
 
@@ -477,4 +494,3 @@ du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_gues
 root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
 
 sol_to_vtk(sol, du_named, u_named, grid, geo, @__FILE__, root_dir, track_progress = false)
-
