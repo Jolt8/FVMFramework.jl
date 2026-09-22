@@ -16,6 +16,7 @@ function get_overall_rocket_data()
     kg_of_fuel = total_impulse / impulse_per_kg_of_fuel |> u"kg"
 
     oxidizer_mass_flow = kg_of_oxidizer / desired_burn_time
+    fuel_mass_flow = kg_of_fuel / desired_burn_time
 
     tank_initial_pressure = 60.0u"bar"
     tank_initial_temperature = 21.0u"°C"
@@ -24,6 +25,7 @@ function get_overall_rocket_data()
         desired_burn_time = desired_burn_time,
         total_impulse = total_impulse,
         oxidizer_mass_flow = oxidizer_mass_flow,
+        fuel_mass_flow = fuel_mass_flow,
         required_kg_of_oxidizer = kg_of_oxidizer,
         required_kg_of_fuel = kg_of_fuel,
         tank_initial_pressure = tank_initial_pressure,
