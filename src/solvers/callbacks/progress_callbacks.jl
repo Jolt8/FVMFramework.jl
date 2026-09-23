@@ -16,7 +16,11 @@ function approx_time_left_affect!(integrator)
 
     dt_sim_time = integrator.t - integrator.tprev
 
-    sim_tspan = first(integrator.opts.tstops) #tstops is a bitset
+    if !isempty(integrator.opts.tstops) #sometimes a callback that terminates the solver early can cause the tstops to be empty
+        sim_tspan = first(integrator.opts.tstops)
+    else
+        sim_tspan = integrator.t
+    end
 
     approximate_steps_left = (sim_tspan - integrator.t) / dt_sim_time
 
