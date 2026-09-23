@@ -10,18 +10,34 @@ using OptimizationOptimJL
 using OptimizationBBO
 using OrderedCollections
 using OrdinaryDiffEq
+using Roots
+using SparseConnectivityTracer
 
 using FVMFramework
 
 Revise.includet(joinpath(@__DIR__, "design_helper_functions.jl"))
 
-model = PR(["nitrous oxide"])
+oxidizer_model = PR(["nitrous oxide"])
+chamber_model = ReidIdeal(["nitrous oxide", "ethylene"])
 
-function adjustable_valve_flow!(du, u, p, t, model)
-    volumetric_flow = p.valve_flow_capacity_factor * p.valve_opening * sqrt((p.tank_pressure - p.mid_section_pressure) / nitrous_oxide_density)
+function adjustable_valve_flow!(du, u, p, t)
+    if p.tank_pressure - p.mid_section_pressure <= 0
+        return 0.0
+    end
+    
+    volumetric_flow = p.valve_flow_capacity_factor * p.valve_opening * sqrt((p.tank_pressure - p.mid_section_pressure) / p.tank_density)
     #we might need a different equation that activates when the tank starts spitting out gas
 
-    mass_flow = volumetric_flow * u.mid_section_density
+    if true == false
+        @show p.valve_flow_capacity_factor
+        @show p.valve_opening
+        @show p.tank_pressure
+        @show p.mid_section_pressure
+        @show p.tank_density
+        @show volumetric_flow
+    end
+
+    mass_flow = volumetric_flow * p.tank_density
 
     du.tank_oxidizer_mass -= mass_flow
     du.tank_oxidizer_internal_energy -= mass_flow * p.tank_specific_enthalpy
@@ -31,23 +47,35 @@ function adjustable_valve_flow!(du, u, p, t, model)
     return (p.tank_pressure - p.mid_section_pressure)
 end
 
-function injector_valve_flow!(du, u, p, t, model)
-    pre_injector_density = mass_density(model, p.mid_section_pressure, p.mid_section_temperature, [1.0])
+function injector_valve_flow!(du, u, p, t)
+    if p.mid_section_pressure - p.chamber_pressure <= 0
+        return 0.0, 0.0
+    end
 
-    volumetric_flow = p.injector_discharge_coefficient * p.injector_orifice_area * sqrt((2 * (p.mid_section_pressure - p.chamber_pressure)) / pre_injector_density)
+    volumetric_flow = p.injector_discharge_coefficient * p.injector_orifice_area * sqrt((2 * (p.mid_section_pressure - p.chamber_pressure)) / p.mid_section_density)
 
-    mass_flow = volumetric_flow * p.chamber_density
+    if true == false
+        println("")
+        @show p.injector_discharge_coefficient
+        @show p.injector_orifice_area
+        @show p.mid_section_pressure
+        @show p.chamber_pressure
+        @show p.mid_section_density
+        @show volumetric_flow
+    end
 
-    du.mid_esction_mass -= mass_flow
-    du.mid_section_internal_energy -= mass_flow * p.tank_specific_enthalpy
-    du.chamber_gas_mass += mass_flow
-    du.chamber_gas_internal += mass_flow * p.tank_specific_enthalpy
+    oxidizer_mass_flow = volumetric_flow * p.mid_section_density
 
-    return (p.mid_section_pressure - p.chamber_pressure)
+    du.mid_section_mass -= oxidizer_mass_flow
+    du.mid_section_internal_energy -= oxidizer_mass_flow * p.mid_section_specific_enthalpy
+    du.chamber_gas_mass += oxidizer_mass_flow
+    du.chamber_gas_internal_energy += oxidizer_mass_flow * p.mid_section_specific_enthalpy
+
+    return (p.mid_section_pressure - p.chamber_pressure), oxidizer_mass_flow
 end
 
-function regression_rate!(du, u, p, t, model)
-    oxidizer_mass_flux = p.oxidizer_mass_flow / p.fuel_grain_average_cross_sectional_area 
+function regression_rate!(du, u, p, t, oxidizer_mass_flow)
+    oxidizer_mass_flux = oxidizer_mass_flow / p.fuel_grain_average_cross_sectional_area 
     #oh no, how do we get the oxidizer_mass_flow here
     #since we don't have access to the previous mass flow rate or previous timestamp, we can't get this
     #hmmm....
@@ -58,18 +86,57 @@ function regression_rate!(du, u, p, t, model)
 
     regression_m_per_s = regression_mm_per_s * 0.001
 
-    du.port_diameter -= regression_m_per_s
+    du.port_diameter += 2 * regression_m_per_s
 
-    fuel_flow = p.fuel_density * p.fuel_grain_burning_surface_area * p.fuel_regression_rate
+    fuel_mass_flow = p.fuel_density * p.fuel_grain_burning_surface_area * regression_m_per_s
 
-    return fuel_flow
+    du.chamber_gas_mass += fuel_mass_flow
+
+    return fuel_mass_flow
 end
 
-function nozzle_outlet!(du, u, p, t, model)
+function update_mass_fractions!(du, u, p, t, oxidizer_mass_flow, fuel_mass_flow)
+    total_mass_flow_in = oxidizer_mass_flow + fuel_mass_flow
+
+    du.chamber_nitrous_oxide_mass_fraction +=
+        (oxidizer_mass_flow - u.chamber_nitrous_oxide_mass_fraction * total_mass_flow_in) /
+        u.chamber_gas_mass
+
+    du.chamber_hdpe_mass_fraction +=
+        (fuel_mass_flow - u.chamber_hdpe_mass_fraction * total_mass_flow_in) /
+        u.chamber_gas_mass
+end
+
+
+function nozzle_outlet!(du, u, p, t)
     chamber_gas_mass_flow_out = p.nozzle_discharge_coefficient * ((p.chamber_pressure * p.nozzle_throat_area) / p.propellant_characteristic_velocity)
 
     du.chamber_gas_mass -= chamber_gas_mass_flow_out
-    du.chamber_gas_internal_energy -= chamber_gas_mass_flow_out * p.propellant_enthalpy
+
+    return chamber_gas_mass_flow_out
+end
+
+function combustion_zone_energy_conservation!(du, u, p, t, model, oxidizer_mass_flow, fuel_mass_flow, chamber_gas_mass_flow_out)
+    burning_fuel_mass_flow = min(
+        fuel_mass_flow,
+        oxidizer_mass_flow / p.stoichiometric_oxidizer_fuel_ratio
+    )
+
+    combustion_heat_release = p.combustion_efficiency * burning_fuel_mass_flow * p.fuel_lowering_heating_value
+
+    pyrolysis_heat_absorption = burning_fuel_mass_flow * p.fuel_heat_of_pyrolysis
+
+    fuel_specific_enthalpy = mass_enthalpy(model, p.chamber_pressure, p.fuel_surface_temperature, [0.0, 1.0], phase = :vapor)
+
+    ejected_internal_energy = chamber_gas_mass_flow_out * p.chamber_specific_enthalpy
+
+    du.chamber_gas_internal_energy += 
+        oxidizer_mass_flow * p.mid_section_specific_enthalpy + 
+        fuel_mass_flow * fuel_specific_enthalpy +
+        combustion_heat_release - 
+        pyrolysis_heat_absorption - 
+        ejected_internal_energy -
+        p.wall_heat_loss
 end
 
 u0 = ComponentVector(
@@ -81,24 +148,37 @@ u0 = ComponentVector(
 
     chamber_gas_mass = 1e-6u"kg",
     chamber_gas_internal_energy = 0.0u"kJ",
+    chamber_nitrous_oxide_mass_fraction = 1.0,
+    chamber_hdpe_mass_fraction = 0.0,
 
-    port_radius = 2.0u"cm"
+    port_diameter = 2.0u"cm"
 )
 
-function update_u0!(du, u, p, t, model)
+function update_u0!(u, p, t, oxidizer_model, chamber_model)
     u.tank_oxidizer_mass = p.u0_tank_oxidizer_mass
 
-    u.tank_oxidizer_internal_energy = Clapeyron.VT0.internal_energy(model, p.tank_volume, p.tank_temperature, [1.0])
+    tank_oxidizer_moles = p.u0_tank_oxidizer_mass / p.nitrous_oxide_molecular_weight
 
-    u.mid_section_mass = p.u0_mid_section_mass
+    p.tank_volume = volume(oxidizer_model, p.tank_pressure, p.tank_temperature, [tank_oxidizer_moles])
 
-    u.mid_section_internal_energy = Clapeyron.VT0.internal_energy(model, p.mid_section_volume, p.mid_section_temperature, [1.0])
+    u.tank_oxidizer_internal_energy = Clapeyron.VT0.internal_energy(oxidizer_model, p.tank_volume, p.tank_temperature, [tank_oxidizer_moles])
 
-    u.chamber_gas_mass = p.u0_chamber_gas_mass
+    u0_mid_section_density = mass_density(oxidizer_model, p.mid_section_pressure, p.mid_section_temperature, [tank_oxidizer_moles])
+    u.mid_section_mass = u0_mid_section_density * p.mid_section_volume
+    
+    mid_section_oxidizer_moles = u.mid_section_mass / p.nitrous_oxide_molecular_weight
+    u.mid_section_internal_energy = Clapeyron.VT0.internal_energy(oxidizer_model, p.mid_section_volume, p.mid_section_temperature, [mid_section_oxidizer_moles])
 
-    u.chamber_gas_internal_energy = Clapeyron.VT0.internal_energy(model, p.chamber_volume, p.chamber_temperature, [1.0])
+    u0_chamber_gas_density = mass_density(chamber_model, p.chamber_pressure, p.chamber_temperature, [tank_oxidizer_moles, 0.0])
+    u.chamber_gas_mass = u0_chamber_gas_density * p.chamber_volume
 
-    u.port_radius = p.u0_fuel_grain_void_diameter
+    chamber_gas_oxidizer_moles = (u.chamber_gas_mass * p.u0_chamber_nitrous_oxide_mass_fraction) / p.nitrous_oxide_molecular_weight
+    chamber_gas_fuel_moles = (u.chamber_gas_mass * p.u0_chamber_hdpe_mass_fraction) / p.ethylene_molecular_weight
+    u.chamber_gas_internal_energy = Clapeyron.VT0.internal_energy(chamber_model, p.chamber_volume, p.chamber_temperature, [chamber_gas_oxidizer_moles, chamber_gas_fuel_moles])
+
+    u.port_diameter = p.u0_fuel_grain_void_diameter
+
+    return nothing
 end
 
 function valve_opening_at_t(t)
@@ -111,43 +191,81 @@ function valve_flow_capacity_factor(valve_opening, p)
     #to help us choose which electronic valve we should purchase
 end
 
-function update_state!(du, u, p, t, model)
-    tank_n_moles = u.tank_oxidizer_mass / u.nitrous_oxide_molecular_weight
+function update_state!(du, u, p, t, oxidizer_model, chamber_model)
+    du .= 0.0 
+    
+    tank_n_moles = u.tank_oxidizer_mass / p.nitrous_oxide_molecular_weight
 
-    result = uv_flash(model, u.tank_oxidizer_internal_energy, u.tank_volume, [tank_n_moles])
+    result = uv_flash_via_vt(
+        oxidizer_model,
+        u.tank_oxidizer_internal_energy,
+        p.tank_volume,
+        [tank_n_moles],
+    )
 
     p.tank_temperature = result.data.T
-    p.tank_pressure = pressure(model, result)
-    p.tank_vapor_fraction = result.amounts[1]
+    p.tank_pressure = pressure(oxidizer_model, result)
+    vapor_phase = argmax(result.volumes)
+    p.tank_vapor_fraction = result.fractions[vapor_phase] / sum(result.fractions)
 
     if p.tank_vapor_fraction <= 0.999
-        p.tank_density = mass_density(model, result, 1) #get liquid density because we drawing from the bottom of the tank
-        p.tank_specific_enthalpy = mass_enthalpy(model, result, 1)
+        p.tank_density = mass_density(oxidizer_model, result, 1) #get liquid density because we drawing from the bottom of the tank
+        p.tank_specific_enthalpy = mass_enthalpy(oxidizer_model, result, 1)
     else
-        p.tank_density = mass_density(model, result) #otherwise, we will be drawing from the remaining vapor in the tank
-        p.tank_specific_enthalpy = mass_enthalpy(model, result)
+        p.tank_density = mass_density(oxidizer_model, result) #otherwise, we will be drawing from the remaining vapor in the tank
+        p.tank_specific_enthalpy = mass_enthalpy(oxidizer_model, result)
     end
 
-    mid_section_n_moles = u.mid_section_mass / u.nitrous_oxide_molecular_weight
+    mid_section_n_moles = u.mid_section_mass / p.nitrous_oxide_molecular_weight
 
-    result = uv_flash(model, u.mid_section_internal_energy, u.mid_section_volume, [mid_section_n_moles])
+    result = uv_flash_via_vt(
+        oxidizer_model,
+        u.mid_section_internal_energy,
+        p.mid_section_volume,
+        [mid_section_n_moles],
+    )
 
     p.mid_section_temperature = result.data.T
-    p.mid_section_pressure = pressure(model, result)
-    p.mid_section_vapor_fraction = result.amounts[1]
-    p.mid_section_density = mass_density(model, result)
-    p.mid_section_specific_enthalpy = mass_enthalpy(model, result)
+    p.mid_section_pressure = pressure(oxidizer_model, result)
+    vapor_phase = argmax(result.volumes)
+    p.mid_section_vapor_fraction = result.fractions[vapor_phase] / sum(result.fractions)
+    p.mid_section_density = mass_density(oxidizer_model, result)
+    p.mid_section_specific_enthalpy = mass_enthalpy(oxidizer_model, result)
 
-    chamber_n_moles = u.chamber_gas_mass / u.nitrous_oxide_molecular_weight
+    oxidizer_moles = (u.chamber_gas_mass * u.chamber_nitrous_oxide_mass_fraction) / p.nitrous_oxide_molecular_weight
+    fuel_moles = (u.chamber_gas_mass * u.chamber_hdpe_mass_fraction) / p.ethylene_molecular_weight
+    chamber_moles = [oxidizer_moles, fuel_moles]
 
-    result = uv_flash(model, u.chamber_gas_internal_energy, u.chamber_volume, [chamber_n_moles])
-    #Should we try to calculate chamber volume based on other parameters or should we just optimize it?
+    # The combustion chamber is assumed to be a homogeneous gas, so recover its
+    # temperature directly from U(V, T, n) instead of performing a phase flash.
+    
+    chamber_energy_residual = (temperature, _) -> Clapeyron.VT0.internal_energy(chamber_model, p.chamber_volume, temperature, chamber_moles) - u.chamber_gas_internal_energy
 
-    p.chamber_temperature = result.data.T
-    p.chamber_pressure = pressure(model, result)
-    p.chamber_vapor_fraction = result.amounts[1]
-    p.chamber_density = mass_density(model, result)
-    p.chamber_specific_enthalpy = mass_enthalpy(model, result)
+    temperature_problem = NonlinearProblem(chamber_energy_residual, p.chamber_temperature)
+    temperature_solution = solve(temperature_problem, NewtonRaphson(); abstol = 1e-8, reltol = 1e-8)
+    p.chamber_temperature = temperature_solution.u
+    
+
+    #=
+    energy_residual(T) =
+        Clapeyron.VT0.internal_energy(
+            chamber_model,
+            p.chamber_volume,
+            T,
+            chamber_moles
+        ) - u.chamber_gas_internal_energy
+
+    p.chamber_temperature = find_zero(
+        energy_residual,
+        (300.0, 5000.0),
+        Roots.Brent()
+    )
+        =#
+
+    p.chamber_pressure = pressure(chamber_model, p.chamber_volume, p.chamber_temperature, chamber_moles)
+    p.chamber_vapor_fraction = one(p.chamber_temperature)
+    p.chamber_density = Clapeyron.VT0.mass_density(chamber_model, p.chamber_volume, p.chamber_temperature, chamber_moles)
+    p.chamber_specific_enthalpy = Clapeyron.VT0.mass_enthalpy(chamber_model, p.chamber_volume, p.chamber_temperature, chamber_moles)
 
     #Other state updates:
     #Adjustable Valve
@@ -160,19 +278,54 @@ function update_state!(du, u, p, t, model)
     #Fuel Grain
     p.fuel_grain_average_cross_sectional_area = pi * (u.port_diameter / 2)^2
     
-    p.fuel_grain_burning_surface_area = pi * u.port_diameter * u.fuel_grain_length
+    p.fuel_grain_burning_surface_area = pi * u.port_diameter * p.fuel_grain_length
     
-    p.fuel_mass = p.fuel_density * (pi * (u.final_fuel_grain_void_diameter / 2)^2 - pi * (u.port_diameter / 2)^2)
+    p.fuel_mass = p.fuel_density * (pi * (p.final_fuel_grain_void_diameter / 2)^2 - pi * (u.port_diameter / 2)^2) * p.fuel_grain_length
 
     #Nozzle
     p.nozzle_throat_area = (pi / 4) * (p.nozzle_throat_diameter^2)
     #again, we need something here that determines propellant_isp based on oxidizer_to_fuel_ratio, chamber_pressure, and exit pressure (which we don't really know yet)
 end
 
+function system_ode!(du, u, p, t, oxidizer_model, chamber_model, p_axes)
+    p = ComponentVector(eltype(u).(p), p_axes)
+
+    update_state!(du, u, p, t, oxidizer_model, chamber_model)
+
+    if true == false
+        println("before")
+        @show du
+        @show u
+        @show p
+        println("")
+    end
+
+    adjustable_valve_pressure_drop = adjustable_valve_flow!(du, u, p, t)
+
+    injector_valve_pressure_drop, oxidizer_mass_flow = injector_valve_flow!(du, u, p, t)
+    
+    fuel_mass_flow = regression_rate!(du, u, p, t, oxidizer_mass_flow)
+
+    chamber_gas_mass_flow_out = nozzle_outlet!(du, u, p, t)
+
+    update_mass_fractions!(du, u, p, t, oxidizer_mass_flow, fuel_mass_flow)
+
+    combustion_zone_energy_conservation!(du, u, p, t, chamber_model, oxidizer_mass_flow, fuel_mass_flow, chamber_gas_mass_flow_out)
+
+    if true == false
+        println("after")
+        @show du
+        @show u
+        @show p
+        println("")
+    end
+end
+
 properties = ComponentVector(
+    #meta parameters
+    simulation_time = 10.0u"s",
+
     #Overall rocket properties
-    oxidizer_mass_flow = 0.0u"kg/s", #this will be a cache for the previous oxidizer mass flow
-    fuel_mass_flow = 0.0u"kg/s", #this will be a cache for the previous fuel mass flow
     oxidizer_to_fuel_ratio = 7.6,
     desired_oxidizer_to_fuel_ratio = 7.6,
     propellant_isp = 220.0u"s",
@@ -184,28 +337,31 @@ properties = ComponentVector(
     gravity = 9.81u"m/s^2",
     target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio = 2.0, #not an optimized parameter, but the ideal choice is hard to know
     fuel_grain_max_diameter = (12.0u"inch" |> u"cm"),
-
+    
     #Tank
+    u0_tank_oxidizer_mass = 5.0u"kg", #optimized
     tank_pressure = 70u"bar", #optimized
     tank_temperature = 21.0u"°C",
-    u0_tank_oxidizer_mass = 5.0u"kg", #optimized
     tank_vapor_fraction = 0.0u"m^3",
     tank_density = 0.0u"kg/m^3",
     tank_volume = 50.0u"cm^3",
+    tank_specific_enthalpy = 0.0u"J/kg",
     
     #Nitrous oxide parameters
     nitrous_oxide_molecular_weight = 44.013u"g/mol",
+    ethylene_molecular_weight = 28.05u"g/mol",
 
     #adjustable valve
     valve_flow_capacity_factor = 1e-5, #a result of the final valve we choose #we should optimize this to get a good ideal of what we want
     valve_opening = 1.0,
 
     #Mid section
-    mid_section_pressure = 40.0u"bar",
+    mid_section_pressure = 20.0u"bar", #this determines the initial kg of nitrous oxide in the mid_section
     mid_section_temperature = 21.0u"°C",
     mid_section_volume = 10.0u"cm^3",
-    u0_mid_section_mass = 1e-6u"kg",
     mid_section_density = 0.0u"kg/m^3",
+    mid_section_vapor_fraction = 0.0,
+    mid_section_specific_enthalpy = 0.0u"J/kg",
 
     #Injector properties
     injector_discharge_coefficient = 0.7,
@@ -215,18 +371,23 @@ properties = ComponentVector(
     target_injector_velocity = 50.0u"m/s",
 
     #Chamber
-    chamber_pressure = 30.0u"bar",
-    chamber_temperature = 0.0u"°C",
-    chamber_volume = 50.0u"cm^3",
-    u0_chamber_gas_mass = 1e-6u"kg",
+    u0_chamber_nitrous_oxide_mass_fraction = 1.0,
+    u0_chamber_hdpe_mass_fraction = 0.0,
+    chamber_pressure = 10.0u"bar", #this determines the initial kg of nitrous oxide in the chamber
+    chamber_temperature = 21.0u"°C",
+    chamber_volume = 212.0u"cm^3",
     chamber_density = 0.0u"kg/m^3",
+    wall_heat_loss = 0.0u"W",
+    chamber_vapor_fraction = 0.0,
+    chamber_specific_enthalpy = 0.0u"J/kg",
+
 
     #Fuel grain
+    u0_fuel_grain_void_diameter = 3.0u"cm", #optimized
     fuel_mass = 0.0u"kg", #this will be derived by substracting the volume of the cylinder formed by the u0_fuel_grain_void_diameter by the final_fuel_grain_void_diameter and then multiplying by the fuel density
     fuel_density = 950.0u"kg/m^3",
-    fuel_regression_rate = 0.5u"mm/s",
-    u0_fuel_grain_void_diameter = 3.0u"cm", #optimized
-    final_fuel_grain_void_diameter = 0.0u"cm", #optimized
+    #fuel_regression_rate = 0.5u"mm/s",
+    final_fuel_grain_void_diameter = 4.0u"cm", #optimized
     fuel_grain_length = 30.0u"cm", #optimized
     fuel_grain_average_cross_sectional_area = 0.0u"m^2",
     fuel_grain_burning_surface_area = 0.0u"m^2",
@@ -235,6 +396,13 @@ properties = ComponentVector(
     #These are for when fuel_regression is measured in mm/s and oxidizer_mass_flux is measured in g/(cm^2*s)
     fuel_regression_coeff_a = 0.248,
     fuel_regression_coeff_n = 0.331,
+
+    #Fuel properties
+    fuel_lowering_heating_value = 47.42u"MJ/kg",
+    stoichiometric_oxidizer_fuel_ratio = 9.41,
+    fuel_heat_of_pyrolysis = 2.3u"MJ/kg",
+    fuel_surface_temperature = 1300.0u"K",
+    combustion_efficiency = 0.9,
 
     #Propellant properties
     propellant_characteristic_velocity = 1500.0u"m/s", 
@@ -253,11 +421,10 @@ end
 
 optimized_properties = [
     #Overall rocket properties
-    OptimizedParameter(:oxidizer_mass_flow, 1e-6u"kg/s", properties.oxidizer_mass_flow * 10.0),
 
     #Tank
     OptimizedParameter(:u0_tank_oxidizer_mass, 1e-6u"kg", 50.0u"kg",),
-    OptimizedParameter(:tank_volume, 10.0u"cm^3", 30.0u"L",),
+    OptimizedParameter(:tank_pressure, 50.0u"bar", 71.0u"bar",),
 
     #adjustable valve
     OptimizedParameter(:valve_flow_capacity_factor, 1e-7u"m^2", 1e-2u"m^2"),
@@ -282,51 +449,57 @@ optimized_properties = [
     OptimizedParameter(:nozzle_throat_diameter, 0.2u"cm", 2.5u"cm")
 ]
 
-function system_ode!(du, u, p, t, model, p_axes)
-    p = ComponentVector(eltype(u).(p), p_axes)
+theta_guess, theta_lb, theta_ub, theta_axes, u_axes, p_axes, theta_to_u_map, theta_to_p_map, p_to_u_map = create_theta_guess(optimized_properties, u0, properties)
 
-    update_state!(du, u, p, t, model)
+# Stop the burn when the fuel port reaches the outside diameter of the grain.
+# Only the positive crossing is active because regression increases port_diameter.
+function port_diameter_limit(u, t, integrator, u_axes, p_axes)
+    u_named = ComponentVector(u, u_axes)
+    p_named = ComponentVector(integrator.p, p_axes)
 
-    adjustable_valve_pressure_drop = adjustable_valve_flow(du, u, p, t, model)
-
-    injector_valve_pressure_drop = injector_valve_flow(du, u, p, t, model)
-
-    fuel_flow = regression_rate(du, u, p, t, model)
+    u_named.port_diameter - p_named.final_fuel_grain_void_diameter
 end
 
-#=
-prob = get!(task_local_storage(), :dry_run_implicit_prob) do    
-    # Build a new closure bound to the thread-isolated copies
-    f_closure = (du, u, p, t) -> system_ode!(du, u, p, t, model, p_axes)
-    
-    #=
-    detector = SparseConnectivityTracer.TracerLocalSparsityDetector()
+port_diameter_termination_cb = ContinuousCallback(
+    (u, t, integrator) -> port_diameter_limit(u, t, integrator, u_axes, p_axes),
+    terminate!,
+    nothing;
+    save_positions = (true, false),
+)
 
-    jac_sparsity = ADTypes.jacobian_sparsity(
-        (du, u) -> f_closure(du, u, p_guess, 0.0), du0_vec, u0_vec, detector
-    )
-    =#
-
-    ode_func = ODEFunction(f_closure)#, jac_prototype = float.(jac_sparsity))
-
-    t0 = 0.0
-    tMax = ustrip(upreferred(thermocouple_data.timestamps[end]))
-    tspan = (t0, tMax)
-
-    implicit_prob = ODEProblem(ode_func, u0_vec, tspan, p_guess)
-end
-=#
-
-function system_design_loss(theta, p, theta_axes, u_axes, p_axes, model, theta_to_p_map, theta_to_u_map, p_to_u_map, append_optimized_parameters!, update_properties!)
+function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_model, chamber_model, theta_to_u_map, theta_to_p_map, p_to_u_map, append_optimized_parameters!, update_u0!)
     theta = ComponentVector(theta, theta_axes)
     
     # Promote p to the type of theta (which will be Dual during ForwardDiff) so it can accept Duals
+    u0 = eltype(theta).(u0)
     p = ComponentVector(eltype(theta).(p), p_axes)
 
-    append_optimized_parameters!(theta, p, theta_to_p_map, theta_to_u_map, p_to_u_map)
-    update_u0!(du, u, p, t, model)
+    append_optimized_parameters!(theta, u0, p, theta_to_u_map, theta_to_p_map, p_to_u_map)
+    update_u0!(u0, p, 0.0, oxidizer_model, chamber_model)
 
-    #we run the ODEProblem here
+    #=
+    prob = get!(task_local_storage(), :implicit_prob) do    
+        # Build a new closure bound to the thread-isolated copies
+        f_closure = (du, u, p, t) -> system_ode!(du, u, p, t, oxidizer_model, chamber_model, p_axes)
+
+        ode_func = ODEFunction(f_closure)#, jac_prototype = float.(jac_sparsity))
+
+        tspan = (0.0, p.simulation_time)
+
+        prob = ODEProblem(ode_func, u0, tspan, p)
+    end
+    =#
+    prob = remake(implicit_prob; u0 = u0, p = p, tspan = (0.0, p.simulation_time))
+
+    #=
+    @show eltype(theta)
+    @show eltype(u0)
+    @show eltype(p)
+    @show typeof(prob.u0)
+    @show typeof(prob.p)
+    =#
+
+    sol = solve(prob)
 
     #Losses
     injector_velocity_loss = 0.0
@@ -334,49 +507,93 @@ function system_design_loss(theta, p, theta_axes, u_axes, p_axes, model, theta_t
 
     #Performance Metrics
     cummulative_impulse = 0.0
-    fuel_depletion_time = 0.0
-    oxidizer_depletion_time = 0.0
+    depletion_time = 0.0
 
     du_temporary = similar(sol.u[1])
+
+    found_depletion_time = false
 
     for i in eachindex(sol.u)
         curr_t = sol.t[i]
         u_named = ComponentVector(sol.u[i], u_axes)
 
-        update_state!(du_temporary, u_named, p, curr_t, model)
+        update_state!(du_temporary, u_named, p, curr_t, oxidizer_model, chamber_model)
 
-        adjustable_valve_pressure_drop = adjustable_valve_flow(du_temporary, u_named, p, curr_t, model)
+        adjustable_valve_pressure_drop = adjustable_valve_flow!(du_temporary, u_named, p, curr_t)
 
-        injector_valve_pressure_drop = injector_valve_flow(du_temporary, u_named, p, curr_t, model)
-        injector_velocity_loss = 0.00001 * abs2(p.target_injector_velocity - injector_valve_oxidizer_mass_flow / (pre_injector_density * p.injector_orifice_area))
+        injector_valve_pressure_drop, oxidizer_mass_flow = injector_valve_flow!(du_temporary, u_named, p, curr_t)
+        injector_velocity_loss += 0.00001 * (1 / length(sol.u)) * abs2(p.target_injector_velocity - oxidizer_mass_flow / (p.mid_section_density * p.injector_orifice_area))
 
-        pressure_drop_ratio_loss = 0.00001 * abs2(p.target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio - (injector_valve_pressure_drop / adjustable_valve_pressure_drop))
+        pressure_drop_ratio_loss += 0.00001 * (1 / length(sol.u)) * abs2(p.target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio - (injector_valve_pressure_drop / adjustable_valve_pressure_drop))
 
         #OBSERVATION: it seems like we're going to have to weigh the importance of injector velocity against adjustable valve authority
 
-        if (abs(u.port_diameter - u.final_fuel_grain_void_diameter) <= 1e-6)
-            fuel_depletion_time = curr_t
+        fuel_mass_flow = regression_rate!(du_temporary, u_named, p, curr_t, oxidizer_mass_flow)
+
+        #=
+        chamber_gas_mass_flow_out = nozzle_outlet!(du_temporary, u_named, p, curr_t)
+
+        update_mass_fractions!(du_temporary, u_named, p, curr_t, oxidizer_mass_flow, fuel_mass_flow)
+
+        combustion_zone_energy_conservation!(du_temporary, u_named, p, curr_t, chamber_model, oxidizer_mass_flow, fuel_mass_flow, chamber_gas_mass_flow_out)
+        =#
+
+        #=
+        if i == 1 || i == length(sol.u)
+            @show u_named.port_diameter
+            @show u_named.port_diameter
+            @show p.final_fuel_grain_void_diameter
+            @show u_named.port_diameter - p.final_fuel_grain_void_diameter
+            @show (u_named.port_diameter <= 1e-6)
+        end
+        =#
+
+        if (u_named.port_diameter >= p.final_fuel_grain_void_diameter) && found_depletion_time == false
+            depletion_time = curr_t
+            found_depletion_time = true
         end
 
-        if (u.tank_oxidizer_mass <= 1e-6)
-            oxidizer_depletion_time = curr_t
+        if (u_named.tank_oxidizer_mass <= 1e-6) && found_depletion_time == false
+            depletion_time = curr_t
+            found_depletion_time = true
         end
+
+        #=
+        if i == length(sol.u)
+            if curr_t == p.simulation_time #the simulation terminated early due to the callback
+                depletion_time = curr_t
+                found_depletion_time = true
+            end
+        end
+        =#
 
         #if we want, we can get the derivative of the cummulative_impulse over time to plot the thrust profile of the engine!
         if i > 1
             u_named_prev = ComponentVector(sol.u[i-1], u_axes)
 
             change_in_oxidizer_mass = u_named.tank_oxidizer_mass - u_named_prev.tank_oxidizer_mass
-            change_in_fuel_mass = u_named.fuel_mass - u_named_prev.fuel_mass
+            #change_in_fuel_mass = u_named.fuel_mass - u_named_prev.fuel_mass
 
-            change_in_propellant_mass = change_in_oxidizer_mass + change_in_fuel_mass
+            change_in_propellant_mass = change_in_oxidizer_mass + fuel_mass_flow
 
-            cummulative_impulse += p.propallant_isp * p.gravity * change_in_propellant_mass
+            cummulative_impulse += p.propellant_isp * p.gravity * change_in_propellant_mass
+        end
+
+        if i == length(sol.u)
+            if depletion_time == 0.0
+                @warn "the simulation did no run long enough to completely burn out the fuel grain"
+                @show remaining_fuel_grain = (u_named.port_diameter - p.final_fuel_grain_void_diameter)
+
+                #depletion_time = curr_t
+
+                burn_time_loss = 1e10
+            end
         end
     end
-
-    burn_time_loss = 0.0001 * abs2(p.desired_burn_time - fuel_depletion_time)
-    average_thrust_loss = 0.0001 * abs2(p.desired_average_thrust - cummulative_impulse / fuel_depletion_time)
+    
+    average_thrust_loss = 0.0001 * abs2(p.desired_average_thrust - cummulative_impulse / depletion_time)
+    
+    burn_time_loss = 0.01 * abs2(p.desired_burn_time - depletion_time)
 
     #above_max_fuel_grain_diameter_loss = 0.01 * abs2(p.u0_fuel_grain_void_diameter + p.additional_fuel_grain_void_diameter - p.fuel_grain_max_diameter)
     #we'll just enforce a bound on final_fuel_grain_void_diameter
@@ -402,13 +619,14 @@ theta_guess_unitless = ustrip.(upreferred.(theta_guess))
 theta_lb_unitless = ustrip.(upreferred.(theta_lb))
 theta_ub_unitless = ustrip.(upreferred.(theta_ub))
 u0_unitless = ustrip.(upreferred.(u0))
+du_test = deepcopy(u0_unitless)
 properties_unitless = ustrip.(upreferred.(properties))
 
 p_axes = getaxes(properties)
 u_axes = getaxes(u0)
 
 function viewable_system_design_loss(theta, p)
-    theta, p, all_losses = system_design_loss(theta, p, theta_axes, u_axes, p_axes, model, theta_to_p_map, theta_to_u_map, p_to_u_map, append_optimized_parameters!, update_properties!)
+    theta, p, all_losses = system_design_loss(theta, u0_unitless, p, theta_axes, u_axes, p_axes, oxidizer_model, chamber_model, theta_to_u_map, theta_to_p_map, p_to_u_map, append_optimized_parameters!, update_u0!)
     @show theta
     println("")
     @show p
@@ -419,29 +637,46 @@ function viewable_system_design_loss(theta, p)
 end
 
 function system_design_loss_closure(theta, p)
-    theta, p, all_losses = system_design_loss(theta, p, theta_axes, u_axes, p_axes, model, theta_to_p_map, theta_to_u_map, p_to_u_map, append_optimized_parameters!, update_properties!)
+    theta, p, all_losses = system_design_loss(theta, u0_unitless, p, theta_axes, u_axes, p_axes, oxidizer_model, chamber_model, theta_to_u_map, theta_to_p_map, p_to_u_map, append_optimized_parameters!, update_u0!)
 
     return sum(all_losses)
 end
 
-f_closure = (du, u, p, t) -> system_ode!(du, u, p, t, model, p_axes)
+f_closure = (du, u, p, t) -> system_ode!(du, u, p, t, oxidizer_model, chamber_model, p_axes)
 
-ode_func = ODEFunction(f_closure)
+#=
+detector = SparseConnectivityTracer.TracerLocalSparsityDetector()
+
+jac_sparsity = ADTypes.jacobian_sparsity(
+    (du, u) -> f_closure(du, u, properties_unitless, 0.0), du_test, u0_unitless, detector
+)
+=#
+
+ode_func = ODEFunction(f_closure)#, jac_prototype = float.(jac_sparsity))
 
 t0 = 0.0
-tMax = 1000.0
+tMax = 10.0
 tspan = (t0, tMax)
-
-du_test = deepcopy(u0_unitless)
 
 implicit_prob = ODEProblem(ode_func, u0_unitless, tspan, properties_unitless)
 
 append_optimized_parameters!(Vector(theta_guess_unitless), u0_unitless, properties_unitless, theta_to_u_map, theta_to_p_map, p_to_u_map)
-update_u0!(du_test, u0_unitless, properties_unitless, 0.0, model)
+update_u0!(u0_unitless, properties_unitless, 0.0, oxidizer_model, chamber_model)
 
-sol = solve(implicit_prob, Tsit5(), callback = approximate_time_to_finish_cb)
+@time begin
+    du_warmup = similar(u0_unitless)
+    f_closure(du_warmup, u0_unitless, properties_unitless, 0.0)
+end
 
-opt_f = OptimizationFunction(system_design_loss_closure, Optimization.AutoForwardDiff())
+sol = solve(
+    implicit_prob,
+    callback = CallbackSet(
+        port_diameter_termination_cb,
+        approximate_time_to_finish_cb,
+    ),
+)
+
+opt_f = OptimizationFunction(system_design_loss_closure, Optimization.AutoFiniteDiff())
 opt_prob = OptimizationProblem(opt_f, Vector(theta_guess_unitless), Vector(properties_unitless), lb = Vector(theta_lb_unitless), ub = Vector(theta_ub_unitless))
 
 cb = function (state, l)
@@ -450,8 +685,9 @@ cb = function (state, l)
     false
 end
 
-@time sol = solve(opt_prob, callback = cb, LBFGS(), reltol = 1e-4, maxiters = 1000)
+sol = solve(opt_prob, callback = cb, LBFGS(), reltol = 1e-4)
 
-viewable_system_design_loss(sol.u, properties_unitless)
+#viewable_system_design_loss(sol.u, properties_unitless)
+viewable_system_design_loss(theta_guess_unitless, properties_unitless)
 
 final_properties = ComponentVector(sol.u, u_axes)
