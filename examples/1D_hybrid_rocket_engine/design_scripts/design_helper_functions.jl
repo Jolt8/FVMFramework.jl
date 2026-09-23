@@ -98,3 +98,39 @@ function build_implicit_prob(f_closure, du0_vec, u0_vec, thermocouple_data, p_gu
 
     return implicit_prob
 end
+
+function uv_flash_via_vt(
+    model,
+    target_internal_energy,
+    volume,
+    moles;
+    temperature_bounds = (180.0, 450.0),
+)
+    energy_residual(T) = begin
+        result = vt_flash(model, volume, T, moles)
+        internal_energy(model, result) - target_internal_energy
+    end
+
+    lower_temperature, upper_temperature = temperature_bounds
+
+    lower_residual = energy_residual(lower_temperature)
+    upper_residual = energy_residual(upper_temperature)
+
+    lower_residual * upper_residual <= 0 ||
+        error("Temperature bounds do not bracket the requested internal energy")
+
+    temperature = find_zero(
+        energy_residual,
+        temperature_bounds,
+        Roots.Brent(),
+    )
+
+    #=
+    energy_residual = (temperature, _) -> Clapeyron.VT0.internal_energy(model, volume, temperature, moles) - target_internal_energy
+
+    temperature_problem = NonlinearProblem(energy_residual, temperature_bounds[1])
+    temperature_solution = solve(temperature_problem, NewtonRaphson(); abstol = 1e-8, reltol = 1e-8)
+    =#
+
+    return vt_flash(model, volume, temperature, moles)
+end
