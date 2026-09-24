@@ -20,6 +20,9 @@ Revise.includet(joinpath(@__DIR__, "design_helper_functions.jl"))
 oxidizer_model = PR(["nitrous oxide"])
 chamber_model = ReidIdeal(["nitrous oxide", "ethylene"])
 
+mass_density(oxidizer_model, 100000, 298.15, [1.0])
+mass_density(chamber_model, 100000, 298.15, [1.0, 1.0])
+
 function adjustable_valve_flow!(du, u, p, t)
     if p.tank_pressure - p.mid_section_pressure <= 0
         return 0.0
@@ -241,9 +244,27 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     
     chamber_energy_residual = (temperature, _) -> Clapeyron.VT0.internal_energy(chamber_model, p.chamber_volume, temperature, chamber_moles) - u.chamber_gas_internal_energy
 
+    
     temperature_problem = NonlinearProblem(chamber_energy_residual, p.chamber_temperature)
     temperature_solution = solve(temperature_problem, NewtonRaphson(); abstol = 1e-8, reltol = 1e-8)
     p.chamber_temperature = temperature_solution.u
+    
+
+    #=
+    energy_residual(T) =
+        Clapeyron.VT0.internal_energy(
+            chamber_model,
+            p.chamber_volume,
+            T,
+            chamber_moles,
+        ) - u.chamber_gas_internal_energy
+
+    p.chamber_temperature = find_zero(
+        energy_residual,
+        (200.0, 5000.0),
+        Roots.Brent(),
+    )
+        =#
     
 
     #=
@@ -288,6 +309,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
 end
 
 function system_ode!(du, u, p, t, oxidizer_model, chamber_model, p_axes)
+
     p = ComponentVector(eltype(u).(p), p_axes)
 
     update_state!(du, u, p, t, oxidizer_model, chamber_model)
@@ -423,7 +445,7 @@ optimized_properties = [
     #Overall rocket properties
 
     #Tank
-    OptimizedParameter(:u0_tank_oxidizer_mass, 1e-6u"kg", 50.0u"kg",),
+    OptimizedParameter(:u0_tank_oxidizer_mass, 0.5u"kg", 5.0u"kg",),
     OptimizedParameter(:tank_pressure, 50.0u"bar", 71.0u"bar",),
 
     #adjustable valve
@@ -439,7 +461,7 @@ optimized_properties = [
     #Fuel grain
     OptimizedParameter(:u0_fuel_grain_void_diameter, 1.0u"cm", 10.0u"cm"),
     OptimizedParameter(:final_fuel_grain_void_diameter, 1.0u"cm", 20.0u"cm"),
-    OptimizedParameter(:fuel_grain_length, 5.0u"cm", 200.0u"cm"),
+    OptimizedParameter(:fuel_grain_length, 5.0u"cm", 50.0u"cm"),
 
     #Fuel Grain Empirical Parameters
 
@@ -467,7 +489,8 @@ port_diameter_termination_cb = ContinuousCallback(
     save_positions = (true, false),
 )
 
-function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_model, chamber_model, theta_to_u_map, theta_to_p_map, p_to_u_map, append_optimized_parameters!, update_u0!)
+function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_model, chamber_model, theta_to_u_map, theta_to_p_map, p_to_u_map, append_optimized_parameters!, update_u0!, problem_template)
+    @show "0"
     theta = ComponentVector(theta, theta_axes)
     
     # Promote p to the type of theta (which will be Dual during ForwardDiff) so it can accept Duals
@@ -489,7 +512,7 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
         prob = ODEProblem(ode_func, u0, tspan, p)
     end
     =#
-    prob = remake(implicit_prob; u0 = u0, p = p, tspan = (0.0, p.simulation_time))
+    prob = remake(problem_template; u0 = u0, p = p, tspan = (0.0, p.simulation_time))
 
     #=
     @show eltype(theta)
@@ -499,7 +522,16 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
     @show typeof(prob.p)
     =#
 
-    sol = solve(prob)
+    sol = 0
+
+    @show "1"
+    try 
+        sol = solve(prob)
+    catch e
+        println(e)
+        return theta, p, 1e10
+    end
+    @show "2"
 
     #Losses
     injector_velocity_loss = 0.0
@@ -522,8 +554,13 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
         adjustable_valve_pressure_drop = adjustable_valve_flow!(du_temporary, u_named, p, curr_t)
 
         injector_valve_pressure_drop, oxidizer_mass_flow = injector_valve_flow!(du_temporary, u_named, p, curr_t)
+
+        #@show p.target_injector_velocity
+        #@show oxidizer_mass_flow / (p.mid_section_density * p.injector_orifice_area)
         injector_velocity_loss += 0.00001 * (1 / length(sol.u)) * abs2(p.target_injector_velocity - oxidizer_mass_flow / (p.mid_section_density * p.injector_orifice_area))
 
+        #@show p.target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio
+        #@show injector_valve_pressure_drop / adjustable_valve_pressure_drop
         pressure_drop_ratio_loss += 0.00001 * (1 / length(sol.u)) * abs2(p.target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio - (injector_valve_pressure_drop / adjustable_valve_pressure_drop))
 
         #OBSERVATION: it seems like we're going to have to weigh the importance of injector velocity against adjustable valve authority
@@ -576,13 +613,16 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
 
             change_in_propellant_mass = change_in_oxidizer_mass + fuel_mass_flow
 
-            cummulative_impulse += p.propellant_isp * p.gravity * change_in_propellant_mass
+            cummulative_impulse += p.propellant_isp * p.gravity * -change_in_propellant_mass
         end
 
         if i == length(sol.u)
-            if depletion_time == 0.0
+            if depletion_time == 0.0 && found_depletion_time == false
                 @warn "the simulation did no run long enough to completely burn out the fuel grain"
                 @show remaining_fuel_grain = (u_named.port_diameter - p.final_fuel_grain_void_diameter)
+
+                @show u_named.port_diameter
+                @show p.final_fuel_grain_void_diameter
 
                 #depletion_time = curr_t
 
@@ -591,9 +631,31 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
         end
     end
     
+    @show p.desired_average_thrust
+    @show cummulative_impulse
+    @show cummulative_impulse / depletion_time
     average_thrust_loss = 0.0001 * abs2(p.desired_average_thrust - cummulative_impulse / depletion_time)
+
+    total_thrust = cummulative_impulse / depletion_time
+
+    #=
+    if total_thrust > 500 && total_thrust < 1500
+        average_thrust_loss = 0.0
+    else
+        average_thrust_loss = 0.0001 * abs2(p.desired_average_thrust - cummulative_impulse / depletion_time)
+    end
+    =#
     
+    @show depletion_time
     burn_time_loss = 0.01 * abs2(p.desired_burn_time - depletion_time)
+
+    #=
+    if depletion_time > 4 && depletion_time < 6
+        burn_time_loss = 0.0
+    else
+        burn_time_loss = 0.01 * abs2(p.desired_burn_time - depletion_time)
+    end
+    =#
 
     #above_max_fuel_grain_diameter_loss = 0.01 * abs2(p.u0_fuel_grain_void_diameter + p.additional_fuel_grain_void_diameter - p.fuel_grain_max_diameter)
     #we'll just enforce a bound on final_fuel_grain_void_diameter
@@ -604,6 +666,8 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
         burn_time_loss = burn_time_loss,
         average_thrust_loss = average_thrust_loss
     )
+
+    @show all_losses
 
     return theta, p, all_losses
 end
@@ -625,24 +689,13 @@ properties_unitless = ustrip.(upreferred.(properties))
 p_axes = getaxes(properties)
 u_axes = getaxes(u0)
 
-function viewable_system_design_loss(theta, p)
-    theta, p, all_losses = system_design_loss(theta, u0_unitless, p, theta_axes, u_axes, p_axes, oxidizer_model, chamber_model, theta_to_u_map, theta_to_p_map, p_to_u_map, append_optimized_parameters!, update_u0!)
-    @show theta
-    println("")
-    @show p
-    println("")
-    @show all_losses
-    println("")
-    return sum(all_losses)
+f_closure = let
+    om = oxidizer_model
+    cm = chamber_model
+    p_axes_local = p_axes
+
+    (du, u, p, t) -> system_ode!(du, u, p, t, om, cm, p_axes_local)
 end
-
-function system_design_loss_closure(theta, p)
-    theta, p, all_losses = system_design_loss(theta, u0_unitless, p, theta_axes, u_axes, p_axes, oxidizer_model, chamber_model, theta_to_u_map, theta_to_p_map, p_to_u_map, append_optimized_parameters!, update_u0!)
-
-    return sum(all_losses)
-end
-
-f_closure = (du, u, p, t) -> system_ode!(du, u, p, t, oxidizer_model, chamber_model, p_axes)
 
 #=
 detector = SparseConnectivityTracer.TracerLocalSparsityDetector()
@@ -663,10 +716,9 @@ implicit_prob = ODEProblem(ode_func, u0_unitless, tspan, properties_unitless)
 append_optimized_parameters!(Vector(theta_guess_unitless), u0_unitless, properties_unitless, theta_to_u_map, theta_to_p_map, p_to_u_map)
 update_u0!(u0_unitless, properties_unitless, 0.0, oxidizer_model, chamber_model)
 
-@time begin
-    du_warmup = similar(u0_unitless)
-    f_closure(du_warmup, u0_unitless, properties_unitless, 0.0)
-end
+system_ode!(du_test, u0_unitless, properties_unitless, 0.0, oxidizer_model, chamber_model, p_axes)
+
+f_closure(du_test, u0_unitless, properties_unitless, 0.0)
 
 sol = solve(
     implicit_prob,
@@ -676,7 +728,88 @@ sol = solve(
     ),
 )
 
-opt_f = OptimizationFunction(system_design_loss_closure, Optimization.AutoFiniteDiff())
+viewable_system_design_loss_closure = let 
+    u_local = u0_unitless
+    theta_axes_local = theta_axes
+    u_axes_local = u_axes
+    p_axes_local = p_axes
+    oxidizer_model_local = oxidizer_model
+    chamber_model_local = chamber_model
+    theta_to_u_map_local = theta_to_u_map
+    theta_to_p_map_local = theta_to_p_map
+    p_to_u_map_local = p_to_u_map
+    append_optimized_parameters_local! = append_optimized_parameters!
+    update_u0_local! = update_u0!
+    problem_template_local = implicit_prob
+    
+    (theta, p) -> system_design_loss(theta, u_local, p, theta_axes_local, u_axes_local, p_axes_local, oxidizer_model_local, chamber_model_local, theta_to_u_map_local, theta_to_p_map_local, p_to_u_map_local, append_optimized_parameters_local!, update_u0_local!, problem_template_local)
+end
+
+function viewable_system_design_loss(theta, p)
+    theta, p, all_losses = viewable_system_design_loss_closure(theta, p)
+    @show theta
+    println("")
+    @show p
+    println("")
+    @show all_losses
+    println("")
+    return sum(all_losses)
+end
+
+system_design_loss_closure = let 
+    u_local = u0_unitless
+    theta_axes_local = theta_axes
+    u_axes_local = u_axes
+    p_axes_local = p_axes
+    oxidizer_model_local = oxidizer_model
+    chamber_model_local = chamber_model
+    theta_to_u_map_local = theta_to_u_map
+    theta_to_p_map_local = theta_to_p_map
+    p_to_u_map_local = p_to_u_map
+    append_optimized_parameters_local! = append_optimized_parameters!
+    update_u0_local! = update_u0!
+    problem_template_local = implicit_prob
+
+    (theta, p) -> system_design_loss(theta, u_local, p, theta_axes_local, u_axes_local, p_axes_local, oxidizer_model_local, chamber_model_local, theta_to_u_map_local, theta_to_p_map_local, p_to_u_map_local, append_optimized_parameters_local!, update_u0_local!, problem_template_local)
+end
+
+pure_system_design_loss_closure = let
+    u_initial = u0_unitless
+    θ_axes = theta_axes
+    state_axes = u_axes
+    parameter_axes = p_axes
+    om = oxidizer_model
+    cm = chamber_model
+    θ_to_u = theta_to_u_map
+    θ_to_p = theta_to_p_map
+    p_to_u = p_to_u_map
+    append_parameters! = append_optimized_parameters!
+    initialize_state! = update_u0!
+    problem_template_local = implicit_prob
+
+    function (theta, p)
+        _, _, losses = system_design_loss(
+            theta,
+            u_initial,
+            p,
+            θ_axes,
+            state_axes,
+            parameter_axes,
+            om,
+            cm,
+            θ_to_u,
+            θ_to_p,
+            p_to_u,
+            append_parameters!,
+            initialize_state!,
+            problem_template_local
+        )
+
+        return sum(losses)
+    end
+end
+
+opt_f = OptimizationFunction(pure_system_design_loss_closure, Optimization.AutoFiniteDiff())
 opt_prob = OptimizationProblem(opt_f, Vector(theta_guess_unitless), Vector(properties_unitless), lb = Vector(theta_lb_unitless), ub = Vector(theta_ub_unitless))
 
 cb = function (state, l)
@@ -685,7 +818,37 @@ cb = function (state, l)
     false
 end
 
-sol = solve(opt_prob, callback = cb, LBFGS(), reltol = 1e-4)
+pure_system_design_loss_closure(theta_guess_unitless, properties_unitless)
+
+#sol = solve(opt_prob, LBFGS(), callback = cb, reltol = 1e-4)
+
+#=
+sol = solve(opt_prob, 
+    BBO_adaptive_de_rand_1_bin_radiuslimited(),
+    callback = cb,
+    PoulationSize = 1,
+    maxiters = 1,
+    maxtime = 60.0,
+    Method = :RandomSearcher,
+    verbose = true
+    #Method = :SepReal
+)
+=#
+
+#=
+for i in 1:10
+    θ = theta_lb_unitless .+
+        rand(length(theta_lb_unitless)) .*
+        (theta_ub_unitless .- theta_lb_unitless)
+
+    @show i θ
+
+    @time pure_system_design_loss_closure(
+        θ,
+        properties_unitless,
+    )
+end
+=#
 
 #viewable_system_design_loss(sol.u, properties_unitless)
 viewable_system_design_loss(theta_guess_unitless, properties_unitless)
