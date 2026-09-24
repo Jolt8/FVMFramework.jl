@@ -116,21 +116,54 @@ function uv_flash_via_vt(
     lower_residual = energy_residual(lower_temperature)
     upper_residual = energy_residual(upper_temperature)
 
-    lower_residual * upper_residual <= 0 ||
+    if lower_residual * upper_residual >= 0.0
+        @show lower_residual
+        @show upper_residual
+        @show lower_residual * upper_residual
+        @show target_internal_energy
+        @show lower_temperature
+        @show upper_temperature
+        @show energy_residual(lower_temperature)
+        @show energy_residual(upper_temperature)
         error("Temperature bounds do not bracket the requested internal energy")
+    end
 
-    temperature = find_zero(
-        energy_residual,
-        temperature_bounds,
-        Roots.Brent(),
-    )
+    temperature = 0.0
 
+    try 
+        temperature = find_zero(
+            energy_residual,
+            temperature_bounds,
+            Roots.Brent(),
+        )
+    catch e
+        @show lower_residual
+        @show upper_residual
+        @show lower_residual * upper_residual
+        @show target_internal_energy
+        @show lower_temperature
+        @show upper_temperature
+        @show energy_residual(lower_temperature)
+        @show energy_residual(upper_temperature)
+        error("Temperature bounds do not bracket the requested internal energy")
+    end
+
+    
     #=
-    energy_residual = (temperature, _) -> Clapeyron.VT0.internal_energy(model, volume, temperature, moles) - target_internal_energy
+    energy_residual = (temperature, _) -> (result = vt_flash(model, volume, temperature, moles); internal_energy(model, result) - target_internal_energy)
 
     temperature_problem = NonlinearProblem(energy_residual, temperature_bounds[1])
-    temperature_solution = solve(temperature_problem, NewtonRaphson(); abstol = 1e-8, reltol = 1e-8)
+    temperature_solution = solve(temperature_problem, NewtonRaphson(); abstol = 1e-8, reltol = 1e-8)\
     =#
 
     return vt_flash(model, volume, temperature, moles)
 end
+
+#=
+
+function system_design_loss_closure(theta, p)
+    theta, p, all_losses = system_design_loss(theta, u0_unitless, p, theta_axes, u_axes, p_axes, oxidizer_model, chamber_model, theta_to_u_map, theta_to_p_map, p_to_u_map, append_optimized_parameters!, update_u0!)
+
+    return sum(all_losses)
+end
+=#
