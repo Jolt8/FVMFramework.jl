@@ -12,6 +12,9 @@ using OrderedCollections
 using OrdinaryDiffEq
 using Roots
 using SparseConnectivityTracer
+using Dates
+using CSV
+using DataFrames
 
 using FVMFramework
 
@@ -362,7 +365,7 @@ properties = ComponentVector(
     
     #Tank
     u0_tank_oxidizer_mass = 5.0u"kg", #optimized
-    tank_pressure = 70u"bar", #optimized
+    tank_pressure = 68.0u"bar", #optimized
     tank_temperature = 21.0u"°C",
     tank_vapor_fraction = 0.0u"m^3",
     tank_density = 0.0u"kg/m^3",
@@ -490,7 +493,6 @@ port_diameter_termination_cb = ContinuousCallback(
 )
 
 function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_model, chamber_model, theta_to_u_map, theta_to_p_map, p_to_u_map, append_optimized_parameters!, update_u0!, problem_template)
-    @show "0"
     theta = ComponentVector(theta, theta_axes)
     
     # Promote p to the type of theta (which will be Dual during ForwardDiff) so it can accept Duals
@@ -524,14 +526,12 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
 
     sol = 0
 
-    @show "1"
     try 
         sol = solve(prob)
     catch e
         println(e)
         return theta, p, 1e10
     end
-    @show "2"
 
     #Losses
     injector_velocity_loss = 0.0
@@ -630,10 +630,7 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
             end
         end
     end
-    
-    @show p.desired_average_thrust
-    @show cummulative_impulse
-    @show cummulative_impulse / depletion_time
+
     average_thrust_loss = 0.0001 * abs2(p.desired_average_thrust - cummulative_impulse / depletion_time)
 
     total_thrust = cummulative_impulse / depletion_time
@@ -645,8 +642,7 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
         average_thrust_loss = 0.0001 * abs2(p.desired_average_thrust - cummulative_impulse / depletion_time)
     end
     =#
-    
-    @show depletion_time
+
     burn_time_loss = 0.01 * abs2(p.desired_burn_time - depletion_time)
 
     #=
@@ -666,8 +662,6 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
         burn_time_loss = burn_time_loss,
         average_thrust_loss = average_thrust_loss
     )
-
-    @show all_losses
 
     return theta, p, all_losses
 end
@@ -812,30 +806,58 @@ end
 opt_f = OptimizationFunction(pure_system_design_loss_closure, Optimization.AutoFiniteDiff())
 opt_prob = OptimizationProblem(opt_f, Vector(theta_guess_unitless), Vector(properties_unitless), lb = Vector(theta_lb_unitless), ub = Vector(theta_ub_unitless))
 
+LOSS = Float64[]
+PARS = []
+
+# Ensure the directory exists and use a filename-safe date format (colons are invalid on Windows)
+mkpath(joinpath(@__DIR__, "optimization_results"))
+results_path = joinpath(@__DIR__, "optimization_results", "optimization_results_$(Dates.format(Dates.now(), "yyyy-mm-dd_HH-MM-SS")).csv")
+
+# Create the file and manually write the header string using propertynames
+open(results_path, "w") do io
+    header_str = "loss," * join(string.(propertynames(theta_guess_unitless)), ",")
+    println(io, header_str)
+end
+
+const cb_lock = ReentrantLock()
+
 cb = function (state, l)
     display(l)
     display(state.u)
+    
+    lock(cb_lock) do
+        push!(LOSS, l)
+        push!(PARS, state.u)
+        
+        # Convert state.u to a named tuple using your p_axes so the CSV has nice column headers
+        theta_named = NamedTuple(ComponentVector(state.u, theta_axes))
+        row = merge((loss = l, ), theta_named)
+        
+        # CSV.write with append=true automatically opens, appends, and closes (flushes) the file
+        CSV.write(results_path, DataFrame([row]), append=true)
+    end
+    
     false
 end
 
 pure_system_design_loss_closure(theta_guess_unitless, properties_unitless)
 
-#sol = solve(opt_prob, LBFGS(), callback = cb, reltol = 1e-4)
+sol = solve(opt_prob, LBFGS(), callback = cb, reltol = 1e-4)
 
-#=
+
 sol = solve(opt_prob, 
     BBO_adaptive_de_rand_1_bin_radiuslimited(),
     callback = cb,
-    PoulationSize = 1,
-    maxiters = 1,
-    maxtime = 60.0,
+    PoulationSize = 100,
+    #maxiters = 1,
+    #maxtime = 60.0,
     Method = :RandomSearcher,
     verbose = true
     #Method = :SepReal
 )
-=#
 
-#=
+
+
 for i in 1:10
     θ = theta_lb_unitless .+
         rand(length(theta_lb_unitless)) .*
@@ -848,7 +870,7 @@ for i in 1:10
         properties_unitless,
     )
 end
-=#
+
 
 #viewable_system_design_loss(sol.u, properties_unitless)
 viewable_system_design_loss(theta_guess_unitless, properties_unitless)
