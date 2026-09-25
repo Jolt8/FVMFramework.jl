@@ -137,7 +137,6 @@ function combustion_zone_energy_conservation!(du, u, p, t, model, oxidizer_mass_
     ejected_internal_energy = chamber_gas_mass_flow_out * p.chamber_specific_enthalpy
 
     du.chamber_gas_internal_energy += 
-        oxidizer_mass_flow * p.mid_section_specific_enthalpy + 
         fuel_mass_flow * fuel_specific_enthalpy +
         combustion_heat_release - 
         pyrolysis_heat_absorption - 
