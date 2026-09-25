@@ -15,8 +15,11 @@ using SparseConnectivityTracer
 using Dates
 using CSV
 using DataFrames
+using Sparspak
 
 using FVMFramework
+
+Revise.includet(joinpath(@__DIR__, "overloads/clapeyron_tracer_overloads.jl"))
 
 Revise.includet(joinpath(@__DIR__, "design_helper_functions.jl"))
 
@@ -161,6 +164,7 @@ u0 = ComponentVector(
 )
 
 function update_u0!(u, p, t, oxidizer_model, chamber_model)
+    #Tank
     u.tank_oxidizer_mass = p.u0_tank_oxidizer_mass
 
     tank_oxidizer_moles = p.u0_tank_oxidizer_mass / p.nitrous_oxide_molecular_weight
@@ -169,12 +173,14 @@ function update_u0!(u, p, t, oxidizer_model, chamber_model)
 
     u.tank_oxidizer_internal_energy = Clapeyron.VT0.internal_energy(oxidizer_model, p.tank_volume, p.tank_temperature, [tank_oxidizer_moles])
 
+    #Mid Section
     u0_mid_section_density = mass_density(oxidizer_model, p.mid_section_pressure, p.mid_section_temperature, [tank_oxidizer_moles])
     u.mid_section_mass = u0_mid_section_density * p.mid_section_volume
     
     mid_section_oxidizer_moles = u.mid_section_mass / p.nitrous_oxide_molecular_weight
     u.mid_section_internal_energy = Clapeyron.VT0.internal_energy(oxidizer_model, p.mid_section_volume, p.mid_section_temperature, [mid_section_oxidizer_moles])
 
+    #Chamber
     u0_chamber_gas_density = mass_density(chamber_model, p.chamber_pressure, p.chamber_temperature, [tank_oxidizer_moles, 0.0])
     u.chamber_gas_mass = u0_chamber_gas_density * p.chamber_volume
 
@@ -182,6 +188,7 @@ function update_u0!(u, p, t, oxidizer_model, chamber_model)
     chamber_gas_fuel_moles = (u.chamber_gas_mass * p.u0_chamber_hdpe_mass_fraction) / p.ethylene_molecular_weight
     u.chamber_gas_internal_energy = Clapeyron.VT0.internal_energy(chamber_model, p.chamber_volume, p.chamber_temperature, [chamber_gas_oxidizer_moles, chamber_gas_fuel_moles])
 
+    #Fuel Grain
     u.port_diameter = p.u0_fuel_grain_void_diameter
 
     return nothing
@@ -197,11 +204,23 @@ function valve_flow_capacity_factor(valve_opening, p)
     #to help us choose which electronic valve we should purchase
 end
 
+Revise.includet(joinpath(@__DIR__, "feed_system_update_state_for_ode.jl"))
+
+#=
 function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     du .= 0.0 
     
     tank_n_moles = u.tank_oxidizer_mass / p.nitrous_oxide_molecular_weight
 
+    show_debug = true
+
+    if show_debug
+        @show "tank"
+        @show u.tank_oxidizer_mass
+        @show tank_n_moles
+        @show u.tank_oxidizer_internal_energy
+        @show p.tank_volume
+    end
     result = uv_flash_via_vt(
         oxidizer_model,
         u.tank_oxidizer_internal_energy,
@@ -224,6 +243,13 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
 
     mid_section_n_moles = u.mid_section_mass / p.nitrous_oxide_molecular_weight
 
+    if show_debug
+        @show "midsection"
+        @show u.mid_section_mass
+        @show mid_section_n_moles
+        @show u.mid_section_internal_energy
+        @show p.mid_section_volume
+    end
     result = uv_flash_via_vt(
         oxidizer_model,
         u.mid_section_internal_energy,
@@ -237,6 +263,15 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     p.mid_section_vapor_fraction = result.fractions[vapor_phase] / sum(result.fractions)
     p.mid_section_density = mass_density(oxidizer_model, result)
     p.mid_section_specific_enthalpy = mass_enthalpy(oxidizer_model, result)
+
+    if show_debug
+        @show "chamber"
+        @show u.chamber_gas_mass
+        @show u.chamber_nitrous_oxide_mass_fraction
+        @show u.chamber_hdpe_mass_fraction
+        @show u.chamber_gas_internal_energy
+        @show p.chamber_volume
+    end
 
     oxidizer_moles = (u.chamber_gas_mass * u.chamber_nitrous_oxide_mass_fraction) / p.nitrous_oxide_molecular_weight
     fuel_moles = (u.chamber_gas_mass * u.chamber_hdpe_mass_fraction) / p.ethylene_molecular_weight
@@ -292,6 +327,9 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     p.chamber_specific_enthalpy = Clapeyron.VT0.mass_enthalpy(chamber_model, p.chamber_volume, p.chamber_temperature, chamber_moles)
 
     #Other state updates:
+    #Overall rocket
+    p.desired_impulse = p.desired_average_thrust * p.desired_burn_time
+    
     #Adjustable Valve
     p.valve_opening = valve_opening_at_t(t)
     p.valve_flow_capacity_factor = valve_flow_capacity_factor(p.valve_opening, p)
@@ -310,10 +348,12 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     p.nozzle_throat_area = (pi / 4) * (p.nozzle_throat_diameter^2)
     #again, we need something here that determines propellant_isp based on oxidizer_to_fuel_ratio, chamber_pressure, and exit pressure (which we don't really know yet)
 end
+=#
 
-function system_ode!(du, u, p, t, oxidizer_model, chamber_model, p_axes)
-
-    p = ComponentVector(eltype(u).(p), p_axes)
+function system_ode!(du_vec, u_vec, p_vec, t, oxidizer_model, chamber_model, p_axes, u_axes)
+    du = ComponentVector(du_vec, u_axes)
+    u = ComponentVector(u_vec, u_axes)
+    p = ComponentVector(eltype(u).(p_vec), p_axes)
 
     update_state!(du, u, p, t, oxidizer_model, chamber_model)
 
@@ -354,18 +394,20 @@ properties = ComponentVector(
     oxidizer_to_fuel_ratio = 7.6,
     desired_oxidizer_to_fuel_ratio = 7.6,
     propellant_isp = 220.0u"s",
-    burn_time = 0.0u"s", 
+    burn_time = 0.0u"s", #for viewing the optimized burn time 
     desired_burn_time = 5.0u"s",
-    average_thrust = 0.0u"N", #determined by specific_impulse * (oxidizer_mass_flow * fuel_mass_flow) * gravity
+    average_thrust = 0.0u"N", #for viewing the optimized averge thrust
     desired_average_thrust = 1000.0u"N",
+    cummulative_impulse = 0.0u"N*s", #for viewing the optimized cumulative impulse
+    desired_impulse = 0.0u"N*s", #this will be calculated based on desired_average thrust and desired_burn_time later
     #we would likely want a better correlation in the future that will return the specific impulse for a given oxidizer to fuel ratio and exit pressure
     gravity = 9.81u"m/s^2",
     target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio = 2.0, #not an optimized parameter, but the ideal choice is hard to know
     fuel_grain_max_diameter = (12.0u"inch" |> u"cm"),
     
     #Tank
-    u0_tank_oxidizer_mass = 5.0u"kg", #optimized
-    tank_pressure = 68.0u"bar", #optimized
+    u0_tank_oxidizer_mass = 1.80u"kg", #optimized, should actually be 2.05kg to get the impulse we need, but I want to see if the optimizer will produce 2.05kg for debugging reasons
+    tank_pressure = 71.0u"bar", #no longer optimized, commercial tanks determine this
     tank_temperature = 21.0u"°C",
     tank_vapor_fraction = 0.0u"m^3",
     tank_density = 0.0u"kg/m^3",
@@ -383,7 +425,7 @@ properties = ComponentVector(
     #Mid section
     mid_section_pressure = 20.0u"bar", #this determines the initial kg of nitrous oxide in the mid_section
     mid_section_temperature = 21.0u"°C",
-    mid_section_volume = 10.0u"cm^3",
+    mid_section_volume = 100.0u"cm^3", #Changed from 10u"cm" to 100u"cm" because I wanted to decrease solver stiffness for debugging purposes
     mid_section_density = 0.0u"kg/m^3",
     mid_section_vapor_fraction = 0.0,
     mid_section_specific_enthalpy = 0.0u"J/kg",
@@ -412,7 +454,8 @@ properties = ComponentVector(
     fuel_mass = 0.0u"kg", #this will be derived by substracting the volume of the cylinder formed by the u0_fuel_grain_void_diameter by the final_fuel_grain_void_diameter and then multiplying by the fuel density
     fuel_density = 950.0u"kg/m^3",
     #fuel_regression_rate = 0.5u"mm/s",
-    final_fuel_grain_void_diameter = 4.0u"cm", #optimized
+    additional_fuel_grain_void_diameter = 1.0u"cm", #optimized
+    final_fuel_grain_void_diameter = 0.0u"cm",
     fuel_grain_length = 30.0u"cm", #optimized
     fuel_grain_average_cross_sectional_area = 0.0u"m^2",
     fuel_grain_burning_surface_area = 0.0u"m^2",
@@ -449,7 +492,7 @@ optimized_properties = [
 
     #Tank
     OptimizedParameter(:u0_tank_oxidizer_mass, 0.5u"kg", 5.0u"kg",),
-    OptimizedParameter(:tank_pressure, 50.0u"bar", 71.0u"bar",),
+    #OptimizedParameter(:tank_pressure, 50.0u"bar", 71.0u"bar",),
 
     #adjustable valve
     OptimizedParameter(:valve_flow_capacity_factor, 1e-7u"m^2", 1e-2u"m^2"),
@@ -463,7 +506,8 @@ optimized_properties = [
 
     #Fuel grain
     OptimizedParameter(:u0_fuel_grain_void_diameter, 1.0u"cm", 10.0u"cm"),
-    OptimizedParameter(:final_fuel_grain_void_diameter, 1.0u"cm", 20.0u"cm"),
+    #OptimizedParameter(:final_fuel_grain_void_diameter, 1.0u"cm", 20.0u"cm"),
+    OptimizedParameter(:additional_fuel_grain_void_diameter, 0.1u"cm", 3.0u"cm"),
     OptimizedParameter(:fuel_grain_length, 5.0u"cm", 50.0u"cm"),
 
     #Fuel Grain Empirical Parameters
@@ -476,23 +520,7 @@ optimized_properties = [
 
 theta_guess, theta_lb, theta_ub, theta_axes, u_axes, p_axes, theta_to_u_map, theta_to_p_map, p_to_u_map = create_theta_guess(optimized_properties, u0, properties)
 
-# Stop the burn when the fuel port reaches the outside diameter of the grain.
-# Only the positive crossing is active because regression increases port_diameter.
-function port_diameter_limit(u, t, integrator, u_axes, p_axes)
-    u_named = ComponentVector(u, u_axes)
-    p_named = ComponentVector(integrator.p, p_axes)
-
-    u_named.port_diameter - p_named.final_fuel_grain_void_diameter
-end
-
-port_diameter_termination_cb = ContinuousCallback(
-    (u, t, integrator) -> port_diameter_limit(u, t, integrator, u_axes, p_axes),
-    terminate!,
-    nothing;
-    save_positions = (true, false),
-)
-
-function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_model, chamber_model, theta_to_u_map, theta_to_p_map, p_to_u_map, append_optimized_parameters!, update_u0!, problem_template)
+function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_model, chamber_model, theta_to_u_map, theta_to_p_map, p_to_u_map, append_optimized_parameters!, update_u0!, isoutofdomain_feedsystem, port_diameter_termination_cb, problem_template)
     theta = ComponentVector(theta, theta_axes)
     
     # Promote p to the type of theta (which will be Dual during ForwardDiff) so it can accept Duals
@@ -514,42 +542,71 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
         prob = ODEProblem(ode_func, u0, tspan, p)
     end
     =#
-    prob = remake(problem_template; u0 = u0, p = p, tspan = (0.0, p.simulation_time))
-
-    #=
-    @show eltype(theta)
-    @show eltype(u0)
-    @show eltype(p)
-    @show typeof(prob.u0)
-    @show typeof(prob.p)
-    =#
+    prob = remake(problem_template; u0 = Vector(u0), p = Vector(p), tspan = (0.0, p.simulation_time))
 
     sol = 0
 
-    try 
-        sol = solve(prob)
-    catch e
-        println(e)
-        return theta, p, 1e10
+    @show "before ode solve"
+    #try
+    sol = solve(prob,
+        saveat = (p.simulation_time / 200),
+        callback = CallbackSet(port_diameter_termination_cb, approximate_time_to_finish_cb),
+        isoutofdomain = isoutofdomain_feedsystem,
+        maxiters = 1000,
+        dtmin = 1e-5
+    )
+    #catch e
+        #println(e)
+        #return theta, p, 1e10
+    #end
+    @show "after ode solve"
+
+    @show sol.retcode
+
+    if !(sol.retcode == SciMLBase.ReturnCode.Success || sol.retcode == SciMLBase.ReturnCode.Terminated)
+        return theta, p, (1e10 + p_named.final_fuel_grain_void_diameter - p_named.u0_fuel_grain_void_diameter) * 1e8 #we want the solver to prioritize runs that got closer to expending all the fuel even if they failed
     end
 
-    #Losses
+
+    #Losses updated every iteration
     injector_velocity_loss = 0.0
     pressure_drop_ratio_loss = 0.0
+    oxidizer_to_fuel_ratio_loss = 0.0
+    thrust_loss = 0.0
+    
+    #Loss updated once
+    unburned_fuel_loss = 0.0
+    unutilized_oxidizer_loss = 0.0
 
     #Performance Metrics
     cummulative_impulse = 0.0
     depletion_time = 0.0
 
-    du_temporary = similar(sol.u[1])
+    du_temporary = ComponentVector(similar(sol.u[1]), u_axes)
 
     found_depletion_time = false
+
+    last_fuel_mass = p.fuel_mass
 
     for i in eachindex(sol.u)
         curr_t = sol.t[i]
         u_named = ComponentVector(sol.u[i], u_axes)
 
         update_state!(du_temporary, u_named, p, curr_t, oxidizer_model, chamber_model)
+
+        if (u_named.port_diameter >= p.final_fuel_grain_void_diameter) && found_depletion_time == false
+            depletion_time = curr_t
+            found_depletion_time = true
+            unutilized_oxidizer_loss = 0.001 * abs2(u_named.tank_oxidizer_mass)
+            break #stop evaluating loss if the fuel has burned out
+        end
+
+        if (u_named.tank_oxidizer_mass <= 1e-6) && found_depletion_time == false
+            depletion_time = curr_t
+            found_depletion_time = true
+            unburned_fuel_loss = 0.001 * abs2(p.fuel_mass)
+            break #stop evaluating loss if the oxidizer has burned out
+        end
 
         adjustable_valve_pressure_drop = adjustable_valve_flow!(du_temporary, u_named, p, curr_t)
 
@@ -575,45 +632,33 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
         combustion_zone_energy_conservation!(du_temporary, u_named, p, curr_t, chamber_model, oxidizer_mass_flow, fuel_mass_flow, chamber_gas_mass_flow_out)
         =#
 
-        #=
-        if i == 1 || i == length(sol.u)
-            @show u_named.port_diameter
-            @show u_named.port_diameter
-            @show p.final_fuel_grain_void_diameter
-            @show u_named.port_diameter - p.final_fuel_grain_void_diameter
-            @show (u_named.port_diameter <= 1e-6)
-        end
-        =#
-
-        if (u_named.port_diameter >= p.final_fuel_grain_void_diameter) && found_depletion_time == false
-            depletion_time = curr_t
-            found_depletion_time = true
-        end
-
-        if (u_named.tank_oxidizer_mass <= 1e-6) && found_depletion_time == false
-            depletion_time = curr_t
-            found_depletion_time = true
-        end
-
-        #=
-        if i == length(sol.u)
-            if curr_t == p.simulation_time #the simulation terminated early due to the callback
-                depletion_time = curr_t
-                found_depletion_time = true
-            end
-        end
-        =#
-
         #if we want, we can get the derivative of the cummulative_impulse over time to plot the thrust profile of the engine!
         if i > 1
             u_named_prev = ComponentVector(sol.u[i-1], u_axes)
+            dt = sol.t[i] - sol.t[i-1]
 
-            change_in_oxidizer_mass = u_named.tank_oxidizer_mass - u_named_prev.tank_oxidizer_mass
-            #change_in_fuel_mass = u_named.fuel_mass - u_named_prev.fuel_mass
+            #Cummulative impulse loss calcs
+            oxidizer_used = -(u_named.tank_oxidizer_mass - u_named_prev.tank_oxidizer_mass)
+            fuel_used = -(p.fuel_mass - last_fuel_mass)
+            last_fuel_mass = p.fuel_mass
 
-            change_in_propellant_mass = change_in_oxidizer_mass + fuel_mass_flow
+            propellant_used = oxidizer_used + fuel_used
 
-            cummulative_impulse += p.propellant_isp * p.gravity * -change_in_propellant_mass
+            cummulative_impulse += p.propellant_isp * p.gravity * propellant_used
+
+            #Oxidizer to fuel ratio loss
+            oxidizer_to_fuel_ratio_loss += (1 / length(sol.u)) * 0.001 * abs2(p.desired_oxidizer_to_fuel_ratio - (oxidizer_used / fuel_used))
+
+            #Thrust loss calcs
+            oxidizer_mass_flow = oxidizer_used / dt
+            fuel_mass_flow = fuel_used / dt
+
+            propallant_mass_flow = oxidizer_mass_flow + fuel_mass_flow
+
+            thrust_produced = p.propellant_isp * p.gravity * propallant_mass_flow
+            
+            p.average_thrust += (1 / (length(sol.t) - 1)) * thrust_produced
+            thrust_loss += (1 / (length(sol.t) - 1)) * 0.001 * abs2(p.desired_average_thrust - thrust_produced)
         end
 
         if i == length(sol.u)
@@ -623,45 +668,34 @@ function system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes, oxidizer_m
 
                 @show u_named.port_diameter
                 @show p.final_fuel_grain_void_diameter
-
-                #depletion_time = curr_t
-
-                burn_time_loss = 1e10
             end
         end
     end
 
-    average_thrust_loss = 0.0001 * abs2(p.desired_average_thrust - cummulative_impulse / depletion_time)
+    p.cummulative_impulse = cummulative_impulse
+    impulse_loss = 0.0001 * abs2(p.desired_average_thrust - cummulative_impulse)
 
-    total_thrust = cummulative_impulse / depletion_time
-
-    #=
-    if total_thrust > 500 && total_thrust < 1500
-        average_thrust_loss = 0.0
-    else
-        average_thrust_loss = 0.0001 * abs2(p.desired_average_thrust - cummulative_impulse / depletion_time)
-    end
-    =#
-
+    p.burn_time = depletion_time
     burn_time_loss = 0.01 * abs2(p.desired_burn_time - depletion_time)
-
-    #=
-    if depletion_time > 4 && depletion_time < 6
-        burn_time_loss = 0.0
-    else
-        burn_time_loss = 0.01 * abs2(p.desired_burn_time - depletion_time)
-    end
-    =#
 
     #above_max_fuel_grain_diameter_loss = 0.01 * abs2(p.u0_fuel_grain_void_diameter + p.additional_fuel_grain_void_diameter - p.fuel_grain_max_diameter)
     #we'll just enforce a bound on final_fuel_grain_void_diameter
 
     all_losses = ComponentVector(
+        #Updated every solver iteration
         injector_velocity_loss = injector_velocity_loss,
         pressure_drop_ratio_loss = pressure_drop_ratio_loss,
+        oxidizer_to_fuel_ratio_loss = oxidizer_to_fuel_ratio_loss,
+        thrust_loss = thrust_loss,
+
+        #Updated once at the end of the simulation
+        impulse_loss = impulse_loss,
         burn_time_loss = burn_time_loss,
-        average_thrust_loss = average_thrust_loss
+        unburned_fuel_loss = unburned_fuel_loss,
+        unutilized_oxidizer_loss = unutilized_oxidizer_loss
     )
+
+    @show sum(all_losses)
 
     return theta, p, all_losses
 end
@@ -687,39 +721,85 @@ f_closure = let
     om = oxidizer_model
     cm = chamber_model
     p_axes_local = p_axes
+    u_axes_local = u_axes
 
-    (du, u, p, t) -> system_ode!(du, u, p, t, om, cm, p_axes_local)
+    (du, u, p, t) -> system_ode!(du, u, p, t, om, cm, p_axes_local, u_axes_local)
 end
 
-#=
+
 detector = SparseConnectivityTracer.TracerLocalSparsityDetector()
 
 jac_sparsity = ADTypes.jacobian_sparsity(
-    (du, u) -> f_closure(du, u, properties_unitless, 0.0), du_test, u0_unitless, detector
+    (du, u) -> f_closure(du, u, properties_unitless, 0.0), Vector(du_test), Vector(u0_unitless), detector
 )
-=#
 
-ode_func = ODEFunction(f_closure)#, jac_prototype = float.(jac_sparsity))
+ode_func = ODEFunction(f_closure, jac_prototype = float.(jac_sparsity))
 
 t0 = 0.0
 tMax = 10.0
 tspan = (t0, tMax)
 
-implicit_prob = ODEProblem(ode_func, u0_unitless, tspan, properties_unitless)
-
 append_optimized_parameters!(Vector(theta_guess_unitless), u0_unitless, properties_unitless, theta_to_u_map, theta_to_p_map, p_to_u_map)
 update_u0!(u0_unitless, properties_unitless, 0.0, oxidizer_model, chamber_model)
 
-system_ode!(du_test, u0_unitless, properties_unitless, 0.0, oxidizer_model, chamber_model, p_axes)
+implicit_prob = ODEProblem(ode_func, Vector(u0_unitless), tspan, Vector(properties_unitless))
+
+system_ode!(du_test, Vector(u0_unitless), Vector(properties_unitless), 0.0, oxidizer_model, chamber_model, p_axes, u_axes)
 
 f_closure(du_test, u0_unitless, properties_unitless, 0.0)
 
+function isoutofdomain_feedsystem_expanded(u, p, t, u_axes)
+    u_named = ComponentVector(u, u_axes)
+
+    #=
+    if u_named.tank_oxidizer_mass < 0.0 || u_named.mid_section_mass < 0.0 || u_named.chamber_gas_mass < 0.0
+        @show "caught out of domain"
+    end
+    =#
+
+    return (
+        u_named.tank_oxidizer_mass < 0.0 ||
+        u_named.mid_section_mass < 0.0 ||
+        u_named.chamber_gas_mass < 0.0
+    )
+end
+
+isoutofdomain_feedsystem = let
+    u_axes_local = u_axes
+    (u, p, t) -> isoutofdomain_feedsystem_expanded(u, p, t, u_axes_local)
+end
+
+# Stop the burn when the fuel port reaches the outside diameter of the grain.
+# Only the positive crossing is active because regression increases port_diameter.
+function port_diameter_limit(u, t, integrator, u_axes, p_axes)
+    u_named = ComponentVector(u, u_axes)
+    p_named = ComponentVector(integrator.p, p_axes)
+
+    update_state!([0.0], u_named, p_named, t, oxidizer_model, chamber_model)
+
+    #@show u_named.port_diameter - p_named.final_fuel_grain_void_diameter
+
+    #if it gets within 1e-5 m of the final grain diameter, terminate to allow stiff problems to still solve
+    u_named.port_diameter - p_named.final_fuel_grain_void_diameter + 1e-5 #0.01 mm 
+end
+
+port_diameter_termination_cb = ContinuousCallback(
+    (u, t, integrator) -> port_diameter_limit(u, t, integrator, u_axes, p_axes),
+    terminate!,
+    nothing;
+    save_positions = (true, false),
+)
+
 sol = solve(
     implicit_prob,
+    #FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, ),
+    #FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
+    #AutoTsit5(FBDF(linsolve = SparspakFactorization(), autodiff = AutoFiniteDiff())),
     callback = CallbackSet(
         port_diameter_termination_cb,
         approximate_time_to_finish_cb,
     ),
+    isoutofdomain = isoutofdomain_feedsystem
 )
 
 viewable_system_design_loss_closure = let 
@@ -734,9 +814,19 @@ viewable_system_design_loss_closure = let
     p_to_u_map_local = p_to_u_map
     append_optimized_parameters_local! = append_optimized_parameters!
     update_u0_local! = update_u0!
+    port_diameter_termination_cb_local = port_diameter_termination_cb
+    isoutofdomain_feedsystem_local = isoutofdomain_feedsystem
     problem_template_local = implicit_prob
     
-    (theta, p) -> system_design_loss(theta, u_local, p, theta_axes_local, u_axes_local, p_axes_local, oxidizer_model_local, chamber_model_local, theta_to_u_map_local, theta_to_p_map_local, p_to_u_map_local, append_optimized_parameters_local!, update_u0_local!, problem_template_local)
+    (theta, p) -> trainsient_system_design_loss(
+        theta, u_local, p, 
+        theta_axes_local, u_axes_local, p_axes_local, 
+        oxidizer_model_local, chamber_model_local, 
+        theta_to_u_map_local, theta_to_p_map_local, p_to_u_map_local, 
+        append_optimized_parameters_local!, update_u0_local!, 
+        isoutofdomain_feedsystem_local, port_diameter_termination_cb_local,
+        problem_template_local
+    )
 end
 
 function viewable_system_design_loss(theta, p)
@@ -762,9 +852,19 @@ system_design_loss_closure = let
     p_to_u_map_local = p_to_u_map
     append_optimized_parameters_local! = append_optimized_parameters!
     update_u0_local! = update_u0!
+    isoutofdomain_feedsystem_local = isoutofdomain_feedsystem
+    port_diameter_termination_cb_local = port_diameter_termination_cb
     problem_template_local = implicit_prob
 
-    (theta, p) -> system_design_loss(theta, u_local, p, theta_axes_local, u_axes_local, p_axes_local, oxidizer_model_local, chamber_model_local, theta_to_u_map_local, theta_to_p_map_local, p_to_u_map_local, append_optimized_parameters_local!, update_u0_local!, problem_template_local)
+    (theta, p) -> trainsient_system_design_loss(
+        theta, u_local, p, 
+        theta_axes_local, u_axes_local, p_axes_local, 
+        oxidizer_model_local, chamber_model_local, 
+        theta_to_u_map_local, theta_to_p_map_local, p_to_u_map_local, 
+        append_optimized_parameters_local!, update_u0_local!, 
+        isoutofdomain_feedsystem_local, port_diameter_termination_cb_local,
+        problem_template_local
+    )
 end
 
 pure_system_design_loss_closure = let
@@ -779,23 +879,18 @@ pure_system_design_loss_closure = let
     p_to_u = p_to_u_map
     append_parameters! = append_optimized_parameters!
     initialize_state! = update_u0!
+    isoutofdomain_feedsystem_local = isoutofdomain_feedsystem
+    port_diameter_termination_cb_local = port_diameter_termination_cb
     problem_template_local = implicit_prob
 
     function (theta, p)
-        _, _, losses = system_design_loss(
-            theta,
-            u_initial,
-            p,
-            θ_axes,
-            state_axes,
-            parameter_axes,
-            om,
-            cm,
-            θ_to_u,
-            θ_to_p,
-            p_to_u,
-            append_parameters!,
-            initialize_state!,
+        _, _, losses = trainsient_system_design_loss(
+            theta, u_initial, p,
+            θ_axes, state_axes, parameter_axes,
+            om, cm,
+            θ_to_u, θ_to_p, p_to_u,
+            append_parameters!, initialize_state!,
+            isoutofdomain_feedsystem_local, port_diameter_termination_cb_local,
             problem_template_local
         )
 
@@ -844,7 +939,6 @@ pure_system_design_loss_closure(theta_guess_unitless, properties_unitless)
 
 sol = solve(opt_prob, LBFGS(), callback = cb, reltol = 1e-4)
 
-
 sol = solve(opt_prob, 
     BBO_adaptive_de_rand_1_bin_radiuslimited(),
     callback = cb,
@@ -856,23 +950,66 @@ sol = solve(opt_prob,
     #Method = :SepReal
 )
 
+losses = Float64[]
+successful_parameters = []
 
+parameter_sweep_steps = 5
+sweep_parameters = Vector(theta_guess_unitless)
 
-for i in 1:10
+for parameter_index in eachindex(sweep_parameters)
+    starting_value = sweep_parameters[parameter_index]
+
+    for bound in (theta_lb_unitless[parameter_index], theta_ub_unitless[parameter_index])
+        bound == starting_value && continue
+
+        parameter_values = range(
+            starting_value,
+            stop = bound,
+            length = parameter_sweep_steps + 1,
+        )
+
+        for parameter_value in Iterators.drop(parameter_values, 1)
+            sweep_parameters[parameter_index] = parameter_value
+            l = pure_system_design_loss_closure(
+                sweep_parameters,
+                properties_unitless,
+            )
+
+            if l <= 1e9
+                push!(losses, l)
+                push!(successful_parameters, copy(sweep_parameters))
+            end
+        end
+    end
+
+    sweep_parameters[parameter_index] = starting_value
+end
+
+@show losses
+@show successful_parameters
+
+for i in 1:1000
     θ = theta_lb_unitless .+
         rand(length(theta_lb_unitless)) .*
         (theta_ub_unitless .- theta_lb_unitless)
 
     @show i θ
 
-    @time pure_system_design_loss_closure(
+    l = pure_system_design_loss_closure(
         θ,
         properties_unitless,
     )
+
+    if l <= 1e9
+        push!(losses, l)
+        push!(successful_parameters, θ)
+    end
 end
 
+@show losses
+@show successful_parameters
 
 #viewable_system_design_loss(sol.u, properties_unitless)
-viewable_system_design_loss(theta_guess_unitless, properties_unitless)
+viewable_system_design_loss(new_theta_guess, properties_unitless)
 
 final_properties = ComponentVector(sol.u, u_axes)
