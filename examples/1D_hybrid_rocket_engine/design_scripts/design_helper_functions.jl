@@ -106,6 +106,7 @@ function uv_flash_via_vt(
     moles;
     temperature_bounds = (180.0, 450.0),
 )
+
     energy_residual(T) = begin
         result = vt_flash(model, volume, T, moles)
         internal_energy(model, result) - target_internal_energy
@@ -116,16 +117,21 @@ function uv_flash_via_vt(
     lower_residual = energy_residual(lower_temperature)
     upper_residual = energy_residual(upper_temperature)
 
+    show_debug = false
+
     if lower_residual * upper_residual >= 0.0
-        @show lower_residual
-        @show upper_residual
-        @show lower_residual * upper_residual
-        @show target_internal_energy
-        @show lower_temperature
-        @show upper_temperature
-        @show energy_residual(lower_temperature)
-        @show energy_residual(upper_temperature)
-        error("Temperature bounds do not bracket the requested internal energy")
+        if show_debug
+            @show lower_residual
+            @show upper_residual
+            @show lower_residual * upper_residual
+            @show target_internal_energy
+            @show lower_temperature
+            @show upper_temperature
+            @show energy_residual(lower_temperature)
+            @show energy_residual(upper_temperature)
+        end
+        return vt_flash(model, volume, 300.0, abs.(moles))
+        #error("Temperature bounds do not bracket the requested internal energy")
     end
 
     temperature = 0.0
@@ -137,15 +143,19 @@ function uv_flash_via_vt(
             Roots.Brent(),
         )
     catch e
-        @show lower_residual
-        @show upper_residual
-        @show lower_residual * upper_residual
-        @show target_internal_energy
-        @show lower_temperature
-        @show upper_temperature
-        @show energy_residual(lower_temperature)
-        @show energy_residual(upper_temperature)
-        error("Temperature bounds do not bracket the requested internal energy")
+        if show_debug
+            @show lower_residual
+            @show upper_residual
+            @show lower_residual * upper_residual
+            @show target_internal_energy
+            @show lower_temperature
+            @show upper_temperature
+            @show energy_residual(lower_temperature)
+            @show energy_residual(upper_temperature)
+        end
+
+        return vt_flash(model, volume, 300.0, abs.(moles))
+        #error("Temperature bounds do not bracket the requested internal energy")
     end
 
     

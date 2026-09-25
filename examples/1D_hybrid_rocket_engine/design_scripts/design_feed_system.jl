@@ -309,6 +309,8 @@ function system_design_loss(u, p, u_axes, p_axes, model, u_to_p_map, append_opti
     append_optimized_parameters!(u, p, u_to_p_map)
     update_properties!(p, model)
 
+    @show p
+
     if any(iszero, p)
         @error "It seems like p is missing a value"
     end
@@ -489,5 +491,6 @@ end
 @time sol = solve(opt_prob, callback = cb, LBFGS(), reltol = 1e-4, maxiters = 1000)
 
 viewable_system_design_loss(sol.u, properties_unitless)
+viewable_system_design_loss(Vector(u_guess_unitless), properties_unitless)
 
 final_properties = ComponentVector(sol.u, u_axes)
