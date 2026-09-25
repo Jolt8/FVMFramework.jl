@@ -247,9 +247,9 @@ version = "0.2.7"
 
 [[deps.CSV]]
 deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "PrecompileTools", "SentinelArrays", "Tables", "Unicode", "WeakRefStrings", "WorkerUtilities"]
-git-tree-sha1 = "8d8e0b0f350b8e1c91420b5e64e5de774c2f0f4d"
+git-tree-sha1 = "abed1e735dd4152f48c90cf0767e1790e25f332f"
 uuid = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
-version = "0.10.16"
+version = "0.10.17"
 
 [[deps.Cairo]]
 deps = ["Cairo_jll", "Colors", "Glib_jll", "Graphics", "Libdl", "Pango_jll"]
@@ -836,7 +836,7 @@ uuid = "f5851436-0d7a-5f13-b9de-f02708fd171a"
 version = "3.3.12+0"
 
 [[deps.FVMFramework]]
-deps = ["ADTypes", "AlgebraicMultigrid", "Clapeyron", "ComponentArrays", "DSP", "DataInterpolations", "Dates", "DiffEqFlux", "Enzyme", "Ferrite", "ForwardDiff", "ILUZero", "LinearAlgebra", "LinearSolve", "Logging", "Lux", "NonlinearSolve", "Optimization", "OptimizationBBO", "OptimizationOptimJL", "OptimizationPolyalgorithms", "OrdinaryDiffEq", "Polyester", "PreallocationTools", "ProfileView", "RecursiveArrayTools", "SciMLSensitivity", "SparseArrays", "SparseConnectivityTracer", "StaticArrays", "SymbolicRegression", "Unitful", "WriteVTK", "Zygote"]
+deps = ["ADTypes", "AlgebraicMultigrid", "Clapeyron", "ComponentArrays", "DSP", "DataInterpolations", "Dates", "DiffEqFlux", "Enzyme", "Ferrite", "ForwardDiff", "ILUZero", "LinearAlgebra", "LinearSolve", "Logging", "Lux", "NonlinearSolve", "Optimization", "OptimizationBBO", "OptimizationOptimJL", "OptimizationPolyalgorithms", "OrdinaryDiffEq", "Polyester", "PreallocationTools", "ProfileView", "RecursiveArrayTools", "Roots", "SciMLSensitivity", "SparseArrays", "SparseConnectivityTracer", "StaticArrays", "SymbolicRegression", "Unitful", "WriteVTK", "Zygote"]
 path = "."
 uuid = "3bea8ca0-a952-4872-be97-bc38a725671f"
 version = "0.1.0"
@@ -2282,9 +2282,9 @@ version = "1.57.1+0"
 
 [[deps.Parsers]]
 deps = ["Dates", "PrecompileTools", "UUIDs"]
-git-tree-sha1 = "32a4e09c5f29402573d673901778a0e03b0807b9"
+git-tree-sha1 = "ba0dc8a8a67cacac4842631f960c046e4e563675"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.8.6"
+version = "2.8.8"
 
 [[deps.Pixman_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LLVMOpenMP_jll", "Libdl"]
