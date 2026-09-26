@@ -47,6 +47,8 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     end
 
 
+
+
     #Losses updated every iteration
     injector_velocity_loss = 0.0
     pressure_drop_ratio_loss = 0.0
@@ -68,6 +70,8 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     found_depletion_time = false
 
     last_fuel_mass = p.fuel_mass
+
+    thrust_vector = []
 
     for i in eachindex(sol.u)
         curr_t = sol.t[i]
@@ -147,6 +151,8 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
             thrust_produced = p.propellant_isp * p.gravity * chamber_gas_mass_flow_out
 
+            push!(thrust_vector, thrust_produced)
+
             cummulative_impulse += thrust_produced * dt
 
             # O/F ratio is now handled by integrating total mass used at the end of the simulation
@@ -170,6 +176,12 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
             end
         end
     end
+
+    @show length(sol.t)
+    @show length(thrust_vector)
+    plt = plot(sol.t, [0.0, 0.0, thrust_vector...])
+    display(plt)
+    @show plt
 
     p.cummulative_impulse = cummulative_impulse
     impulse_loss = 0.0001 * abs2(p.desired_impulse - cummulative_impulse)

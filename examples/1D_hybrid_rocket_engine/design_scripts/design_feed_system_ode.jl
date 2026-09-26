@@ -16,6 +16,7 @@ using Dates
 using CSV
 using DataFrames
 using Sparspak
+using Plots
 
 using FVMFramework
 
@@ -592,6 +593,32 @@ pure_system_design_loss_closure = let
         return sum(losses)
     end
 end
+
+viewable_system_design_loss(
+    ComponentVector(
+        u0_tank_oxidizer_mass = 2.034594773122675,
+        valve_flow_capacity_factor = 6.6906403746981306e-6,
+        injector_orifice_area = 2.0728250081324405e-5,
+        u0_fuel_grain_void_diameter = 0.03403845868495702,
+        additional_fuel_grain_void_diameter = 0.009822880727716907,
+        fuel_grain_length = 0.6997446134380847, 
+        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
+        nozzle_throat_diameter = 0.014563969006102736
+    ), properties_unitless
+)
+
+viewable_system_design_loss(
+    ComponentVector(
+        u0_tank_oxidizer_mass = 2.034594773122675,
+        valve_flow_capacity_factor = 6.6906403746981306e-6,
+        injector_orifice_area = 2.0728250081324405e-5,
+        u0_fuel_grain_void_diameter = 0.03403845868495702,
+        additional_fuel_grain_void_diameter = 0.009822880727716907,
+        fuel_grain_length = 0.6997446134380847, 
+        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
+        nozzle_throat_diameter = 0.014563969006102736
+    ), properties_unitless
+)
 
 viewable_system_design_loss(
     ComponentVector(

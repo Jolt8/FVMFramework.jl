@@ -1,7 +1,7 @@
 include(joinpath(@__DIR__, "CEA_lookup_table.jl"))
 #includes isp_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio) and cstar_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio)
 
-function update_state!(du, u, p, t, oxidizer_model, chamber_model)
+function update_state!(du, u, p, t, oxidizer_model, chamber_model, p_axes, u_axes)
     du .= 0.0 
     
     tank_n_moles = u.tank_oxidizer_mass / p.nitrous_oxide_molecular_weight
