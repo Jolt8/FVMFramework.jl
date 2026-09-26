@@ -623,6 +623,19 @@ viewable_system_design_loss(
 viewable_system_design_loss(
     ComponentVector(
         u0_tank_oxidizer_mass = 2.06,
+        valve_flow_capacity_factor = 1.0e-4,
+        injector_orifice_area = 6.0e-4,
+        u0_fuel_grain_void_diameter = 0.01,
+        additional_fuel_grain_void_diameter = 0.0132,
+        fuel_grain_length = 0.6, 
+        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
+        nozzle_throat_diameter = 0.0233
+    ), properties_unitless
+)
+
+viewable_system_design_loss(
+    ComponentVector(
+        u0_tank_oxidizer_mass = 2.06,
         valve_flow_capacity_factor = 3.0e-6,
         injector_orifice_area = 7.0e-6,
         u0_fuel_grain_void_diameter = 0.01,
