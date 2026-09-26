@@ -25,28 +25,25 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
     sol = 0
 
-    @show "before ode solve"
+    
     #try
     sol = solve(prob,
         saveat = (p.simulation_time / 200),
         callback = optimized_cb_set,
         isoutofdomain = isoutofdomain_feedsystem,
         maxiters = 1000,
-        dtmin = 1e-5
+        #dtmin = 1e-5
     )
     #catch e
         #println(e)
         #return theta, p, 1e10
     #end
-    @show "after ode solve"
-
-    @show sol.retcode
 
     if !(sol.retcode == SciMLBase.ReturnCode.Success || sol.retcode == SciMLBase.ReturnCode.Terminated)
         #@show p.final_fuel_grain_void_diameter
         u_named = ComponentVector(sol.u[end], u_axes)
         @show u_named.port_diameter
-        return theta, p, (1e10 + p.final_fuel_grain_void_diameter - u_named.port_diameter) * 1e8 #we want the solver to prioritize runs that got closer to expending all the fuel even if they failed
+        return theta, p, (1e10 + 1e8 * p.final_fuel_grain_void_diameter - u_named.port_diameter) #we want the solver to prioritize runs that got closer to expending all the fuel even if they failed
     end
 
 
@@ -99,26 +96,27 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         #@show p.target_injector_velocity
         #@show oxidizer_mass_flow / (p.mid_section_density * p.injector_orifice_area)
         if show_loss_function_compositions
-            @info "injector_velocity_loss"
-            @info p.target_injector_velocity
-            @info oxidizer_mass_flow / (p.mid_section_density * p.injector_orifice_area)
+            @show "injector_velocity_loss"
+            @show p.target_injector_velocity
+            @show oxidizer_mass_flow / (p.mid_section_density * p.injector_orifice_area)
         end
         injector_velocity_loss += 0.00001 * (1 / length(sol.u)) * abs2(p.target_injector_velocity - oxidizer_mass_flow / (p.mid_section_density * p.injector_orifice_area))
         
         if show_loss_function_compositions
-            @info "pressure_drop_ratio_loss"
-            @info p.target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio
-            @info injector_valve_pressure_drop / adjustable_valve_pressure_drop
+            @show "pressure_drop_ratio_loss"
+            @show p.target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio
+            @show injector_valve_pressure_drop / adjustable_valve_pressure_drop
         end
-        pressure_drop_ratio_loss += 0.00001 * (1 / length(sol.u)) * abs2(p.target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio - (injector_valve_pressure_drop / adjustable_valve_pressure_drop))
+
+        if adjustable_valve_pressure_drop > 1e-9 #sometimes the very last step of the solve can result in the adjustable valve pressure drop being zero
+            pressure_drop_ratio_loss += 0.00001 * (1 / length(sol.u)) * abs2(p.target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio - (injector_valve_pressure_drop / adjustable_valve_pressure_drop))
+        end
 
         #OBSERVATION: it seems like we're going to have to weigh the importance of injector velocity against adjustable valve authority
 
         fuel_mass_flow = regression_rate!(du_temporary, u_named, p, curr_t, oxidizer_mass_flow)
 
         #=
-        chamber_gas_mass_flow_out = nozzle_outlet!(du_temporary, u_named, p, curr_t)
-
         update_mass_fractions!(du_temporary, u_named, p, curr_t, oxidizer_mass_flow, fuel_mass_flow)
 
         combustion_zone_energy_conservation!(du_temporary, u_named, p, curr_t, chamber_model, oxidizer_mass_flow, fuel_mass_flow, chamber_gas_mass_flow_out)
@@ -130,32 +128,35 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
             dt = sol.t[i] - sol.t[i-1]
 
             #Cummulative impulse loss calcs
-            oxidizer_used = -(u_named.tank_oxidizer_mass - u_named_prev.tank_oxidizer_mass)
-            fuel_used = -(p.fuel_mass - last_fuel_mass)
-            last_fuel_mass = p.fuel_mass
-
-            propellant_used = oxidizer_used + fuel_used
-
-            cummulative_impulse += p.propellant_isp * p.gravity * propellant_used
-
-            #Oxidizer to fuel ratio loss
-            p.oxidizer_to_fuel_ratio += (1 / length(sol.u)) * (oxidizer_used / fuel_used)
-            oxidizer_to_fuel_ratio_loss += (1 / length(sol.u)) * 0.001 * abs2(p.desired_oxidizer_to_fuel_ratio - (oxidizer_used / fuel_used))
-
-            #Thrust loss calcs
+            oxidizer_used = u_named_prev.tank_oxidizer_mass - u_named.tank_oxidizer_mass
+            fuel_used = p.fuel_density * (π / 4) * (u_named_prev.port_diameter^2 - u_named.port_diameter^2) * p.fuel_grain_length
+            
             oxidizer_mass_flow = oxidizer_used / dt
             fuel_mass_flow = fuel_used / dt
 
-            propallant_mass_flow = oxidizer_mass_flow + fuel_mass_flow
+            propellant_used = oxidizer_used + fuel_used
+            propellant_mass_flow = oxidizer_mass_flow + fuel_mass_flow
 
-            thrust_produced = p.propellant_isp * p.gravity * propallant_mass_flow
+            oxidizer_to_fuel_ratio = oxidizer_mass_flow / max(fuel_mass_flow, 1e-9)
+
+            p.propellant_isp = isp_interpolator_Pa(p.chamber_pressure, oxidizer_to_fuel_ratio)
+
+            p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, oxidizer_to_fuel_ratio)
+
+            chamber_gas_mass_flow_out = p.nozzle_discharge_coefficient * ((p.chamber_pressure * p.nozzle_throat_area) / p.propellant_characteristic_velocity)
+
+            thrust_produced = p.propellant_isp * p.gravity * chamber_gas_mass_flow_out
+
+            cummulative_impulse += thrust_produced * dt
+
+            # O/F ratio is now handled by integrating total mass used at the end of the simulation
             
             p.average_thrust += (1 / (length(sol.t) - 1)) * thrust_produced
             thrust_loss += (1 / (length(sol.t) - 1)) * 0.001 * abs2(p.desired_average_thrust - thrust_produced)
             if show_loss_function_compositions
-                @info "thrust_loss"
-                @info p.desired_average_thrust
-                @info thrust_produced
+                @show "thrust_loss"
+                @show p.desired_average_thrust
+                @show thrust_produced
             end
         end
 
@@ -173,18 +174,30 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     p.cummulative_impulse = cummulative_impulse
     impulse_loss = 0.0001 * abs2(p.desired_impulse - cummulative_impulse)
     if show_loss_function_compositions
-        @info "impulse_loss"
-        @info p.desired_impulse
-        @info cummulative_impulse
+        @show "impulse_loss"
+        @show p.desired_impulse
+        @show cummulative_impulse
     end
 
     p.burn_time = depletion_time
     burn_time_loss = 0.01 * abs2(p.desired_burn_time - depletion_time)
     if show_loss_function_compositions
-        @info "burn_time_loss"
-        @info p.desired_burn_time
-        @info depletion_time
+        @show "burn_time_loss"
+        @show p.desired_burn_time
+        @show depletion_time
     end
+
+    u_start = ComponentVector(sol.u[1], u_axes)
+    u_end = ComponentVector(sol.u[end], u_axes)
+    
+    total_fuel_burned = p.fuel_density * (pi * (u_end.port_diameter / 2)^2 - pi * (u_start.port_diameter / 2)^2) * p.fuel_grain_length
+    @show total_fuel_burned
+
+    total_oxidizer_used = u_start.tank_oxidizer_mass - u_end.tank_oxidizer_mass
+    @show total_oxidizer_used
+    
+    p.oxidizer_to_fuel_ratio = total_oxidizer_used / max(total_fuel_burned, 1e-9)
+    oxidizer_to_fuel_ratio_loss = 0.001 * abs2(p.desired_oxidizer_to_fuel_ratio - p.oxidizer_to_fuel_ratio)
 
     #above_max_fuel_grain_diameter_loss = 0.01 * abs2(p.u0_fuel_grain_void_diameter + p.additional_fuel_grain_void_diameter - p.fuel_grain_max_diameter)
     #we'll just enforce a bound on final_fuel_grain_void_diameter

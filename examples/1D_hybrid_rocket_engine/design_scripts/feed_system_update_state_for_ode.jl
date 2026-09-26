@@ -1,3 +1,6 @@
+include(joinpath(@__DIR__, "CEA_lookup_table.jl"))
+#includes isp_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio) and cstar_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio)
+
 function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     du .= 0.0 
     
@@ -25,6 +28,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     vapor_phase = argmax(result.volumes)
     p.tank_vapor_fraction = result.fractions[vapor_phase] / sum(result.fractions)
 
+    #this increases stiffness significantly especially near the end
     if p.tank_vapor_fraction <= 0.999
         p.tank_density = mass_density(oxidizer_model, result, 1) #get liquid density because we drawing from the bottom of the tank
         p.tank_specific_enthalpy = mass_enthalpy(oxidizer_model, result, 1)
@@ -32,6 +36,9 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
         p.tank_density = mass_density(oxidizer_model, result) #otherwise, we will be drawing from the remaining vapor in the tank
         p.tank_specific_enthalpy = mass_enthalpy(oxidizer_model, result)
     end
+
+    #p.tank_density = mass_density(oxidizer_model, result)
+    #p.tank_specific_enthalpy = mass_enthalpy(oxidizer_model, result)
 
     mid_section_n_moles = u.mid_section_mass / p.nitrous_oxide_molecular_weight
 
@@ -121,6 +128,10 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     #Other state updates:
     #Overall rocket
     p.desired_impulse = p.desired_average_thrust * p.desired_burn_time
+
+    #Propellant properties
+    #we don't need ISP yet, we only need that for the objective function, we do need propellant_characteristic_velocity for the mass flow out of the nozzle however
+    #p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, p.oxidizer_to_fuel_ratio)
     
     #Adjustable Valve
     p.valve_opening = valve_opening_at_t(t)
