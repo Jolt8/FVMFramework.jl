@@ -1,7 +1,17 @@
 include(joinpath(@__DIR__, "CEA_lookup_table.jl"))
 #includes isp_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio) and cstar_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio)
 
-function update_state!(du, u, p, t, oxidizer_model, chamber_model, p_axes, u_axes)
+function valve_opening_at_t(t)
+    return 1.0
+end
+
+function valve_flow_capacity_factor(valve_opening, p)
+    return valve_opening * p.valve_flow_capacity_factor
+    #since we don't have a physical valve that we've collected experimental data on yet, we're going to optimize the valve_flow_capacity_factor
+    #to help us choose which electronic valve we should purchase
+end
+
+function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     du .= 0.0 
     
     tank_n_moles = u.tank_oxidizer_mass / p.nitrous_oxide_molecular_weight
@@ -29,6 +39,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model, p_axes, u_axe
     p.tank_vapor_fraction = result.fractions[vapor_phase] / sum(result.fractions)
 
     #this increases stiffness significantly especially near the end
+    #TODO: we have to find a way to accurately model the liquid state without imposing way too much stiffness
     if p.tank_vapor_fraction <= 0.999
         p.tank_density = mass_density(oxidizer_model, result, 1) #get liquid density because we drawing from the bottom of the tank
         p.tank_specific_enthalpy = mass_enthalpy(oxidizer_model, result, 1)
@@ -132,10 +143,6 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model, p_axes, u_axe
     #Propellant properties
     #we don't need ISP yet, we only need that for the objective function, we do need propellant_characteristic_velocity for the mass flow out of the nozzle however
     #p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, p.oxidizer_to_fuel_ratio)
-    
-    #Adjustable Valve
-    p.valve_opening = valve_opening_at_t(t)
-    p.valve_flow_capacity_factor = valve_flow_capacity_factor(p.valve_opening, p)
 
     #Injector
     #p.injector_orifice_area = p.injector_number_of_orifices * (pi / 4) * (p.injector_orifice_diameter^2)
@@ -148,6 +155,24 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model, p_axes, u_axe
     p.fuel_grain_burning_surface_area = pi * u.port_diameter * p.fuel_grain_length
     
     p.fuel_mass = p.fuel_density * (pi * (p.final_fuel_grain_void_diameter / 2)^2 - pi * (u.port_diameter / 2)^2) * p.fuel_grain_length
+    
+    #Adjustable Valve
+    #if p.burned_out == 0.0
+    if u.port_diameter < p.final_fuel_grain_void_diameter
+        #If we haven't burned all our fuel yet, keep the valve open
+        p.valve_opening = valve_opening_at_t(t)
+    else
+        #If we have though, close the valve to prevent the oxidizer tank from dumping way too much oxidizer into the system, causing it to drop to very low temperatures and crash the solver
+        #This also conveniently fixes the issue of the stiffness created by switching from drawing liquid to drawing vapor in the tank
+        #TODO: This assumption might change if the oxidizer runs out before the fuel, but that seems unlikely given our design
+        p.valve_opening = 0.0
+    end
+
+    p.adjusted_valve_flow_capacity_factor = valve_flow_capacity_factor(p.valve_opening, p)
+
+    #@show u.port_diameter
+    #@show p.final_fuel_grain_void_diameter
+    #@show p.valve_opening
 
     #Nozzle
     p.nozzle_throat_area = (pi / 4) * (p.nozzle_throat_diameter^2)
