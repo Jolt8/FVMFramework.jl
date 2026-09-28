@@ -26,7 +26,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     sol = 0
 
     
-    #try
+    try
     sol = solve(prob,
         saveat = (p.simulation_time / 200),
         callback = optimized_cb_set,
@@ -34,20 +34,18 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         maxiters = 1000,
         #dtmin = 1e-5
     )
-    #catch e
-        #println(e)
-        #return theta, p, 1e10
-    #end
+    catch e
+        println(e)
+        return theta, p, 1e10
+    end
+
+    did_not_finish_loss = 0.0
 
     if !(sol.retcode == SciMLBase.ReturnCode.Success || sol.retcode == SciMLBase.ReturnCode.Terminated)
         #@show p.final_fuel_grain_void_diameter
         u_named = ComponentVector(sol.u[end], u_axes)
-        @show u_named.port_diameter
-        return theta, p, (1e10 + 1e8 * p.final_fuel_grain_void_diameter - u_named.port_diameter) #we want the solver to prioritize runs that got closer to expending all the fuel even if they failed
+        did_not_finish_loss += 1e10 + 1e8 * p.final_fuel_grain_void_diameter - u_named.port_diameter
     end
-
-
-
 
     #Losses updated every iteration
     injector_velocity_loss = 0.0
@@ -71,7 +69,8 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
     last_fuel_mass = p.fuel_mass
 
-    thrust_vector = []
+    thrust_over_time = []
+    pressures_over_time = []
 
     for i in eachindex(sol.u)
         curr_t = sol.t[i]
@@ -79,18 +78,20 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
         update_state!(du_temporary, u_named, p, curr_t, oxidizer_model, chamber_model)
 
+        push!(pressures_over_time, p.chamber_pressure)
+
         if (u_named.port_diameter >= p.final_fuel_grain_void_diameter) && found_depletion_time == false
             depletion_time = curr_t
             found_depletion_time = true
             unutilized_oxidizer_loss = 0.001 * abs2(u_named.tank_oxidizer_mass)
-            break #stop evaluating loss if the fuel has burned out
+            #break #stop evaluating loss if the fuel has burned out
         end
 
         if (u_named.tank_oxidizer_mass <= 1e-6) && found_depletion_time == false
             depletion_time = curr_t
             found_depletion_time = true
             unburned_fuel_loss = 0.001 * abs2(p.fuel_mass)
-            break #stop evaluating loss if the oxidizer has burned out
+            #break #stop evaluating loss if the oxidizer has burned out
         end
 
         adjustable_valve_pressure_drop = adjustable_valve_flow!(du_temporary, u_named, p, curr_t)
@@ -117,8 +118,10 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         end
 
         #OBSERVATION: it seems like we're going to have to weigh the importance of injector velocity against adjustable valve authority
-
-        fuel_mass_flow = regression_rate!(du_temporary, u_named, p, curr_t, oxidizer_mass_flow)
+        fuel_mass_flow = 0.0
+        if found_depletion_time == false
+            fuel_mass_flow = regression_rate!(du_temporary, u_named, p, curr_t, oxidizer_mass_flow)
+        end
 
         #=
         update_mass_fractions!(du_temporary, u_named, p, curr_t, oxidizer_mass_flow, fuel_mass_flow)
@@ -151,7 +154,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
             thrust_produced = p.propellant_isp * p.gravity * chamber_gas_mass_flow_out
 
-            push!(thrust_vector, thrust_produced)
+            push!(thrust_over_time, thrust_produced)
 
             cummulative_impulse += thrust_produced * dt
 
@@ -177,11 +180,16 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         end
     end
 
-    @show length(sol.t)
-    @show length(thrust_vector)
-    plt = plot(sol.t, [0.0, 0.0, thrust_vector...])
-    display(plt)
-    @show plt
+    #@show length(sol.u)
+
+    #@show length(thrust_over_time)
+    #@show length(pressures_over_time)
+    #@show length(sol.t)
+
+    #thrust_plt = plot(sol.t, [0.0, thrust_over_time...], label = "Thrust", xlabel = "Time [s]", ylabel = "Thrust [N]")
+    #display(thrust_plt)
+    #pressure_plt = plot(sol.t, pressures_over_time, label = "Chamber Pressure", xlabel = "Time [s]", ylabel = "Chamber Pressure [Pa]")
+    #display(pressure_plt)
 
     p.cummulative_impulse = cummulative_impulse
     impulse_loss = 0.0001 * abs2(p.desired_impulse - cummulative_impulse)
@@ -203,10 +211,10 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     u_end = ComponentVector(sol.u[end], u_axes)
     
     total_fuel_burned = p.fuel_density * (pi * (u_end.port_diameter / 2)^2 - pi * (u_start.port_diameter / 2)^2) * p.fuel_grain_length
-    @show total_fuel_burned
+    #@show total_fuel_burned
 
     total_oxidizer_used = u_start.tank_oxidizer_mass - u_end.tank_oxidizer_mass
-    @show total_oxidizer_used
+    #@show total_oxidizer_used
     
     p.oxidizer_to_fuel_ratio = total_oxidizer_used / max(total_fuel_burned, 1e-9)
     oxidizer_to_fuel_ratio_loss = 0.001 * abs2(p.desired_oxidizer_to_fuel_ratio - p.oxidizer_to_fuel_ratio)
@@ -215,6 +223,9 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     #we'll just enforce a bound on final_fuel_grain_void_diameter
 
     all_losses = ComponentVector(
+        #Misc Losses
+        did_not_finish_loss = did_not_finish_loss,
+
         #Updated every solver iteration
         injector_velocity_loss = injector_velocity_loss,
         pressure_drop_ratio_loss = pressure_drop_ratio_loss,
@@ -228,7 +239,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         unutilized_oxidizer_loss = unutilized_oxidizer_loss
     )
 
-    @show sum(all_losses)
+    #@show sum(all_losses)
 
     return theta, p, all_losses
 end
