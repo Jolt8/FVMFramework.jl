@@ -1,0 +1,19 @@
+FVMFramework Verification Report
+Target: CompressibleFlow(HLLC, first_order)    Level: unit
+
+COMPONENT
+PASS  uniform_hllc_flux                  identical-state HLLC equals the analytical Euler flux
+PASS  internal_face_conservation         one HLLC face contributes equal and opposite integrated flux
+
+RESIDUAL
+PASS  free_stream_residual               uniform three-dimensional flow has a zero semi-discrete residual
+PASS  global_conservation                volume-integrated closed-domain residual conserves all Euler quantities
+
+STATE
+PASS  state_admissibility                state checker accepts valid flow and localizes non-finite/nonphysical states
+
+JACOBIAN
+PASS  empirical_dependency               finite-difference dependencies are contained in tracer-declared sparsity
+PASS  ad_vs_finite_difference_jvp        ForwardDiff Jacobian-vector products agree with central finite differences
+
+RESULT: PASS (7/7 checks passed)

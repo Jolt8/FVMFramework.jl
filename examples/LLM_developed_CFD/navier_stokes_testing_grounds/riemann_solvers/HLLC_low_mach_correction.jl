@@ -83,8 +83,10 @@ function thornber_low_mach_correction(
     average_normal_velocity = 0.5 * (normal_velocity_a + normal_velocity_b)
     half_normal_velocity_jump = 0.5 * (normal_velocity_a - normal_velocity_b)
 
-    corrected_normal_velocity_a = average_normal_velocity + velocity_jump_scaling * half_normal_velocity_jump
-    corrected_normal_velocity_b = average_normal_velocity - velocity_jump_scaling * half_normal_velocity_jump
+    corrected_normal_velocity_a =
+        average_normal_velocity + velocity_jump_scaling * half_normal_velocity_jump
+    corrected_normal_velocity_b =
+        average_normal_velocity - velocity_jump_scaling * half_normal_velocity_jump
 
     normal_velocity_change_a = corrected_normal_velocity_a - normal_velocity_a
     normal_velocity_change_b = corrected_normal_velocity_b - normal_velocity_b

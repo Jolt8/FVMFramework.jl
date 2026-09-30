@@ -1,0 +1,639 @@
+{
+  "environment": {
+    "FVMFramework_version": "0.1.0",
+    "ForwardDiff_version": "1.3.2",
+    "OrdinaryDiffEq_version": "6.108.0",
+    "benchmark_mesh_cells": 64,
+    "explicit_algorithm": "SSPRK43, fixed CFL=0.2",
+    "implicit_algorithm": "FBDF, reltol=1e-6, abstol=1e-8",
+    "julia_version": "1.12.5",
+    "random_seed": 4609613,
+    "spatial_method": "first-order finite volume with HLLC",
+    "unit_mesh_cells": 5
+  },
+  "finished_at": "2026-09-30T15:24:26.156",
+  "level": "full",
+  "results": [
+    {
+      "component": "component",
+      "diagnostics": {
+        "expected_flux": [
+          141.6,
+          118317.0,
+          424.8,
+          -283.2,
+          4.3576940400000006e7
+        ],
+        "measured_flux": [
+          141.6,
+          118317.0,
+          424.8,
+          -283.2,
+          4.357694040000001e7
+        ]
+      },
+      "elapsed_seconds": 0.2070000171661377,
+      "expected": {
+        "oracle": "independently evaluated physical Euler flux",
+        "relative_tolerance": 4.440892098500626e-14
+      },
+      "metrics": {
+        "absolute_error": 7.450580596923828e-9,
+        "relative_error": 1.709753031886522e-16
+      },
+      "name": "uniform_hllc_flux",
+      "status": "pass",
+      "summary": "identical-state HLLC equals the analytical Euler flux"
+    },
+    {
+      "component": "component",
+      "diagnostics": {
+        "imbalances": {
+          "density": 0.0,
+          "momentum_density_u": 0.0,
+          "momentum_density_v": 0.0,
+          "momentum_density_w": 0.0,
+          "volumetric_energy": 0.0
+        }
+      },
+      "elapsed_seconds": 0.35699987411499023,
+      "expected": {
+        "identity": "flow_into_cell_a + flow_into_cell_b = 0",
+        "normalized_tolerance": 4.440892098500626e-15
+      },
+      "metrics": {
+        "face_cells": [
+          1,
+          2
+        ],
+        "maximum_normalized_imbalance": 0.0
+      },
+      "name": "internal_face_conservation",
+      "status": "pass",
+      "summary": "one HLLC face contributes equal and opposite integrated flux"
+    },
+    {
+      "component": "residual",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.4529998302459717,
+      "expected": {
+        "boundary_condition": "transmissive physical flux",
+        "maximum_normalized_norm": 5.0e-13
+      },
+      "metrics": {
+        "absolute_field_norms": {
+          "density": 6.32827124036339e-14,
+          "momentum_density_u": 7.275957614183426e-11,
+          "momentum_density_v": 9.436895709313833e-14,
+          "momentum_density_w": 0.0,
+          "volumetric_energy": 3.725290298461914e-8
+        },
+        "maximum_normalized_norm": 6.009895233434265e-16,
+        "normalized_field_norms": {
+          "density": 6.272534697981317e-17,
+          "momentum_density_u": 6.009895233434265e-16,
+          "momentum_density_v": 3.1179266042597207e-17,
+          "momentum_density_w": 0.0,
+          "volumetric_energy": 1.66419284381021e-16
+        }
+      },
+      "name": "free_stream_residual",
+      "status": "pass",
+      "summary": "uniform three-dimensional flow has a zero semi-discrete residual"
+    },
+    {
+      "component": "residual",
+      "diagnostics": {},
+      "elapsed_seconds": 0.21300005912780762,
+      "expected": {
+        "normalized_tolerance": 1.0e-12,
+        "oracle": "pairwise internal cancellation plus balanced constant wall pressure"
+      },
+      "metrics": {
+        "maximum_normalized_rate": 7.842836778348817e-17,
+        "net_rates": {
+          "density": 0.0,
+          "momentum_density_u": -7.946754365661939e-12,
+          "momentum_density_v": 0.0,
+          "momentum_density_w": 0.0,
+          "volumetric_energy": 0.0
+        },
+        "normalization_scales": {
+          "density": 421.65046823776163,
+          "momentum_density_u": 101325.0,
+          "momentum_density_v": 101325.0,
+          "momentum_density_w": 101325.0,
+          "volumetric_energy": 1.3896033719406986e8
+        },
+        "normalized_rates": {
+          "density": 0.0,
+          "momentum_density_u": 7.842836778348817e-17,
+          "momentum_density_v": 0.0,
+          "momentum_density_w": 0.0,
+          "volumetric_energy": 0.0
+        }
+      },
+      "name": "global_conservation",
+      "status": "pass",
+      "summary": "volume-integrated closed-domain residual conserves all Euler quantities"
+    },
+    {
+      "component": "state",
+      "diagnostics": {
+        "nonfinite_state_violations": [
+          {
+            "cell_index": 2,
+            "nearby_state": {
+              "density": 1.18,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": "NaN",
+              "momentum_density_w": -2.36,
+              "volumetric_energy": 261816.17000000007
+            },
+            "reason": "non-finite conservative state",
+            "time": 0.25,
+            "value": "NaN",
+            "variable": "momentum_density_v"
+          },
+          {
+            "cell_index": 2,
+            "nearby_state": {
+              "density": 1.18,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": "NaN",
+              "momentum_density_w": -2.36,
+              "volumetric_energy": 261816.17000000007
+            },
+            "reason": "pressure derived from the conservative state must be finite and positive",
+            "time": 0.25,
+            "value": "NaN",
+            "variable": "pressure"
+          },
+          {
+            "cell_index": 2,
+            "nearby_state": {
+              "density": 1.18,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": "NaN",
+              "momentum_density_w": -2.36,
+              "volumetric_energy": 261816.17000000007
+            },
+            "reason": "temperature derived from the conservative state must be finite and positive",
+            "time": 0.25,
+            "value": "NaN",
+            "variable": "temperature"
+          }
+        ],
+        "nonphysical_state_violations": [
+          {
+            "cell_index": 1,
+            "nearby_state": {
+              "density": -1.0,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": 3.54,
+              "momentum_density_w": -2.36,
+              "volumetric_energy": 261816.17000000007
+            },
+            "reason": "density must be finite and positive",
+            "time": 0.5,
+            "value": -1.0,
+            "variable": "density"
+          },
+          {
+            "cell_index": 3,
+            "nearby_state": {
+              "density": 1.18,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": 3.54,
+              "momentum_density_w": -2.36,
+              "volumetric_energy": 0.0
+            },
+            "reason": "pressure derived from the conservative state must be finite and positive",
+            "time": 0.5,
+            "value": -3401.4679999999985,
+            "variable": "pressure"
+          },
+          {
+            "cell_index": 3,
+            "nearby_state": {
+              "density": 1.18,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": 3.54,
+              "momentum_density_w": -2.36,
+              "volumetric_energy": 0.0
+            },
+            "reason": "temperature derived from the conservative state must be finite and positive",
+            "time": 0.5,
+            "value": -10.043902439024388,
+            "variable": "temperature"
+          }
+        ],
+        "valid_state_violations": []
+      },
+      "elapsed_seconds": 0.01399993896484375,
+      "expected": {
+        "required_detections": [
+          "NaN",
+          "negative density",
+          "nonpositive pressure/temperature"
+        ],
+        "valid_state_violation_count": 0
+      },
+      "metrics": {
+        "nonfinite_detection_count": 3,
+        "nonphysical_detection_count": 3,
+        "valid_state_violation_count": 0
+      },
+      "name": "state_admissibility",
+      "status": "pass",
+      "summary": "state checker accepts valid flow and localizes non-finite/nonphysical states"
+    },
+    {
+      "component": "jacobian",
+      "diagnostics": {
+        "unexpected_dependencies": []
+      },
+      "elapsed_seconds": 0.9670000076293945,
+      "expected": {
+        "comparison_policy": "declared supersets are allowed because one state cannot activate every branch",
+        "unexpected_dependency_count": 0
+      },
+      "metrics": {
+        "declared_nonzeros": 316,
+        "degrees_of_freedom": 25,
+        "observed_nonzeros": 158,
+        "state_inactive_declared_count": 158,
+        "unexpected_dependency_count": 0
+      },
+      "name": "empirical_dependency",
+      "status": "pass",
+      "summary": "finite-difference dependencies are contained in tracer-declared sparsity"
+    },
+    {
+      "component": "jacobian",
+      "diagnostics": {
+        "classifications": [
+          "good agreement",
+          "good agreement",
+          "good agreement"
+        ]
+      },
+      "elapsed_seconds": 1.4869999885559082,
+      "expected": {
+        "finite_difference_scheme": "centered",
+        "random_seed": 4609613,
+        "relative_tolerance": 2.0e-5
+      },
+      "metrics": {
+        "directions": [
+          {
+            "absolute_error_norm": 0.008501676316458685,
+            "classification": "good agreement",
+            "direction": 1,
+            "maximum_component_error": 0.005456611514091492,
+            "maximum_error_index": 24,
+            "relative_error": 5.3369431956879405e-11
+          },
+          {
+            "absolute_error_norm": 0.010348437291012858,
+            "classification": "good agreement",
+            "direction": 2,
+            "maximum_component_error": 0.007576018571853638,
+            "maximum_error_index": 22,
+            "relative_error": 3.8251217259686505e-11
+          },
+          {
+            "absolute_error_norm": 0.02136599596241952,
+            "classification": "good agreement",
+            "direction": 3,
+            "maximum_component_error": 0.01636040210723877,
+            "maximum_error_index": 22,
+            "relative_error": 1.223386019643475e-10
+          }
+        ],
+        "finite_difference_step": 6.0554544523933395e-6,
+        "maximum_relative_error": 1.223386019643475e-10
+      },
+      "name": "ad_vs_finite_difference_jvp",
+      "status": "pass",
+      "summary": "ForwardDiff Jacobian-vector products agree with central finite differences"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 2.2730000019073486,
+      "expected": {
+        "CFL_number": 0.2,
+        "state_violations": 0,
+        "successful_return_code": true
+      },
+      "metrics": {
+        "CFL_timestep": 0.0026411070460266146,
+        "solver_statistics": {
+          "accepted_steps": 46,
+          "algorithm": "SSPRK43",
+          "allocated_bytes": 259396753,
+          "garbage_collection_seconds": 0.0,
+          "jacobian_evaluations": 0,
+          "linear_solves": 0,
+          "maximum_saved_timestep": 0.0026411070460266167,
+          "minimum_saved_timestep": 0.0011501829288022847,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 0,
+          "rejected_steps": 0,
+          "return_code": "Success",
+          "rhs_evaluations": 184,
+          "runtime_seconds": 1.7633364,
+          "secondary_rhs_evaluations": 0
+        }
+      },
+      "name": "explicit_smoke",
+      "status": "pass",
+      "summary": "SSPRK43 completed the diagnostic Sod solve with admissible states"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 9.91100001335144,
+      "expected": {
+        "state_violations": 0,
+        "successful_return_code": true
+      },
+      "metrics": {
+        "solver_statistics": {
+          "accepted_steps": 155,
+          "algorithm": "FBDF",
+          "allocated_bytes": 1211785088,
+          "garbage_collection_seconds": 0.2243091,
+          "jacobian_evaluations": 1,
+          "linear_solves": 273,
+          "maximum_saved_timestep": 0.0013007197176172214,
+          "minimum_saved_timestep": 3.954201856563029e-13,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 273,
+          "rejected_steps": 1,
+          "return_code": "Success",
+          "rhs_evaluations": 291,
+          "runtime_seconds": 9.0237614,
+          "secondary_rhs_evaluations": 0
+        }
+      },
+      "name": "implicit_smoke",
+      "status": "pass",
+      "summary": "FBDF completed the diagnostic Sod solve with admissible states"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "likely_categories": [],
+        "qualification": "categories are diagnostic leads, not mathematical proof"
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "explicit_status": "pass",
+        "implicit_status": "pass"
+      },
+      "metrics": {
+        "explicit_status": "pass",
+        "implicit_status": "pass"
+      },
+      "name": "explicit_vs_implicit_classification",
+      "status": "pass",
+      "summary": "both spatial/time-integration paths completed"
+    },
+    {
+      "component": "benchmark",
+      "diagnostics": {
+        "exact_density": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.9473071427244942,
+          0.8626852217361832,
+          0.7842216727584492,
+          0.7115740758859332,
+          0.64441294611284,
+          0.5824214842759201,
+          0.5252953279974312,
+          0.4727423026281119,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125
+        ],
+        "exact_pressure": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.927015800810259,
+          0.8131923824804115,
+          0.7115646694862585,
+          0.6210236857754543,
+          0.540542641253003,
+          0.4691722763563711,
+          0.4060363858626057,
+          0.3503275184086991,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "numerical_density": [
+          0.9999999990689149,
+          0.9999999974315805,
+          0.9999999912541897,
+          0.999999970867755,
+          0.9999999061367312,
+          0.9999997080127195,
+          0.9999991241095472,
+          0.9999974694820474,
+          0.9999929683099195,
+          0.9999812339142955,
+          0.9999519737725444,
+          0.9998823325676898,
+          0.9997244812496859,
+          0.9993845598260483,
+          0.9986908362510439,
+          0.997352277329037,
+          0.9949154216543237,
+          0.9907359931114781,
+          0.9839870464823939,
+          0.9737208431848712,
+          0.9589844674484345,
+          0.9389660458264177,
+          0.91313269732875,
+          0.881322992206942,
+          0.843774378336312,
+          0.8010891621420945,
+          0.7541601803570189,
+          0.7040845759958064,
+          0.6520935781911718,
+          0.5995248312159908,
+          0.5478692477981285,
+          0.49887646737250657,
+          0.4553695492095506,
+          0.42234735469873785,
+          0.40628245524032586,
+          0.3963847929949473,
+          0.3822273962617808,
+          0.3630179836774212,
+          0.3403297121288452,
+          0.3168761654554502,
+          0.29524183351618843,
+          0.2767403984404601,
+          0.26088252561207803,
+          0.2456352760935082,
+          0.22833596094033043,
+          0.20717931616951385,
+          0.18295085359128613,
+          0.15966881225292176,
+          0.14218758521066394,
+          0.1321731436455992,
+          0.12764323513962808,
+          0.12590303471924807,
+          0.12529459131644408,
+          0.12509292513250983,
+          0.125028463459966,
+          0.12500847564063253,
+          0.1250024538766252,
+          0.12500069071416675,
+          0.12500018901163162,
+          0.12500005028494932,
+          0.1250000130078705,
+          0.12500000327361926,
+          0.1250000008069534,
+          0.12500000023970093
+        ]
+      },
+      "elapsed_seconds": 0.2109999656677246,
+      "expected": {
+        "density_L1_maximum": 0.08,
+        "oracle": "independent exact ideal-gas Riemann solution sampled at cell centers",
+        "pressure_L1_maximum": 0.08
+      },
+      "metrics": {
+        "cells": 64,
+        "density_L1_error": 0.02155815502957223,
+        "final_time": 0.12,
+        "pressure_L1_error": 0.02218493979572933
+      },
+      "name": "sod_shock_tube",
+      "status": "pass",
+      "summary": "Sod shock tube agrees with the exact Euler Riemann solution"
+    }
+  ],
+  "schema_version": "1.0",
+  "started_at": "2026-09-30T15:23:57.659",
+  "status": "pass",
+  "summary": {
+    "errors": 0,
+    "failed": 0,
+    "passed": 11,
+    "total": 11
+  },
+  "target": "CompressibleFlow(HLLC, first_order)"
+}

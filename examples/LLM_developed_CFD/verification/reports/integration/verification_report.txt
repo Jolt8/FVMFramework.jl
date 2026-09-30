@@ -1,0 +1,27 @@
+FVMFramework Verification Report
+Target: CompressibleFlow(HLLC, first_order)    Level: integration
+
+COMPONENT
+PASS  uniform_hllc_flux                  identical-state HLLC equals the analytical Euler flux
+PASS  internal_face_conservation         one HLLC face contributes equal and opposite integrated flux
+
+RESIDUAL
+PASS  free_stream_residual               uniform three-dimensional flow has a zero semi-discrete residual
+PASS  global_conservation                volume-integrated closed-domain residual conserves all Euler quantities
+
+STATE
+PASS  state_admissibility                state checker accepts valid flow and localizes non-finite/nonphysical states
+
+JACOBIAN
+PASS  empirical_dependency               finite-difference dependencies are contained in tracer-declared sparsity
+PASS  ad_vs_finite_difference_jvp        ForwardDiff Jacobian-vector products agree with central finite differences
+
+INTEGRATION
+PASS  explicit_smoke                     SSPRK43 completed the diagnostic Sod solve with admissible states
+PASS  implicit_smoke                     FBDF completed the diagnostic Sod solve with admissible states
+PASS  explicit_vs_implicit_classification both spatial/time-integration paths completed
+
+BENCHMARK
+PASS  sod_shock_tube                     Sod shock tube agrees with the exact Euler Riemann solution
+
+RESULT: PASS (11/11 checks passed)
