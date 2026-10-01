@@ -1,0 +1,1564 @@
+{
+  "environment": {
+    "FVMFramework_version": "0.1.0",
+    "ForwardDiff_version": "1.3.2",
+    "OrdinaryDiffEq_version": "6.108.0",
+    "benchmark_mesh_cells": 32,
+    "explicit_algorithm": "SSPRK43, fixed CFL=0.2",
+    "implicit_algorithm": "FBDF; ForwardDiff for first order and finite differences for shock-limited MUSCL",
+    "julia_version": "1.12.5",
+    "low_mach_method": "Thornber velocity reconstruction correction",
+    "random_seed": 4609613,
+    "spatial_methods": [
+      "first-order HLLC",
+      "MUSCL HLLC"
+    ],
+    "species_model": "oriented upwind advection and Fickian mass-fraction diffusion",
+    "unit_mesh_cells": 5
+  },
+  "finished_at": "2026-09-30T16:52:07.589",
+  "level": "integration",
+  "results": [
+    {
+      "component": "component",
+      "diagnostics": {
+        "expected_flux": [
+          141.6,
+          118317.0,
+          424.8,
+          -283.2,
+          4.3576940400000006e7
+        ],
+        "measured_flux": [
+          141.6,
+          118317.0,
+          424.8,
+          -283.2,
+          4.357694040000001e7
+        ]
+      },
+      "elapsed_seconds": 0.18400001525878906,
+      "expected": {
+        "oracle": "independently evaluated physical Euler flux",
+        "relative_tolerance": 4.440892098500626e-14
+      },
+      "metrics": {
+        "absolute_error": 7.450580596923828e-9,
+        "relative_error": 1.709753031886522e-16
+      },
+      "name": "uniform_hllc_flux",
+      "status": "pass",
+      "summary": "identical-state HLLC equals the analytical Euler flux"
+    },
+    {
+      "component": "component",
+      "diagnostics": {
+        "imbalances": {
+          "density": 0.0,
+          "momentum_density_u": 0.0,
+          "momentum_density_v": 0.0,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 0.0,
+          "species_densities.species_b": 0.0,
+          "volumetric_energy": 0.0
+        }
+      },
+      "elapsed_seconds": 0.503000020980835,
+      "expected": {
+        "identity": "flow_into_cell_a + flow_into_cell_b = 0",
+        "normalized_tolerance": 4.440892098500626e-15
+      },
+      "metrics": {
+        "face_cells": [
+          1,
+          2
+        ],
+        "maximum_normalized_imbalance": 0.0
+      },
+      "name": "internal_face_conservation",
+      "status": "pass",
+      "summary": "one HLLC face contributes equal and opposite integrated flux"
+    },
+    {
+      "component": "residual",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.6110000610351562,
+      "expected": {
+        "boundary_condition": "transmissive physical flux",
+        "maximum_normalized_norm": 5.0e-13
+      },
+      "metrics": {
+        "absolute_field_norms": {
+          "density": 6.32827124036339e-14,
+          "momentum_density_u": 7.275957614183426e-11,
+          "momentum_density_v": 9.436895709313833e-14,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 1.5820678100908474e-14,
+          "species_densities.species_b": 4.746203430272542e-14,
+          "volumetric_energy": 3.725290298461914e-8
+        },
+        "maximum_normalized_norm": 6.009895233434265e-16,
+        "normalized_field_norms": {
+          "density": 6.272534697981317e-17,
+          "momentum_density_u": 6.009895233434265e-16,
+          "momentum_density_v": 3.1179266042597207e-17,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 6.272534697981317e-17,
+          "species_densities.species_b": 6.272534697981316e-17,
+          "volumetric_energy": 1.66419284381021e-16
+        }
+      },
+      "name": "free_stream_residual",
+      "status": "pass",
+      "summary": "uniform three-dimensional flow has a zero semi-discrete residual"
+    },
+    {
+      "component": "residual",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.2330000400543213,
+      "expected": {
+        "normalized_tolerance": 1.0e-12,
+        "oracle": "pairwise internal cancellation plus balanced constant wall pressure"
+      },
+      "metrics": {
+        "maximum_normalized_rate": 7.842836778348817e-17,
+        "net_rates": {
+          "density": 0.0,
+          "momentum_density_u": -7.946754365661939e-12,
+          "momentum_density_v": 0.0,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": -4.235164736271502e-22,
+          "species_densities.species_b": 4.235164736271502e-22,
+          "volumetric_energy": 0.0
+        },
+        "normalization_scales": {
+          "density": 421.65046823776163,
+          "momentum_density_u": 101325.0,
+          "momentum_density_v": 101325.0,
+          "momentum_density_w": 101325.0,
+          "species_densities.species_a": 187.67900642485915,
+          "species_densities.species_b": 269.7468010895419,
+          "volumetric_energy": 1.3896033719406986e8
+        },
+        "normalized_rates": {
+          "density": 0.0,
+          "momentum_density_u": 7.842836778348817e-17,
+          "momentum_density_v": 0.0,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 2.2566001477459495e-24,
+          "species_densities.species_b": 1.570051885384786e-24,
+          "volumetric_energy": 0.0
+        }
+      },
+      "name": "global_conservation",
+      "status": "pass",
+      "summary": "volume-integrated closed-domain residual conserves all Euler quantities"
+    },
+    {
+      "component": "state",
+      "diagnostics": {
+        "nonfinite_state_violations": [
+          {
+            "cell_index": 2,
+            "nearby_state": {
+              "density": 1.18,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": "NaN",
+              "momentum_density_w": -2.36,
+              "species_densities": {
+                "species_a": 0.295,
+                "species_b": 0.885
+              },
+              "volumetric_energy": 261816.17000000007
+            },
+            "reason": "non-finite conservative state",
+            "time": 0.25,
+            "value": "NaN",
+            "variable": "momentum_density_v"
+          },
+          {
+            "cell_index": 2,
+            "nearby_state": {
+              "density": 1.18,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": "NaN",
+              "momentum_density_w": -2.36,
+              "species_densities": {
+                "species_a": 0.295,
+                "species_b": 0.885
+              },
+              "volumetric_energy": 261816.17000000007
+            },
+            "reason": "pressure derived from the conservative state must be finite and positive",
+            "time": 0.25,
+            "value": "NaN",
+            "variable": "pressure"
+          },
+          {
+            "cell_index": 2,
+            "nearby_state": {
+              "density": 1.18,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": "NaN",
+              "momentum_density_w": -2.36,
+              "species_densities": {
+                "species_a": 0.295,
+                "species_b": 0.885
+              },
+              "volumetric_energy": 261816.17000000007
+            },
+            "reason": "temperature derived from the conservative state must be finite and positive",
+            "time": 0.25,
+            "value": "NaN",
+            "variable": "temperature"
+          }
+        ],
+        "nonphysical_state_violations": [
+          {
+            "cell_index": 1,
+            "nearby_state": {
+              "density": -1.0,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": 3.54,
+              "momentum_density_w": -2.36,
+              "species_densities": {
+                "species_a": 0.295,
+                "species_b": 0.885
+              },
+              "volumetric_energy": 261816.17000000007
+            },
+            "reason": "density must be finite and positive",
+            "time": 0.5,
+            "value": -1.0,
+            "variable": "density"
+          },
+          {
+            "cell_index": 3,
+            "nearby_state": {
+              "density": 1.18,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": 3.54,
+              "momentum_density_w": -2.36,
+              "species_densities": {
+                "species_a": 0.295,
+                "species_b": 0.885
+              },
+              "volumetric_energy": 0.0
+            },
+            "reason": "pressure derived from the conservative state must be finite and positive",
+            "time": 0.5,
+            "value": -3401.4679999999985,
+            "variable": "pressure"
+          },
+          {
+            "cell_index": 3,
+            "nearby_state": {
+              "density": 1.18,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": 3.54,
+              "momentum_density_w": -2.36,
+              "species_densities": {
+                "species_a": 0.295,
+                "species_b": 0.885
+              },
+              "volumetric_energy": 0.0
+            },
+            "reason": "temperature derived from the conservative state must be finite and positive",
+            "time": 0.5,
+            "value": -10.043902439024388,
+            "variable": "temperature"
+          },
+          {
+            "cell_index": 4,
+            "nearby_state": {
+              "density": 1.18,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": 3.54,
+              "momentum_density_w": -2.36,
+              "species_densities": {
+                "species_a": -0.1,
+                "species_b": 0.885
+              },
+              "volumetric_energy": 261816.17000000007
+            },
+            "reason": "conservative species density must be finite and non-negative",
+            "time": 0.5,
+            "value": -0.1,
+            "variable": "species_a"
+          },
+          {
+            "cell_index": 4,
+            "nearby_state": {
+              "density": 1.18,
+              "momentum_density_u": 141.6,
+              "momentum_density_v": 3.54,
+              "momentum_density_w": -2.36,
+              "species_densities": {
+                "species_a": -0.1,
+                "species_b": 0.885
+              },
+              "volumetric_energy": 261816.17000000007
+            },
+            "reason": "conservative species densities must sum to mixture density",
+            "time": 0.5,
+            "value": 0.785,
+            "variable": "species_density_sum"
+          }
+        ],
+        "valid_state_violations": []
+      },
+      "elapsed_seconds": 0.013000011444091797,
+      "expected": {
+        "required_detections": [
+          "NaN",
+          "negative density",
+          "nonpositive pressure/temperature",
+          "negative conservative species density"
+        ],
+        "valid_state_violation_count": 0
+      },
+      "metrics": {
+        "nonfinite_detection_count": 3,
+        "nonphysical_detection_count": 5,
+        "valid_state_violation_count": 0
+      },
+      "name": "state_admissibility",
+      "status": "pass",
+      "summary": "state checker accepts valid flow and localizes non-finite/nonphysical states"
+    },
+    {
+      "component": "jacobian",
+      "diagnostics": {
+        "unexpected_dependencies": []
+      },
+      "elapsed_seconds": 1.6019999980926514,
+      "expected": {
+        "comparison_policy": "declared supersets are allowed because one state cannot activate every branch",
+        "unexpected_dependency_count": 0
+      },
+      "metrics": {
+        "declared_nonzeros": 507,
+        "degrees_of_freedom": 35,
+        "observed_nonzeros": 268,
+        "state_inactive_declared_count": 239,
+        "unexpected_dependency_count": 0
+      },
+      "name": "empirical_dependency",
+      "status": "pass",
+      "summary": "finite-difference dependencies are contained in tracer-declared sparsity"
+    },
+    {
+      "component": "jacobian",
+      "diagnostics": {
+        "classifications": [
+          "good agreement",
+          "good agreement",
+          "good agreement"
+        ]
+      },
+      "elapsed_seconds": 2.0979998111724854,
+      "expected": {
+        "finite_difference_scheme": "centered",
+        "random_seed": 4609613,
+        "relative_tolerance": 2.0e-5
+      },
+      "metrics": {
+        "base_finite_difference_step": 6.0554544523933395e-6,
+        "directions": [
+          {
+            "absolute_error_norm": 0.006605684053522496,
+            "classification": "good agreement",
+            "direction": 1,
+            "maximum_component_error": 0.005962282419204712,
+            "maximum_error_index": 25,
+            "relative_error": 4.39802627022317e-11,
+            "selected_step": 2.4221817809573358e-5,
+            "step_sweep": [
+              {
+                "absolute_error_norm": 0.006605684053522496,
+                "maximum_component_error": 0.005962282419204712,
+                "maximum_error_index": 25,
+                "relative_error": 4.39802627022317e-11,
+                "step": 2.4221817809573358e-5
+              },
+              {
+                "absolute_error_norm": 0.015636675815403078,
+                "maximum_component_error": 0.01132287085056305,
+                "maximum_error_index": 22,
+                "relative_error": 1.0410808397657954e-10,
+                "step": 6.0554544523933395e-6
+              },
+              {
+                "absolute_error_norm": 0.039025702200605326,
+                "maximum_component_error": 0.030076267197728157,
+                "maximum_error_index": 23,
+                "relative_error": 2.598308700589296e-10,
+                "step": 1.5138636130983349e-6
+              }
+            ]
+          },
+          {
+            "absolute_error_norm": 0.004861455416116605,
+            "classification": "good agreement",
+            "direction": 2,
+            "maximum_component_error": 0.0036459118127822876,
+            "maximum_error_index": 24,
+            "relative_error": 2.5290063651805942e-11,
+            "selected_step": 2.4221817809573358e-5,
+            "step_sweep": [
+              {
+                "absolute_error_norm": 0.004861455416116605,
+                "maximum_component_error": 0.0036459118127822876,
+                "maximum_error_index": 24,
+                "relative_error": 2.5290063651805942e-11,
+                "step": 2.4221817809573358e-5
+              },
+              {
+                "absolute_error_norm": 0.026466977904442527,
+                "maximum_component_error": 0.017796054482460022,
+                "maximum_error_index": 22,
+                "relative_error": 1.3768542516071368e-10,
+                "step": 6.0554544523933395e-6
+              },
+              {
+                "absolute_error_norm": 0.08667025423051344,
+                "maximum_component_error": 0.060898229479789734,
+                "maximum_error_index": 23,
+                "relative_error": 4.508724360084415e-10,
+                "step": 1.5138636130983349e-6
+              }
+            ]
+          },
+          {
+            "absolute_error_norm": 0.005950223022464905,
+            "classification": "good agreement",
+            "direction": 3,
+            "maximum_component_error": 0.004160046577453613,
+            "maximum_error_index": 24,
+            "relative_error": 2.684721385877971e-11,
+            "selected_step": 2.4221817809573358e-5,
+            "step_sweep": [
+              {
+                "absolute_error_norm": 0.005950223022464905,
+                "maximum_component_error": 0.004160046577453613,
+                "maximum_error_index": 24,
+                "relative_error": 2.684721385877971e-11,
+                "step": 2.4221817809573358e-5
+              },
+              {
+                "absolute_error_norm": 0.016034253661682592,
+                "maximum_component_error": 0.00953337550163269,
+                "maximum_error_index": 24,
+                "relative_error": 7.23460340050898e-11,
+                "step": 6.0554544523933395e-6
+              },
+              {
+                "absolute_error_norm": 0.062226314937230826,
+                "maximum_component_error": 0.04667633771896362,
+                "maximum_error_index": 23,
+                "relative_error": 2.807631207193911e-10,
+                "step": 1.5138636130983349e-6
+              }
+            ]
+          }
+        ],
+        "maximum_relative_error": 4.39802627022317e-11
+      },
+      "name": "ad_vs_finite_difference_jvp",
+      "status": "pass",
+      "summary": "ForwardDiff Jacobian-vector products agree with central finite differences"
+    },
+    {
+      "component": "muscl",
+      "diagnostics": {},
+      "elapsed_seconds": 2.7690000534057617,
+      "expected": {
+        "absolute_tolerance": 8.881784197001252e-15,
+        "oracle": "constant-field identity"
+      },
+      "metrics": {
+        "faces_checked": 30,
+        "maximum_absolute_error": 0.0
+      },
+      "name": "muscl_constant_reconstruction",
+      "status": "pass",
+      "summary": "MUSCL exactly preserves a constant scalar field"
+    },
+    {
+      "component": "muscl",
+      "diagnostics": {},
+      "elapsed_seconds": 2.74399995803833,
+      "expected": {
+        "absolute_tolerance": 6.25e-6,
+        "oracle": "analytical linear value at each face"
+      },
+      "metrics": {
+        "grid_cells": 32,
+        "maximum_absolute_error": 4.440892098500626e-16
+      },
+      "name": "muscl_linear_reconstruction",
+      "status": "pass",
+      "summary": "MUSCL reconstructs a linear field to its regularized finite-grid accuracy"
+    },
+    {
+      "component": "muscl",
+      "diagnostics": {},
+      "elapsed_seconds": 5.515000104904175,
+      "expected": {
+        "minimum_asymptotic_order": 1.8,
+        "norm": "L2",
+        "oracle": "analytical periodic sine field at internal faces"
+      },
+      "metrics": {
+        "asymptotic_minimum_order": 2.0238176977683264,
+        "convergence_table": [
+          {
+            "error": 0.003079185278166786,
+            "grid": 16,
+            "observed_order": null,
+            "spacing": 0.0625
+          },
+          {
+            "error": 0.0007275592748567868,
+            "grid": 32,
+            "observed_order": 2.0814119831547258,
+            "spacing": 0.03125
+          },
+          {
+            "error": 0.00017600988940063534,
+            "grid": 64,
+            "observed_order": 2.0474082990723175,
+            "spacing": 0.015625
+          },
+          {
+            "error": 4.328199168418844e-5,
+            "grid": 128,
+            "observed_order": 2.0238176977683264,
+            "spacing": 0.0078125
+          }
+        ]
+      },
+      "name": "muscl_smooth_convergence",
+      "status": "pass",
+      "summary": "smooth MUSCL face reconstruction approaches second order"
+    },
+    {
+      "component": "muscl",
+      "diagnostics": {},
+      "elapsed_seconds": 0.06699991226196289,
+      "expected": {
+        "maximum_allowed": 1.55,
+        "minimum_allowed": 0.45,
+        "strict_positivity": true
+      },
+      "metrics": {
+        "all_finite": true,
+        "maximum_reconstructed_value": 1.5,
+        "minimum_reconstructed_value": 0.5
+      },
+      "name": "muscl_discontinuity",
+      "status": "pass",
+      "summary": "limited MUSCL remains finite, positive, and bounded near a jump"
+    },
+    {
+      "component": "muscl",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.1119999885559082,
+      "expected": {
+        "boundary_condition": "transmissive physical flux",
+        "maximum_normalized_norm": 5.0e-13
+      },
+      "metrics": {
+        "absolute_field_norms": {
+          "density": 6.32827124036339e-14,
+          "momentum_density_u": 7.275957614183426e-11,
+          "momentum_density_v": 9.436895709313833e-14,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 1.5820678100908474e-14,
+          "species_densities.species_b": 4.746203430272542e-14,
+          "volumetric_energy": 1.9354047253727903e-8
+        },
+        "maximum_normalized_norm": 6.009895233434265e-16,
+        "normalized_field_norms": {
+          "density": 6.272534697981317e-17,
+          "momentum_density_u": 6.009895233434265e-16,
+          "momentum_density_v": 3.1179266042597207e-17,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 6.272534697981317e-17,
+          "species_densities.species_b": 6.272534697981316e-17,
+          "volumetric_energy": 8.646001883857727e-17
+        }
+      },
+      "name": "muscl_free_stream",
+      "status": "pass",
+      "summary": "uniform three-dimensional flow has a zero semi-discrete residual"
+    },
+    {
+      "component": "jacobian",
+      "diagnostics": {},
+      "elapsed_seconds": 2.3309998512268066,
+      "expected": {
+        "first_order_maximum_radius": 1,
+        "missing_declared_dependencies": 0,
+        "muscl_minimum_radius": 2
+      },
+      "metrics": {
+        "first_order_cell_radius": 1,
+        "first_order_observed_nonzeros": 395,
+        "missing_declared_dependencies": 0,
+        "muscl_cell_radius": 2,
+        "muscl_declared_nonzeros": 1091,
+        "muscl_observed_nonzeros": 545
+      },
+      "name": "muscl_stencil_expansion",
+      "status": "pass",
+      "summary": "MUSCL expands the empirical stencil and tracer sparsity contains it"
+    },
+    {
+      "component": "jacobian",
+      "diagnostics": {
+        "unexpected_dependencies": []
+      },
+      "elapsed_seconds": 0.0019998550415039062,
+      "expected": {
+        "comparison_policy": "declared supersets are allowed because one state cannot activate every branch",
+        "unexpected_dependency_count": 0
+      },
+      "metrics": {
+        "declared_nonzeros": 1091,
+        "degrees_of_freedom": 49,
+        "observed_nonzeros": 545,
+        "state_inactive_declared_count": 546,
+        "unexpected_dependency_count": 0
+      },
+      "name": "muscl_empirical_dependency",
+      "status": "pass",
+      "summary": "finite-difference dependencies are contained in tracer-declared sparsity"
+    },
+    {
+      "component": "jacobian",
+      "diagnostics": {
+        "classifications": [
+          "good agreement",
+          "good agreement",
+          "good agreement"
+        ]
+      },
+      "elapsed_seconds": 2.190000057220459,
+      "expected": {
+        "finite_difference_scheme": "centered",
+        "random_seed": 4609614,
+        "relative_tolerance": 2.0e-5
+      },
+      "metrics": {
+        "base_finite_difference_step": 6.0554544523933395e-6,
+        "directions": [
+          {
+            "absolute_error_norm": 0.5909389820804395,
+            "classification": "good agreement",
+            "direction": 1,
+            "maximum_component_error": 0.36850300431251526,
+            "maximum_error_index": 31,
+            "relative_error": 4.731522948002116e-9,
+            "selected_step": 1.5138636130983349e-6,
+            "step_sweep": [
+              {
+                "absolute_error_norm": 252.59365048287827,
+                "maximum_component_error": 195.13772839307785,
+                "maximum_error_index": 30,
+                "relative_error": 2.0224637230256006e-6,
+                "step": 2.4221817809573358e-5
+              },
+              {
+                "absolute_error_norm": 54.5328427027795,
+                "maximum_component_error": 40.57723657786846,
+                "maximum_error_index": 30,
+                "relative_error": 4.366328918759135e-7,
+                "step": 6.0554544523933395e-6
+              },
+              {
+                "absolute_error_norm": 0.5909389820804395,
+                "maximum_component_error": 0.36850300431251526,
+                "maximum_error_index": 31,
+                "relative_error": 4.731522948002116e-9,
+                "step": 1.5138636130983349e-6
+              }
+            ]
+          },
+          {
+            "absolute_error_norm": 0.5457807584603591,
+            "classification": "good agreement",
+            "direction": 2,
+            "maximum_component_error": 0.3242824524641037,
+            "maximum_error_index": 32,
+            "relative_error": 3.5583825216318048e-9,
+            "selected_step": 1.5138636130983349e-6,
+            "step_sweep": [
+              {
+                "absolute_error_norm": 141.34156056984563,
+                "maximum_component_error": 88.82935293018818,
+                "maximum_error_index": 32,
+                "relative_error": 9.215189999198764e-7,
+                "step": 2.4221817809573358e-5
+              },
+              {
+                "absolute_error_norm": 8.794262834068284,
+                "maximum_component_error": 5.552216574549675,
+                "maximum_error_index": 32,
+                "relative_error": 5.7336853075698245e-8,
+                "step": 6.0554544523933395e-6
+              },
+              {
+                "absolute_error_norm": 0.5457807584603591,
+                "maximum_component_error": 0.3242824524641037,
+                "maximum_error_index": 32,
+                "relative_error": 3.5583825216318048e-9,
+                "step": 1.5138636130983349e-6
+              }
+            ]
+          },
+          {
+            "absolute_error_norm": 0.08973726623325096,
+            "classification": "good agreement",
+            "direction": 3,
+            "maximum_component_error": 0.0807221420109272,
+            "maximum_error_index": 31,
+            "relative_error": 8.781472945712855e-10,
+            "selected_step": 1.5138636130983349e-6,
+            "step_sweep": [
+              {
+                "absolute_error_norm": 20.591795664131613,
+                "maximum_component_error": 12.431960184127092,
+                "maximum_error_index": 35,
+                "relative_error": 2.015063575239784e-7,
+                "step": 2.4221817809573358e-5
+              },
+              {
+                "absolute_error_norm": 1.1708365450498381,
+                "maximum_component_error": 0.7821506448090076,
+                "maximum_error_index": 35,
+                "relative_error": 1.1457524700476474e-8,
+                "step": 6.0554544523933395e-6
+              },
+              {
+                "absolute_error_norm": 0.08973726623325096,
+                "maximum_component_error": 0.0807221420109272,
+                "maximum_error_index": 31,
+                "relative_error": 8.781472945712855e-10,
+                "step": 1.5138636130983349e-6
+              }
+            ]
+          }
+        ],
+        "maximum_relative_error": 4.731522948002116e-9
+      },
+      "name": "muscl_ad_vs_finite_difference_jvp",
+      "status": "pass",
+      "summary": "ForwardDiff Jacobian-vector products agree with central finite differences"
+    },
+    {
+      "component": "low_mach",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "absolute_tolerance": 4.440892098500626e-15,
+        "oracle": "zero left-right velocity jump"
+      },
+      "metrics": {
+        "maximum_absolute_error": 0.0
+      },
+      "name": "thornber_identical_states",
+      "status": "pass",
+      "summary": "Thornber leaves identical velocities unchanged"
+    },
+    {
+      "component": "low_mach",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "Mach_coefficient": 1.0,
+        "absolute_tolerance": 5.6843418860808015e-12
+      },
+      "metrics": {
+        "maximum_absolute_error": 0.0
+      },
+      "name": "thornber_high_mach_recovery",
+      "status": "pass",
+      "summary": "Thornber exactly recovers ordinary reconstruction above Mach one"
+    },
+    {
+      "component": "low_mach",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "absolute_tolerance": 1.7763568394002505e-13,
+        "oracle": "independent Thornber normal-jump decomposition"
+      },
+      "metrics": {
+        "Mach_coefficient": 0.014997116216449367,
+        "corrected_normal_jump": 0.059988464865797564,
+        "expected_normal_jump": 0.05998846486579747,
+        "maximum_absolute_error": 9.71445146547012e-17,
+        "original_normal_jump": 4.0
+      },
+      "name": "thornber_low_mach_jump",
+      "status": "pass",
+      "summary": "Thornber scales the low-Mach normal jump by the independent Mach coefficient"
+    },
+    {
+      "component": "low_mach",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "absolute_tolerance": 1.7763568394002505e-13,
+        "unchanged_quantities": "both tangential velocity components"
+      },
+      "metrics": {
+        "maximum_tangential_error": 1.7763568394002505e-15
+      },
+      "name": "thornber_tangential_preservation",
+      "status": "pass",
+      "summary": "Thornber changes only the face-normal velocity components"
+    },
+    {
+      "component": "low_mach",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.10700011253356934,
+      "expected": {
+        "boundary_condition": "transmissive physical flux",
+        "maximum_normalized_norm": 5.0e-13
+      },
+      "metrics": {
+        "absolute_field_norms": {
+          "density": 6.32827124036339e-14,
+          "momentum_density_u": 7.275957614183426e-11,
+          "momentum_density_v": 9.436895709313833e-14,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 1.5820678100908474e-14,
+          "species_densities.species_b": 4.746203430272542e-14,
+          "volumetric_energy": 3.725290298461914e-8
+        },
+        "maximum_normalized_norm": 6.009895233434265e-16,
+        "normalized_field_norms": {
+          "density": 6.272534697981317e-17,
+          "momentum_density_u": 6.009895233434265e-16,
+          "momentum_density_v": 3.1179266042597207e-17,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 6.272534697981317e-17,
+          "species_densities.species_b": 6.272534697981316e-17,
+          "volumetric_energy": 1.66419284381021e-16
+        }
+      },
+      "name": "thornber_free_stream",
+      "status": "pass",
+      "summary": "uniform three-dimensional flow has a zero semi-discrete residual"
+    },
+    {
+      "component": "low_mach",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.059999942779541016,
+      "expected": {
+        "boundary_condition": "transmissive physical flux",
+        "maximum_normalized_norm": 5.0e-13
+      },
+      "metrics": {
+        "absolute_field_norms": {
+          "density": 6.32827124036339e-14,
+          "momentum_density_u": 7.275957614183426e-11,
+          "momentum_density_v": 9.436895709313833e-14,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 1.5820678100908474e-14,
+          "species_densities.species_b": 4.746203430272542e-14,
+          "volumetric_energy": 1.9354047253727903e-8
+        },
+        "maximum_normalized_norm": 6.009895233434265e-16,
+        "normalized_field_norms": {
+          "density": 6.272534697981317e-17,
+          "momentum_density_u": 6.009895233434265e-16,
+          "momentum_density_v": 3.1179266042597207e-17,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 6.272534697981317e-17,
+          "species_densities.species_b": 6.272534697981316e-17,
+          "volumetric_energy": 8.646001883857727e-17
+        }
+      },
+      "name": "muscl_thornber_free_stream",
+      "status": "pass",
+      "summary": "uniform three-dimensional flow has a zero semi-discrete residual"
+    },
+    {
+      "component": "species",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "exact_flux": 0.0,
+        "oracle": "Fick's law with zero composition gradient or zero effective diffusivity"
+      },
+      "metrics": {
+        "uniform_composition_flux": -0.0,
+        "zero_coefficient_flux": -0.0
+      },
+      "name": "species_zero_diffusion",
+      "status": "pass",
+      "summary": "uniform composition and an impermeable side give zero species diffusion"
+    },
+    {
+      "component": "species",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "absolute_tolerance": 6.776263578034403e-19,
+        "direction": "from high toward low mass fraction",
+        "oracle": "independent arithmetic-density/harmonic-diffusivity Fick law"
+      },
+      "metrics": {
+        "absolute_error": 0.0,
+        "expected_flux": -6.159999999999999e-5,
+        "measured_flux": -6.159999999999999e-5
+      },
+      "name": "species_linear_diffusion",
+      "status": "pass",
+      "summary": "linear composition gradient has the independent Fickian magnitude and direction"
+    },
+    {
+      "component": "species",
+      "diagnostics": {},
+      "elapsed_seconds": 0.4700000286102295,
+      "expected": {
+        "absolute_tolerance": 2.220446049250313e-14,
+        "constraint": "equal diffusion coefficients and sum(Y)=1 imply sum(J)=0"
+      },
+      "metrics": {
+        "cell_one_fraction_sum_rate": 0.0,
+        "cell_two_fraction_sum_rate": 0.0,
+        "species_a_global_rate": 0.0,
+        "species_b_global_rate": 0.0
+      },
+      "name": "species_diffusive_conservation",
+      "status": "pass",
+      "summary": "oriented Fickian face updates conserve each species and the equal-D fraction sum"
+    },
+    {
+      "component": "species",
+      "diagnostics": {},
+      "elapsed_seconds": 0.2709999084472656,
+      "expected": {
+        "absolute_tolerance": 2.220446049250313e-14,
+        "constraint": "sum of species mass fluxes equals total mass flux",
+        "upwind_source_cell": 1
+      },
+      "metrics": {
+        "cell_one_fraction_sum_rate": 0.0,
+        "cell_two_fraction_sum_rate": 0.0,
+        "species_a_global_rate": 0.0,
+        "species_b_global_rate": 0.0
+      },
+      "name": "species_advection_sum_constraint",
+      "status": "pass",
+      "summary": "upwind species advection conserves species and preserves sum(Y)=1 after capping"
+    },
+    {
+      "component": "species",
+      "diagnostics": {},
+      "elapsed_seconds": 0.009999990463256836,
+      "expected": {
+        "absolute_or_normalized_tolerance": 2.0e-12,
+        "residual_identity": "sum(d(rho*Y_k)/dt) = d(rho)/dt",
+        "state_identity": "sum(rho*Y_k) = rho"
+      },
+      "metrics": {
+        "mass_fraction_cache_error": 0.0,
+        "normalized_residual_sum_error": 4.484970394667739e-15,
+        "species_degrees_of_freedom": 10,
+        "state_sum_error": 2.220446049250313e-16
+      },
+      "name": "conservative_species_state",
+      "status": "pass",
+      "summary": "rho*Y is evolved in the ODE state and its summed residual equals the density residual"
+    },
+    {
+      "component": "species",
+      "diagnostics": {},
+      "elapsed_seconds": 0.11999988555908203,
+      "expected": {
+        "absolute_tolerance": 2.220446049250313e-14,
+        "species_flux_sum": 1.4
+      },
+      "metrics": {
+        "cell_a_species_rate": -1.4,
+        "cell_b_species_rate": 1.4,
+        "maximum_error": 0.0
+      },
+      "name": "conservative_species_face_advection",
+      "status": "pass",
+      "summary": "HLLC mass flux advects conservative species densities with exact face conservation"
+    },
+    {
+      "component": "species",
+      "diagnostics": {},
+      "elapsed_seconds": 0.2720000743865967,
+      "expected": {
+        "absolute_tolerance": 1.0e-14,
+        "constraint": "sum(J_k)=0 with unequal diffusion coefficients"
+      },
+      "metrics": {
+        "maximum_imbalance": 0.0,
+        "maximum_species_flux_activity": 4.1881904761904754e-5
+      },
+      "name": "mixture_corrected_species_diffusion",
+      "status": "pass",
+      "summary": "mixture-corrected unequal-D diffusion conserves every species and total density"
+    },
+    {
+      "component": "benchmark",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.8990001678466797,
+      "expected": {
+        "maximum_normalized_norm": 1.0e-12,
+        "oracle": "exact stationary Euler contact with equal pressure and velocity"
+      },
+      "metrics": {
+        "absolute_field_norms": {
+          "density": 0.0,
+          "momentum_density_u": 1.3322676295501878e-15,
+          "momentum_density_v": 0.0,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 0.0,
+          "species_densities.species_b": 0.0,
+          "volumetric_energy": 0.0
+        },
+        "maximum_normalized_norm": 1.3322676295501878e-15,
+        "normalized_field_norms": {
+          "density": 0.0,
+          "momentum_density_u": 1.3322676295501878e-15,
+          "momentum_density_v": 0.0,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 0.0,
+          "species_densities.species_b": 0.0,
+          "volumetric_energy": 0.0
+        },
+        "spatial_method": "first_order"
+      },
+      "name": "stationary_contact",
+      "status": "pass",
+      "summary": "HLLC exactly preserves a stationary ideal-gas contact discontinuity"
+    },
+    {
+      "component": "benchmark",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.11400008201599121,
+      "expected": {
+        "maximum_normalized_norm": 1.0e-12,
+        "oracle": "exact stationary Euler contact with equal pressure and velocity"
+      },
+      "metrics": {
+        "absolute_field_norms": {
+          "density": 0.0,
+          "momentum_density_u": 8.881784197001252e-16,
+          "momentum_density_v": 0.0,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 0.0,
+          "species_densities.species_b": 0.0,
+          "volumetric_energy": 0.0
+        },
+        "maximum_normalized_norm": 8.881784197001252e-16,
+        "normalized_field_norms": {
+          "density": 0.0,
+          "momentum_density_u": 8.881784197001252e-16,
+          "momentum_density_v": 0.0,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 0.0,
+          "species_densities.species_b": 0.0,
+          "volumetric_energy": 0.0
+        },
+        "spatial_method": "muscl"
+      },
+      "name": "stationary_contact_muscl",
+      "status": "pass",
+      "summary": "HLLC exactly preserves a stationary ideal-gas contact discontinuity"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 2.7950000762939453,
+      "expected": {
+        "CFL_number": 0.2,
+        "state_violations": 0,
+        "successful_return_code": true
+      },
+      "metrics": {
+        "CFL_timestep": 0.005282214092053229,
+        "solver_statistics": {
+          "accepted_steps": 23,
+          "algorithm": "SSPRK43",
+          "allocated_bytes": 314671918,
+          "garbage_collection_seconds": 0.3669836,
+          "jacobian_evaluations": 0,
+          "linear_solves": 0,
+          "maximum_saved_timestep": 0.0052822140920532334,
+          "minimum_saved_timestep": 0.003791289974828929,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 0,
+          "rejected_steps": 0,
+          "return_code": "Success",
+          "rhs_evaluations": 92,
+          "runtime_seconds": 2.3513966,
+          "secondary_rhs_evaluations": 0
+        }
+      },
+      "name": "explicit_smoke",
+      "status": "pass",
+      "summary": "SSPRK43 completed the diagnostic Sod solve with admissible states"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 10.803999900817871,
+      "expected": {
+        "state_violations": 0,
+        "successful_return_code": true
+      },
+      "metrics": {
+        "initial_timestep": 0.00026411070460266144,
+        "solver_statistics": {
+          "accepted_steps": 104,
+          "algorithm": "FBDF(ForwardDiff)",
+          "allocated_bytes": 1316687128,
+          "garbage_collection_seconds": 0.2168668,
+          "jacobian_evaluations": 1,
+          "linear_solves": 202,
+          "maximum_saved_timestep": 0.002200165478154034,
+          "minimum_saved_timestep": 9.349589012787291e-10,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 202,
+          "rejected_steps": 7,
+          "return_code": "Success",
+          "rhs_evaluations": 224,
+          "runtime_seconds": 9.5145373,
+          "secondary_rhs_evaluations": 0
+        }
+      },
+      "name": "implicit_smoke",
+      "status": "pass",
+      "summary": "FBDF completed the diagnostic Sod solve with admissible states"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "likely_categories": [],
+        "qualification": "categories are diagnostic leads, not mathematical proof"
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "explicit_status": "pass",
+        "implicit_status": "pass"
+      },
+      "metrics": {
+        "explicit_status": "pass",
+        "implicit_status": "pass"
+      },
+      "name": "explicit_vs_implicit_classification",
+      "status": "pass",
+      "summary": "both spatial/time-integration paths completed"
+    },
+    {
+      "component": "benchmark",
+      "diagnostics": {
+        "exact_density": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.9920380971210215,
+          0.822705358070425,
+          0.6773277969654586,
+          0.5532687865886997,
+          0.4480926807471252,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125
+        ],
+        "exact_pressure": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.9888711140554343,
+          0.7609253558494637,
+          0.5795867636382457,
+          0.4366270497273658,
+          0.3250236702345099,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "numerical_density": [
+          0.9999921631973803,
+          0.9999781621710636,
+          0.9999277109178681,
+          0.9997742280530135,
+          0.999343586773389,
+          0.9982321767916916,
+          0.9956082050456718,
+          0.9899690743595,
+          0.9789733635900841,
+          0.959530774835795,
+          0.9282756008182302,
+          0.8823531822303631,
+          0.8202594802860289,
+          0.7424607820724005,
+          0.6516804613649673,
+          0.5516794583213886,
+          0.4581674073164956,
+          0.3929046923588138,
+          0.3564652302430355,
+          0.31947011601167113,
+          0.2813216761089156,
+          0.24601981082655217,
+          0.2135368159803101,
+          0.18277808177121624,
+          0.156264994171226,
+          0.13844242387587913,
+          0.1296783265220443,
+          0.12640158966373968,
+          0.12538227420172385,
+          0.12509767300712277,
+          0.12502375331288504,
+          0.12500672379952002
+        ]
+      },
+      "elapsed_seconds": 0.21799993515014648,
+      "expected": {
+        "density_L1_maximum": 0.08,
+        "oracle": "independent exact ideal-gas Riemann solution sampled at cell centers",
+        "pressure_L1_maximum": 0.08
+      },
+      "metrics": {
+        "cells": 32,
+        "density_L1_error": 0.030251187811610097,
+        "final_time": 0.12,
+        "pressure_L1_error": 0.033783892985178
+      },
+      "name": "sod_shock_tube",
+      "status": "pass",
+      "summary": "Sod shock tube agrees with the exact Euler Riemann solution"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.1269998550415039,
+      "expected": {
+        "CFL_number": 0.2,
+        "state_violations": 0,
+        "successful_return_code": true
+      },
+      "metrics": {
+        "CFL_timestep": 0.005282214092053229,
+        "solver_statistics": {
+          "accepted_steps": 23,
+          "algorithm": "SSPRK43",
+          "allocated_bytes": 17183250,
+          "garbage_collection_seconds": 0.0,
+          "jacobian_evaluations": 0,
+          "linear_solves": 0,
+          "maximum_saved_timestep": 0.0052822140920532334,
+          "minimum_saved_timestep": 0.003791289974828929,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 0,
+          "rejected_steps": 0,
+          "return_code": "Success",
+          "rhs_evaluations": 92,
+          "runtime_seconds": 0.1255678,
+          "secondary_rhs_evaluations": 0
+        }
+      },
+      "name": "explicit_smoke_muscl",
+      "status": "pass",
+      "summary": "SSPRK43 completed the diagnostic Sod solve with admissible states"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 2.754000186920166,
+      "expected": {
+        "state_violations": 0,
+        "successful_return_code": true
+      },
+      "metrics": {
+        "initial_timestep": 0.00026411070460266144,
+        "solver_statistics": {
+          "accepted_steps": 513,
+          "algorithm": "FBDF(AutoFiniteDiff)",
+          "allocated_bytes": 255517484,
+          "garbage_collection_seconds": 0.0779524,
+          "jacobian_evaluations": 1,
+          "linear_solves": 1055,
+          "maximum_saved_timestep": 0.0011048846966393404,
+          "minimum_saved_timestep": 9.406236881019732e-10,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 1055,
+          "rejected_steps": 99,
+          "return_code": "Success",
+          "rhs_evaluations": 1088,
+          "runtime_seconds": 2.2556375,
+          "secondary_rhs_evaluations": 0
+        }
+      },
+      "name": "implicit_smoke_muscl",
+      "status": "pass",
+      "summary": "FBDF completed the diagnostic Sod solve with admissible states"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "likely_categories": [],
+        "qualification": "categories are diagnostic leads, not mathematical proof"
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "explicit_status": "pass",
+        "implicit_status": "pass"
+      },
+      "metrics": {
+        "explicit_status": "pass",
+        "implicit_status": "pass"
+      },
+      "name": "explicit_vs_implicit_classification_muscl",
+      "status": "pass",
+      "summary": "both spatial/time-integration paths completed"
+    },
+    {
+      "component": "benchmark",
+      "diagnostics": {
+        "exact_density": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.9920380971210215,
+          0.822705358070425,
+          0.6773277969654586,
+          0.5532687865886997,
+          0.4480926807471252,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125
+        ],
+        "exact_pressure": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.9888711140554343,
+          0.7609253558494637,
+          0.5795867636382457,
+          0.4366270497273658,
+          0.3250236702345099,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "numerical_density": [
+          1.0000000000001041,
+          1.0000000000004963,
+          1.000000000000061,
+          0.9999999993827282,
+          0.9999999959388949,
+          0.999999994043199,
+          1.0000015912009788,
+          1.000026007050704,
+          1.0000643944139804,
+          1.0000825209172735,
+          0.9962136567675681,
+          0.9323176995944324,
+          0.8193820949706935,
+          0.6982722089534856,
+          0.5856818790531618,
+          0.48219226913801866,
+          0.4347761364634908,
+          0.43252806045710945,
+          0.3910900232313414,
+          0.3338282253288378,
+          0.29139748996908155,
+          0.2612860093930044,
+          0.20269188935009994,
+          0.13814058400768492,
+          0.12502787625816963,
+          0.12499947959084623,
+          0.12499991645346352,
+          0.12499999806973794,
+          0.12499999999921767,
+          0.12500000000202421,
+          0.125000000000095,
+          0.12499999999999938
+        ]
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "density_L1_maximum": 0.08,
+        "oracle": "independent exact ideal-gas Riemann solution sampled at cell centers",
+        "pressure_L1_maximum": 0.08
+      },
+      "metrics": {
+        "cells": 32,
+        "density_L1_error": 0.012594060573978922,
+        "final_time": 0.12,
+        "pressure_L1_error": 0.010637835069692498
+      },
+      "name": "sod_shock_tube_muscl",
+      "status": "pass",
+      "summary": "Sod shock tube agrees with the exact Euler Riemann solution"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.023000001907348633,
+      "expected": {
+        "absolute_tolerance": 2.0e-11,
+        "oracle": "boundary flux balance for a passively advected two-species contact"
+      },
+      "metrics": {
+        "conservation_error": 3.645000967722467e-14,
+        "expected_species_a_mass_change": 0.030000000000000006,
+        "maximum_species_a_mass_fraction": 0.8,
+        "maximum_species_density_sum_error": 1.3322676295501878e-15,
+        "measured_species_a_mass_change": 0.029999999999963556,
+        "minimum_species_a_mass_fraction": 0.20000000001151866,
+        "solver_statistics": {
+          "accepted_steps": 27,
+          "algorithm": "SSPRK43",
+          "allocated_bytes": 5748096,
+          "garbage_collection_seconds": 0.0,
+          "jacobian_evaluations": 0,
+          "linear_solves": 0,
+          "maximum_saved_timestep": 0.0037131301990213222,
+          "minimum_saved_timestep": 0.0034586148254456273,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 0,
+          "rejected_steps": 0,
+          "return_code": "Success",
+          "rhs_evaluations": 108,
+          "runtime_seconds": 0.0032833,
+          "secondary_rhs_evaluations": 0
+        }
+      },
+      "name": "coupled_species_advection",
+      "status": "pass",
+      "summary": "the integrated compressible ODE advects rho*Y conservatively and preserves sum(Y)=1"
+    }
+  ],
+  "schema_version": "1.0",
+  "started_at": "2026-09-30T16:51:07.177",
+  "status": "pass",
+  "summary": {
+    "errors": 0,
+    "failed": 0,
+    "passed": 39,
+    "total": 39
+  },
+  "target": "CompressibleFlow(HLLC, first_order + MUSCL + Thornber + species)"
+}

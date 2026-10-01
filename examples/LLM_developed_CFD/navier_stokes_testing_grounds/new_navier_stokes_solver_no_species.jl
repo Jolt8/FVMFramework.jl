@@ -14,7 +14,6 @@ using LinearAlgebra
 using StaticArrays
 using FVMFramework
 
-
 grid_x_length = 1.0
 grid_y_length = 0.1
 grid_z_length = 0.1
@@ -43,7 +42,7 @@ u_proto = ComponentVector(
     momentum_density_u = zeros(n_cells)u"kg/(m^2*s)",
     momentum_density_v = zeros(n_cells)u"kg/(m^2*s)",
     momentum_density_w = zeros(n_cells)u"kg/(m^2*s)",
-    volumetric_energy = zeros(n_cells)u"J/m^3"
+    volumetric_energy = zeros(n_cells)u"J/m^3",
 )
 
 config = create_fvm_config(grid, u_proto);
@@ -70,6 +69,7 @@ add_setup_syms!(
     ),
     special_caches = ComponentVector(
         grad_density = zeros(n_cells, 3)u"kg/m^4",
+        grad_pressure = zeros(n_cells, 3)u"Pa/m",
         grad_vel_u = zeros(n_cells, 3)u"m/(s*m)",
         grad_vel_v = zeros(n_cells, 3)u"m/(s*m)",
         grad_vel_w = zeros(n_cells, 3)u"m/(s*m)",
@@ -94,6 +94,14 @@ Revise.includet(joinpath(@__DIR__, "weighted_least_squares/weighted_least_square
 Revise.includet(joinpath(@__DIR__, "face_reconstructors/MUSCL_face_reconstruction.jl"))
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/fluid_viscous_and_diffusive_fluxes.jl"))
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/wall_viscous_and_diffusive_fluxes.jl"))
+
+const USE_THORNBER = "--thornber" in ARGS
+const LOW_MACH_CORRECTION = if USE_THORNBER
+    thornber_low_mach_correction
+else
+    no_low_mach_correction
+end
+const USE_NO_SLIP_WALLS = "--no-slip-walls" in ARGS
 
 function fluid_fluid_flux!(
     du, u, p, t, system, geo,
@@ -120,7 +128,7 @@ function fluid_fluid_flux!(
         idx_b, face_b,
         #MUSCL_face_reconstruction!,
         first_order_face_reconstruction!,
-        #thornber_low_mach_correction,
+        LOW_MACH_CORRECTION,
     )
     #HLLC!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b, first_order_face_reconstruction!)
 
@@ -151,14 +159,14 @@ function construct_initial_conditions_from_intuitive_inputs(u)
     R_specific = u.cp - u.cv
     pressure = u.density * R_specific * u.temperature
 
-    @show speed_of_sound = sqrt((u.cp / u.cv) * pressure / u.density) |> u"m/s"
+    #@show speed_of_sound = sqrt((u.cp / u.cv) * pressure / u.density) |> u"m/s"
 
     return ComponentVector(
         density = u.density,
         momentum_density_u = momentum_density_u,
         momentum_density_v = momentum_density_v,
         momentum_density_w = momentum_density_w,
-        volumetric_energy = volumetric_energy
+        volumetric_energy = volumetric_energy,
     ), ComponentVector(
         cp = u.cp,
         cv = u.cv,
@@ -359,7 +367,20 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
             du.momentum_density_v_flow[idx_a] -= face_area * pressure * face_normal[2]
             du.momentum_density_w_flow[idx_a] -= face_area * pressure * face_normal[3]
 
-            non_moving_wall_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+            if USE_NO_SLIP_WALLS
+                non_moving_wall_viscous_and_diffusive_flux!(
+                    du,
+                    u,
+                    p,
+                    t,
+                    system,
+                    geo,
+                    idx_a,
+                    face_a,
+                    idx_b,
+                    face_b,
+                )
+            end
         end
     ) 
 end
@@ -377,13 +398,22 @@ WLS_STENCIL = build_weighted_least_squares_stencil(geo)
 function solve_system!(du, u, p, t, system, geo)
     update_region_groups!(du, u, p, t, system, geo)
     update_weighted_least_squares_gradients!(u, WLS_STENCIL)
-    update_MUSCL_gradients!(u, WLS_STENCIL)
     solve_connection_groups!(du, u, p, t, system, geo)
     solve_patch_groups!(du, u, p, t, system, geo)
     solve_region_groups!(du, u, p, t, system, geo)
 end
 
 f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
+
+if "--smoke-test" in ARGS
+    smoke_test_derivative = similar(u0_vec)
+    f_closure_implicit(smoke_test_derivative, u0_vec, 0.0, 0.0)
+    @assert length(u0_vec) == 5 * n_cells
+    @assert all(isfinite, u0_vec)
+    @assert all(isfinite, smoke_test_derivative)
+    println("No-species smoke test passed with $(length(u0_vec)) Euler degrees of freedom.")
+    exit(0)
+end
 
 #=
 function f_closure_implicit(du, u, p, t)
@@ -407,23 +437,27 @@ function state_is_invalid(u, p, t, system)
     u_named = ComponentVector(u, system.state_axes)
 
     for i in 1:n_cells
+        density = u_named.density[i]
+        if !isfinite(density) || density <= 0.0
+            return true
+        end
         kinetic_energy_density = 0.5 * (
             u_named.momentum_density_u[i]^2 +
             u_named.momentum_density_v[i]^2 +
             u_named.momentum_density_w[i]^2
-        ) / u_named.density[i]
+        ) / density
         
         internal_energy_density = u_named.volumetric_energy[i] - kinetic_energy_density
 
         if !all(
             isfinite, (
-                u_named.density[i],
+                density,
                 u_named.momentum_density_u[i],
                 u_named.momentum_density_v[i],
                 u_named.momentum_density_w[i],
                 u_named.volumetric_energy[i],
                 internal_energy_density,
-            )) || u_named.density[i] <= 0.0 || internal_energy_density <= 0.0
+            )) || internal_energy_density <= 0.0
             return true
         end
     end
@@ -435,60 +469,183 @@ state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
 
 #transient
 t0 = 0.0
-tMax = 1000.0
+function command_line_float(prefix, default)
+    argument = findfirst(arg -> startswith(arg, prefix), ARGS)
+    return isnothing(argument) ? default : parse(Float64, split(ARGS[argument], "=", limit = 2)[2])
+end
+
+tMax = command_line_float("--tmax=", 1000.0)
+transient_abstol = command_line_float("--abstol=", 1.0e-6)
+transient_reltol = command_line_float("--reltol=", 1.0e-4)
 tspan = (t0, tMax)
 
 ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
 implicit_prob = ODEProblem(ode_func, u0_vec, tspan, p_guess)
 
-early_dtmax = 100.0
-late_dtmax  = 1000.0
-switch_time = 400.0
-
-function increase_dtmax!(integrator)
-    integrator.opts.dtmax = late_dtmax
-
-    # We changed solver settings, not the state vector.
-    u_modified!(integrator, false)
-
-    println("Raised dtmax to $late_dtmax at t = $(integrator.t)")
-end
-
-increase_dtmax_cb = DiscreteCallback(
-    (u, t, integrator) -> t >= switch_time && integrator.opts.dtmax < late_dtmax,
-    increase_dtmax!;
+progress_interval = max((tMax - t0) / 20.0, eps(Float64))
+next_progress_time = Ref(t0 + progress_interval)
+progress_callback = DiscreteCallback(
+    (u, t, integrator) -> t >= next_progress_time[],
+    integrator -> begin
+        println("sim time: $(integrator.t)s")
+        next_progress_time[] += progress_interval
+    end;
     save_positions = (false, false),
 )
 
-callbacks = CallbackSet(
-    approximate_time_to_finish_cb,
-    #increase_dtmax_cb,
+transient_algorithm = Rosenbrock23(
+    autodiff = ADTypes.AutoFiniteDiff(),
+    linsolve = SparspakFactorization(),
+)
+save_times = range(t0, tMax; length = 101)
+transient_solve_kwargs = (
+    #abstol = transient_abstol,
+    #reltol = transient_reltol,
+    #dt = min(1e-5, tMax - t0),
+    isoutofdomain = state_is_invalid_closure,
+    #saveat = save_times,
+    save_everystep = false,
+    maxiters = 1_000_000,
 )
 
-VSCodeServer.@profview @time sol = solve(
+@time sol = solve(
     implicit_prob,
-    #Tsit5(),
-    #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
-    #FBDF(linsolve = SparspakFactorization()),
-    #FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
-    #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
-    callback = callbacks,
-    #isoutofdomain = state_is_invalid_closure,
-    #saveat = (tMax / 300),
-    #dtmax = 100
-    #dtmax = early_dtmax
-    #dt = 1e-5
+    #transient_algorithm;
+    #transient_solve_kwargs...,
+    callback = approximate_time_to_finish_cb,
 )
 
-sol.alg
+sol = if "--progress" in ARGS
+    @time solve(
+        implicit_prob,
+        transient_algorithm;
+        transient_solve_kwargs...,
+        callback = approximate_time_to_finish_cb,
+    )
+else
+    @time solve(implicit_prob, transient_algorithm; transient_solve_kwargs...)
+end
+
+println("Transient algorithm: Rosenbrock23(AutoFiniteDiff, Sparspak)")
+println("HLLC reconstruction: $(USE_THORNBER ? "Thornber low-Mach" : "ordinary")")
+println("Wall model: $(USE_NO_SLIP_WALLS ? "no-slip viscous" : "slip adiabatic")")
+println("Transient return code: $(sol.retcode), final time: $(sol.t[end])")
+println(
+    "Transient steps: accepted=$(sol.destats.naccept), rejected=$(sol.destats.nreject), " *
+    "nonlinear failures=$(sol.destats.nnonlinconvfail)",
+)
+final_transient_state = ComponentVector(sol.u[end], system.state_axes)
+final_transient_velocity_u =
+    final_transient_state.momentum_density_u ./ final_transient_state.density
+println(
+    "Final axial velocity range: " *
+    "$(extrema(final_transient_velocity_u)) m/s",
+)
+if !OrdinaryDiffEq.SciMLBase.successful_retcode(sol)
+    error("transient solve failed with return code $(sol.retcode)")
+end
+
+if !("--steady" in ARGS)
+    exit(0)
+end
+
+if "--jacobian-smoke-test" in ARGS
+    direction = max.(abs.(u0_vec), 1.0)
+    jacobian_vector_product = ForwardDiff.jacobian([0.0]) do epsilon
+        perturbed_state = u0_vec .+ epsilon[1] .* direction
+        derivative = similar(perturbed_state)
+        f_closure_implicit(derivative, perturbed_state, 0.0, 0.0)
+        return derivative
+    end
+    @assert all(isfinite, jacobian_vector_product)
+    println("No-species ForwardDiff Jacobian-vector smoke test passed.")
+    exit(0)
+end
 
 f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)
 
-nl_func = NonlinearFunction(f_closure_steady, jac_prototype = float.(jac_sparsity))
+inlet_density = supersonic_inlet_initial_conditions_stripped.density
+inlet_momentum_scale = max(
+    abs(supersonic_inlet_initial_conditions_stripped.momentum_density_u),
+    inlet_density * sqrt(
+        (fluid_properties.cp / fluid_properties.cv) *
+        supersonic_inlet_initial_conditions_stripped.volumetric_energy /
+        inlet_density,
+    ),
+)
+inlet_energy = supersonic_inlet_initial_conditions_stripped.volumetric_energy
+state_scales = similar(u0_vec)
+named_state_scales = ComponentVector(state_scales, system.state_axes)
+named_state_scales.density .= inlet_density
+named_state_scales.momentum_density_u .= inlet_momentum_scale
+named_state_scales.momentum_density_v .= inlet_momentum_scale
+named_state_scales.momentum_density_w .= inlet_momentum_scale
+named_state_scales.volumetric_energy .= inlet_energy
 
-prob = NonlinearProblem(nl_func, u0_vec, p_guess)
+function scaled_steady_residual!(scaled_residual, scaled_state, p)
+    physical_state = scaled_state .* state_scales
+    if state_is_invalid(physical_state, p, 0.0, system)
+        fill!(scaled_residual, 1.0e6)
+        return nothing
+    end
+    physical_residual = similar(physical_state)
+    f_closure_steady(physical_residual, physical_state, p)
+    scaled_residual .= .-physical_residual ./ state_scales
+    return nothing
+end
 
-@time sol_steady = solve(prob, NonlinearSolve.NewtonRaphson(concrete_jac = true))
+uniform_inlet_state = similar(u0_vec)
+named_uniform_inlet_state = ComponentVector(uniform_inlet_state, system.state_axes)
+named_uniform_inlet_state.density .=
+    supersonic_inlet_initial_conditions_stripped.density
+named_uniform_inlet_state.momentum_density_u .=
+    supersonic_inlet_initial_conditions_stripped.momentum_density_u
+named_uniform_inlet_state.momentum_density_v .=
+    supersonic_inlet_initial_conditions_stripped.momentum_density_v
+named_uniform_inlet_state.momentum_density_w .=
+    supersonic_inlet_initial_conditions_stripped.momentum_density_w
+named_uniform_inlet_state.volumetric_energy .=
+    supersonic_inlet_initial_conditions_stripped.volumetric_energy
+
+steady_initial_state = if USE_NO_SLIP_WALLS
+    sol.u[end]
+else
+    uniform_inlet_state
+end
+scaled_steady_initial_state = steady_initial_state ./ state_scales
+initial_scaled_residual = similar(scaled_steady_initial_state)
+scaled_steady_residual!(
+    initial_scaled_residual,
+    scaled_steady_initial_state,
+    p_guess,
+)
+println("Initial scaled steady residual (Linf): $(norm(initial_scaled_residual, Inf))")
+
+nl_func = NonlinearFunction(
+    scaled_steady_residual!;
+    jac_prototype = float.(jac_sparsity),
+)
+nl_prob = NonlinearLeastSquaresProblem(nl_func, scaled_steady_initial_state, p_guess)
+steady_algorithm = LevenbergMarquardt(
+    autodiff = ADTypes.AutoFiniteDiff(),
+    linsolve = SparspakFactorization(),
+)
+sol_steady = @time solve(
+    nl_prob,
+    steady_algorithm;
+    abstol = 1e-8,
+    reltol = 1e-8,
+    maxiters = 500,
+)
+steady_state = sol_steady.u .* state_scales
+final_scaled_residual = similar(sol_steady.u)
+scaled_steady_residual!(final_scaled_residual, sol_steady.u, p_guess)
+println("Steady return code: $(sol_steady.retcode)")
+println("Final scaled steady residual (Linf): $(norm(final_scaled_residual, Inf))")
+println("Steady state admissible: $(!state_is_invalid(steady_state, p_guess, 0.0, system))")
+if !OrdinaryDiffEq.SciMLBase.successful_retcode(sol_steady)
+    error("steady solve failed with return code $(sol_steady.retcode)")
+end
 #=
 du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_guess, track_progress = false);
 

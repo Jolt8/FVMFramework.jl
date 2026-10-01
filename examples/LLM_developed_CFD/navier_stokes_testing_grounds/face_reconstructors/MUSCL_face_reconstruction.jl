@@ -1,14 +1,16 @@
 """
     update_MUSCL_gradients!(u, stencil)
 
-Populate the density gradient required by the primitive-variable MUSCL
-reconstruction. Velocity and temperature gradients are populated by
+Populate the density and pressure gradients required by the primitive-variable
+MUSCL reconstruction. Velocity and temperature gradients are populated by
 `update_weighted_least_squares_gradients!`.
 """
 function update_MUSCL_gradients!(u, stencil)
     populate_weighted_least_squares_gradient!(u.grad_density, u.density, stencil)
+    populate_weighted_least_squares_gradient!(u.grad_pressure, u.pressure, stencil)
     return nothing
 end
+
 
 """
     MUSCL_face_reconstruction!(du, u, p, t, system, geo,
@@ -16,7 +18,7 @@ end
 
 Reconstruct the state on the `idx_a` side of an internal face using a
 cell-centred, piecewise-linear MUSCL reconstruction. Density, velocity, and
-temperature are reconstructed with weighted-least-squares gradients and a
+pressure are reconstructed with weighted-least-squares gradients and a
 Venkatakrishnan limiter, then converted back to the conservative variables
 expected by HLLC.
 
@@ -50,8 +52,8 @@ function MUSCL_face_reconstruction!(
         u.vel_w, u.grad_vel_w, idx_a,
         face_normal_a, face_distance_a, geo,
     )
-    temperature_face = _MUSCL_limited_face_value(
-        u.temperature, u.grad_temperature, idx_a,
+    pressure_face = _MUSCL_limited_face_value(
+        u.pressure, u.grad_pressure, idx_a,
         face_normal_a, face_distance_a, geo,
     )
 
@@ -59,13 +61,12 @@ function MUSCL_face_reconstruction!(
     momentum_density_v_face = density_face * vel_v_face
     momentum_density_w_face = density_face * vel_w_face
 
-    specific_internal_energy_face = u.cv[idx_a] * temperature_face
+    specific_heat_ratio = u.cp[idx_a] / u.cv[idx_a]
     specific_kinetic_energy_face = 0.5 * (
         vel_u_face^2 + vel_v_face^2 + vel_w_face^2
     )
-    volumetric_energy_face = density_face * (
-        specific_internal_energy_face + specific_kinetic_energy_face
-    )
+    volumetric_energy_face = pressure_face / (specific_heat_ratio - 1.0) +
+        density_face * specific_kinetic_energy_face
 
     return (
         density_face,
@@ -96,19 +97,34 @@ function _MUSCL_limited_face_value(
     local_maximum = cell_value
     for neighbor_data in geo.cell_neighbors[cell_id][2]
         neighbor_id = neighbor_data[1]
-        neighbor_id > 0 || continue
+        if neighbor_id <= 0
+            continue
+        end
         neighbor_value = cell_values[neighbor_id]
         local_minimum = min(local_minimum, neighbor_value)
         local_maximum = max(local_maximum, neighbor_value)
     end
 
-    limiter = _MUSCL_venkatakrishnan_limiter(
+    smooth_limiter = _MUSCL_venkatakrishnan_limiter(
         cell_value,
         unlimited_increment,
         local_minimum,
         local_maximum,
         geo.cell_volumes[cell_id],
     )
+    bound_limiter = _MUSCL_bound_limiter(
+        cell_value,
+        unlimited_increment,
+        local_minimum,
+        local_maximum,
+    )
+    limiter_denominator = smooth_limiter + bound_limiter -
+        smooth_limiter * bound_limiter
+    if limiter_denominator == 0.0
+        limiter = 0.0
+    else
+        limiter = smooth_limiter * bound_limiter / limiter_denominator
+    end
 
     return cell_value + limiter * unlimited_increment
 end
@@ -133,20 +149,22 @@ function _MUSCL_venkatakrishnan_limiter(
     local_minimum,
     local_maximum,
     cell_volume;
-    K=3.0,
+    K = 3.0,
 )
-    if unlimited_increment > zero(unlimited_increment)
+    if unlimited_increment > 0.0
         bound_increment = local_maximum - cell_value
-    elseif unlimited_increment < zero(unlimited_increment)
+    elseif unlimited_increment < 0.0
         bound_increment = local_minimum - cell_value
     else
         return 1.0
     end
 
-    K >= zero(K) || throw(ArgumentError("K must be non-negative"))
-    cell_volume > zero(cell_volume) || throw(ArgumentError(
-        "cell_volume must be positive",
-    ))
+    if K < 0.0
+        throw(ArgumentError("K must be non-negative"))
+    end
+    if cell_volume <= 0.0
+        throw(ArgumentError("cell_volume must be positive"))
+    end
 
     characteristic_length = cbrt(cell_volume)
     epsilon_squared = (K * characteristic_length)^3
@@ -161,7 +179,7 @@ function _MUSCL_venkatakrishnan_limiter(
         2 * unlimited_increment_squared + epsilon_squared
     )
 
-    return max(zero(limiter), min(one(limiter), limiter))
+    return max(0.0, min(1.0, limiter))
 end
 
 function _MUSCL_bound_limiter(
@@ -170,14 +188,13 @@ function _MUSCL_bound_limiter(
     local_minimum,
     local_maximum,
 )
-    if unlimited_increment > zero(unlimited_increment)
+    if unlimited_increment > 0.0
         ratio = (local_maximum - cell_value) / unlimited_increment
-    elseif unlimited_increment < zero(unlimited_increment)
+    elseif unlimited_increment < 0.0
         ratio = (local_minimum - cell_value) / unlimited_increment
     else
         return 1.0
     end
 
-    return max(zero(ratio), min(one(ratio), ratio))
+    return max(0.0, min(1.0, ratio))
 end
-
