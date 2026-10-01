@@ -277,7 +277,7 @@ properties = ComponentVector(
     burn_out_time = 0.0, #this gets set to the t in which 
     
     #Tank
-    u0_tank_oxidizer_mass = 2.05u"kg", #optimized, should actually be 2.05kg to get the impulse we need, but I want to see if the optimizer will produce 2.05kg for debugging reasons
+    u0_tank_oxidizer_mass = 1.33u"kg", #optimized, should actually be 2.05kg to get the impulse we need, but I want to see if the optimizer will produce 2.05kg for debugging reasons
     tank_pressure = 71.0u"bar", #no longer optimized, commercial tanks determine this
     tank_temperature = 21.0u"°C",
     tank_vapor_fraction = 0.0u"m^3",
@@ -710,7 +710,7 @@ opt_sol = solve(opt_prob,
     callback = cb,
     PoulationSize = 1000,
     #maxiters = 1,
-    maxtime = 60.0,
+    #maxtime = 60.0,
     Method = :RandomSearcher,
     verbose = true
     #Method = :SepReal
