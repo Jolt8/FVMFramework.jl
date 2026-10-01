@@ -427,4 +427,14 @@ function HLLC!(
             F_density,
         )
     end
+    if hasproperty(u, :turbulent_kinetic_energy_density)
+        add_hllc_sst_advection_flux!(
+            du,
+            u,
+            idx_a,
+            idx_b,
+            face_area_a,
+            F_density,
+        )
+    end
 end

@@ -9,24 +9,15 @@ function corrected_face_gradient(
     grad_avg_z = 0.5 * (grad_a_z + grad_b_z)
 
     normal_derivative = (phi_b - phi_a) / dist
+    projected_gradient =
+        grad_avg_x * normal[1] +
+        grad_avg_y * normal[2] +
+        grad_avg_z * normal[3]
+    normal_correction = normal_derivative - projected_gradient
 
-    res_x = grad_avg_x +
-        (
-            normal_derivative -
-            dot(grad_avg_x, normal[1])
-        ) * normal[1]
-
-    res_y = grad_avg_y +
-        (
-            normal_derivative -
-            dot(grad_avg_y, normal[2])
-        ) * normal[2]
-
-    res_z = grad_avg_z +
-        (
-            normal_derivative -
-            dot(grad_avg_z, normal[3])
-        ) * normal[3]
+    res_x = grad_avg_x + normal_correction * normal[1]
+    res_y = grad_avg_y + normal_correction * normal[2]
+    res_z = grad_avg_z + normal_correction * normal[3]
         
     return (res_x, res_y, res_z)
 end
@@ -55,8 +46,22 @@ function fluid_viscous_and_diffusive_flux!(
 
     # Harmonic averaging is reasonable for diffusive transport
     # coefficients, especially if properties vary spatially.
-    mu_face = harmonic_mean(u.mu[idx_a], u.mu[idx_b])
-    k_face  = harmonic_mean(u.k[idx_a],  u.k[idx_b])
+    if hasproperty(u, :effective_dynamic_viscosity)
+        mu_face = harmonic_mean(
+            u.effective_dynamic_viscosity[idx_a],
+            u.effective_dynamic_viscosity[idx_b],
+        )
+    else
+        mu_face = harmonic_mean(u.mu[idx_a], u.mu[idx_b])
+    end
+    if hasproperty(u, :effective_thermal_conductivity)
+        k_face = harmonic_mean(
+            u.effective_thermal_conductivity[idx_a],
+            u.effective_thermal_conductivity[idx_b],
+        )
+    else
+        k_face = harmonic_mean(u.k[idx_a], u.k[idx_b])
+    end
 
     # ------------------------------------------------------------
     # 2. Interpolate cell-centered gradients to the face
@@ -89,18 +94,6 @@ function fluid_viscous_and_diffusive_flux!(
         u.grad_temperature[idx_b, 1], u.grad_temperature[idx_b, 2], u.grad_temperature[idx_b, 3],
         face_normal_a, dist
     )
-    
-    grad_v_face_x = 0.5 * (u.grad_vel_v[idx_a, 1] + u.grad_vel_v[idx_b, 1])
-    grad_v_face_y = 0.5 * (u.grad_vel_v[idx_a, 2] + u.grad_vel_v[idx_b, 2])
-    grad_v_face_z = 0.5 * (u.grad_vel_v[idx_a, 3] + u.grad_vel_v[idx_b, 3])
-    
-    grad_w_face_x = 0.5 * (u.grad_vel_w[idx_a, 1] + u.grad_vel_w[idx_b, 1])
-    grad_w_face_y = 0.5 * (u.grad_vel_w[idx_a, 2] + u.grad_vel_w[idx_b, 2])
-    grad_w_face_z = 0.5 * (u.grad_vel_w[idx_a, 3] + u.grad_vel_w[idx_b, 3])
-    
-    grad_T_face_x = 0.5 * (u.grad_temperature[idx_a, 1] + u.grad_temperature[idx_b, 1])
-    grad_T_face_y = 0.5 * (u.grad_temperature[idx_a, 2] + u.grad_temperature[idx_b, 2])
-    grad_T_face_z = 0.5 * (u.grad_temperature[idx_a, 3] + u.grad_temperature[idx_b, 3])
 
     # ------------------------------------------------------------
     # 3. Velocity divergence at the face
@@ -145,6 +138,16 @@ function fluid_viscous_and_diffusive_flux!(
             grad_v_face_z +
             grad_w_face_y
         )
+
+    if hasproperty(u, :turbulent_kinetic_energy)
+        turbulent_normal_stress = (2 / 3) * 0.5 * (
+            u.density[idx_a] * u.turbulent_kinetic_energy[idx_a] +
+            u.density[idx_b] * u.turbulent_kinetic_energy[idx_b]
+        )
+        tau_xx -= turbulent_normal_stress
+        tau_yy -= turbulent_normal_stress
+        tau_zz -= turbulent_normal_stress
+    end
 
     # ------------------------------------------------------------
     # 5. Viscous traction τ⋅n

@@ -6,6 +6,8 @@ function _state_snapshot(state, cell_id)
         :momentum_density_v,
         :momentum_density_w,
         :volumetric_energy,
+        :turbulent_kinetic_energy_density,
+        :specific_dissipation_rate_density,
     )
         if hasproperty(state, variable)
             values = getproperty(state, variable)
@@ -93,6 +95,27 @@ function state_violations(
         end
         if !isfinite(temperature) || temperature <= 0.0
             record_violation(:temperature, cell_id, temperature, "temperature derived from the conservative state must be finite and positive")
+        end
+
+        for turbulence_variable in (
+            :turbulent_kinetic_energy,
+            :density_turbulent_kinetic_energy,
+            :turbulent_kinetic_energy_density,
+            :specific_dissipation_rate,
+            :density_specific_dissipation_rate,
+            :specific_dissipation_rate_density,
+        )
+            if hasproperty(state, turbulence_variable)
+                turbulence_value = getproperty(state, turbulence_variable)[cell_id]
+                if !isfinite(turbulence_value) || turbulence_value <= 0.0
+                    record_violation(
+                        turbulence_variable,
+                        cell_id,
+                        turbulence_value,
+                        "SST k-omega state variables must be finite and strictly positive",
+                    )
+                end
+            end
         end
 
         if hasproperty(state, :species_densities)

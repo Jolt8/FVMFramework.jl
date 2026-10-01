@@ -1,0 +1,6 @@
+reynolds_x,skin_friction_coefficient,source
+100000,0.005920000000000000,one_fifth_power_law
+300000,0.004751312358526844,one_fifth_power_law
+1000000,0.003735023350520292,one_fifth_power_law
+3000000,0.002998078886993443,one_fifth_power_law
+10000000,0.002356796112378408,one_fifth_power_law

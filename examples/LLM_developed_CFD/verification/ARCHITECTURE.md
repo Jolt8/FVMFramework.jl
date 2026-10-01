@@ -1,4 +1,4 @@
-# Stage 1–2 architecture and findings
+# Stage 1–3 architecture and findings
 
 ## Architecture
 
@@ -49,6 +49,87 @@ Diffusion uses the production Fickian flux followed by the mixture correction
 for unequal species diffusivities. The original oriented mass-fraction helper
 is retained and tested for compatibility, while the coupled solver writes
 equal-and-opposite fluxes directly into conservative species-flow caches.
+
+## Viscous and thermal verification
+
+The internal-face `corrected_face_gradient` previously made three independent
+scalar products instead of projecting the complete gradient. It now evaluates
+`dot(grad_avg, normal)` once and adds the resulting correction along the normal.
+The flux routine also no longer discards its corrected `v`, `w`, and temperature
+gradients. The operation preserves the interpolated tangential gradient and
+replaces only its normal component.
+
+Three direct checks protect this code: weighted least squares must recover a
+resolved linear field, an oblique-face oracle checks the full projection, and
+distinct `u`, `v`, `w`, and temperature inputs verify every transported field.
+The Couette, Poiseuille, and conduction cases use the same production correction
+inside compact one-dimensional finite-volume operators. This exposes transport
+signs and orders without conflating them with HLLC dissipation. Poiseuille gives
+second-order convergence; Couette and conduction reproduce their linear steady
+solutions to roundoff.
+
+## Manufactured solutions
+
+The first MMS is a special case of compressible Navier--Stokes: constant
+density, pressure, and temperature with tangential
+`u(y)=u0+A*sin(2*pi*y)`. Independently evaluated continuous sources cancel
+Newtonian momentum diffusion and the divergence of viscous work in total
+energy. Density remains exactly steady and the measured interior asymptotic
+order is about 1.98.
+
+The second MMS uses `Y_a=0.4+0.1*sin(2*pi*y)` and `Y_b=1-Y_a` with constant
+density and equal diffusivity. It calls the production conservative,
+mixture-corrected diffusion flux, obtains order 2.01, and keeps the summed
+species residual at roundoff. Interior norms are used because the MMS supplies
+analytical boundary fluxes; boundary behavior is independently covered by the
+analytical transport cases.
+
+## Persistent performance and long-time evidence
+
+`performance/performance_baselines.toml` stores solver-work expectations for
+32- and 64-cell first-order, MUSCL, and Thornber Sod runs. Accepted/rejected
+steps, RHS evaluations, linear solves, nonlinear iterations, and minimum
+timestep are gating. Runtime is only a loose, non-gating warning. Missing
+baseline entries fail their checks.
+
+The main cost is now quantified: 32-cell MUSCL FBDF requires 517 accepted / 94
+rejected steps and 1,087 RHS calls versus SSPRK43's 23 / 0 and 92. The stored
+64-cell reference is 854 / 163 and 1,972 versus 46 / 0 and 184.
+
+Long-time integration records sampled minimum-density, minimum-pressure, and
+scaled-residual trajectories. A nonuniform stationary contact is the known
+steady oracle and remains unchanged through `t=1` with both integrators. A
+smooth acoustic/composition perturbation provides a nontrivial startup; both
+paths stay admissible and agree to about `1.30e-6` relative Linf at `t=0.5`.
+
+## Mutation and SST k-omega
+
+Mutation checks show that the suite rejects the historical componentwise
+gradient projection and reversed viscous/species-diffusion signs. At 64 cells,
+the sign mutations amplify their MMS errors by roughly 2,490 times.
+
+The production SST implementation evolves conservative `rho*k` and `rho*omega`.
+HLLC mass flux upwinds both quantities; internal faces add the molecular-plus-
+SST diffusion coefficients; cell sources contain limited production, destruction,
+and cross diffusion. `F1` blends the inner/outer constants, `F2` enters the
+eddy-viscosity limiter, and the wall treatment imposes zero `k` with the standard
+near-wall `omega` scale. State validation requires both conservative fields to
+remain finite and strictly positive.
+
+The momentum/energy viscous flux uses `mu + mu_t`, turbulent conductivity with
+`Pr_t=0.9`, and the isotropic `-2*rho*k/3` Reynolds stress. The species-capable
+Navier--Stokes example connects the same implementation through initialization,
+inlet/outlet advection, internal diffusion, wall fluxes, source capping, and its
+admissibility check.
+
+Tests cover inner/outer blending limits, homogeneous decay source values,
+equal-and-opposite face transport, a complete FVM residual, and time integration
+against the analytical decay solution. Canonical closure checks verify the
+channel log-layer identities `mu_t=rho*kappa*y*u_tau` and `P_k=beta*rho*k*omega`,
+plus skin friction against a separate smooth-flat-plate reference table.
+These are equilibrium/asymptotic closure validations, not mesh-converged RANS
+solutions. The current example's one-cell transverse mesh is sufficient for a
+plumbing smoke check but not a credible wall-bounded-flow calculation.
 
 ## Thornber low-Mach reconstruction
 
@@ -120,15 +201,16 @@ converge to a steady root.
 - Species advection is first-order upwind even when density, pressure, and
   velocity use MUSCL reconstruction. A bounded second-order species
   reconstruction needs dedicated gradient caches and convergence tests.
-- Manufactured solutions, viscous analytical cases, turbulence, mutations,
-  and persistent performance baselines remain Stage 3 work.
+- A resolved SST flat-plate/channel solve still needs a wall-normal mesh study,
+  inlet turbulence sensitivity, and comparison with profile/reference data.
 - State validation covers conservative ideal-gas density, pressure,
   temperature, non-negative species densities, and the species-density sum.
-  Turbulence-specific admissibility rules will be needed when those state
-  fields are introduced.
+  Conventional SST `k` and `omega` field names are also checked for strict
+  positivity when present.
 - The sparsity diagnostic intentionally uses tiny meshes and one smooth state;
   it reports inactive declared entries rather than claiming they are wrong.
-- Solver statistics are captured but not yet compared with a versioned baseline.
+- Performance references are specific to the 32- and 64-cell Sod cases; a new
+  mesh or algorithm must add a reviewed baseline entry.
 - Long-time convergence of the 100-cell supersonic-inlet driver with Thornber
   is not verified. Its mixed-Mach startup develops a materially different flow
   from ordinary HLLC, including backflow by 1 s in the tested configuration.
@@ -142,17 +224,14 @@ converge to a steady root.
   internal energy to `1e-10`. That keeps downstream arithmetic finite but can
   mask where an inadmissible conservative state first appeared. The verifier
   therefore checks the unclamped conservative state before interpreting it.
-- In `fluid_viscous_and_diffusive_flux!`, corrected face gradients are computed
-  for all velocity components and temperature, but the `v`, `w`, and
-  temperature results are immediately overwritten by arithmetic averages.
-  The scalar-component form used inside `corrected_face_gradient` also deserves
-  a dedicated analytical test. This routine is outside the inviscid Stage 1
-  benchmark and was not modified here.
+- The internal viscous face projection and overwritten `v`, `w`, and temperature
+  gradients were real defects. They are fixed and protected by direct oblique-
+  gradient, analytical transport, MMS, and mutation checks.
 - On the MUSCL Sod runs, FBDF with ForwardDiff could not accept its first step
   because the shock limiter changes branches. `AutoFiniteDiff` completes the
-  solve, but on the latest 64-cell case it required 906 accepted and 167 rejected
-  steps versus SSPRK43's 46 accepted fixed-CFL steps. This is a strong candidate
-  for a future performance baseline and nonlinear-solver investigation.
+  solve. The current reviewed 64-cell baseline is 854 accepted and 163 rejected
+  steps versus SSPRK43's 46 accepted fixed-CFL steps; this remains a nonlinear-
+  solver investigation target.
 - The existing example is monolithic and executes a large solve when included.
   The verifier therefore constructs a small equivalent configuration rather
   than importing the top-level example script.

@@ -44,6 +44,8 @@ u_proto = ComponentVector(
     momentum_density_v = zeros(n_cells)u"kg/(m^2*s)",
     momentum_density_w = zeros(n_cells)u"kg/(m^2*s)",
     volumetric_energy = zeros(n_cells)u"J/m^3",
+    turbulent_kinetic_energy_density = zeros(n_cells)u"J/m^3",
+    specific_dissipation_rate_density = zeros(n_cells)u"kg/(m^3*s)",
     species_densities = ComponentVector(
         species_a = zeros(n_cells)u"kg/m^3",
         species_b = zeros(n_cells)u"kg/m^3",
@@ -68,6 +70,17 @@ add_setup_syms!(
         momentum_density_v_flow = u"N",
         momentum_density_w_flow = u"N",
         volumetric_energy_flow = u"W",
+        turbulent_kinetic_energy = u"m^2/s^2",
+        specific_dissipation_rate = u"1/s",
+        turbulent_viscosity = u"Pa*s",
+        effective_dynamic_viscosity = u"Pa*s",
+        effective_thermal_conductivity = u"W/(m*K)",
+        wall_distance = u"m",
+        strain_rate_squared = u"1/s^2",
+        sst_F1 = u"1",
+        sst_F2 = u"1",
+        turbulent_kinetic_energy_density_flow = u"W",
+        specific_dissipation_rate_density_flow = u"kg/s^2",
         mass_fractions = (
             species_a = u"kg/kg",
             species_b = u"kg/kg",
@@ -87,6 +100,8 @@ add_setup_syms!(
         grad_vel_v = zeros(n_cells, 3)u"m/(s*m)",
         grad_vel_w = zeros(n_cells, 3)u"m/(s*m)",
         grad_temperature = zeros(n_cells, 3)u"K/m",
+        grad_turbulent_kinetic_energy = zeros(n_cells, 3)u"m/s^2",
+        grad_specific_dissipation_rate = zeros(n_cells, 3)u"1/(m*s)",
 
         
         vel_u_face = zeros(n_cells, n_faces)u"m/s",
@@ -101,6 +116,7 @@ add_setup_syms!(
 struct Fluid <: AbstractPhysics end
 
 Revise.includet(joinpath(@__DIR__, "face_reconstructors/first_order_face_reconstruction.jl"))
+Revise.includet(joinpath(@__DIR__, "turbulence/sst_k_omega.jl"))
 Revise.includet(joinpath(@__DIR__, "riemann_solvers/HLLC_low_mach_correction.jl"))
 Revise.includet(joinpath(@__DIR__, "riemann_solvers/HLLC.jl"))
 Revise.includet(joinpath(@__DIR__, "weighted_least_squares/weighted_least_squares.jl"))
@@ -152,6 +168,15 @@ function fluid_fluid_flux!(
         face_area_a,
         distance,
     )
+    add_sst_diffusion_flux!(
+        du,
+        u,
+        idx_a,
+        idx_b,
+        face_area_a,
+        face_normal_a,
+        distance,
+    )
 end
 
 # Mapping connection functions
@@ -174,6 +199,10 @@ function construct_initial_conditions_from_intuitive_inputs(u)
     kinetic_energy = 0.5 * (u.vel_u^2 + u.vel_v^2 + u.vel_w^2)
     
     volumetric_energy = u.density * (internal_energy + kinetic_energy)
+    turbulent_kinetic_energy_density =
+        u.density * u.turbulent_kinetic_energy
+    specific_dissipation_rate_density =
+        u.density * u.specific_dissipation_rate
     species_densities = ComponentVector(
         species_a = u.density * u.mass_fractions.species_a,
         species_b = u.density * u.mass_fractions.species_b,
@@ -190,6 +219,8 @@ function construct_initial_conditions_from_intuitive_inputs(u)
         momentum_density_v = momentum_density_v,
         momentum_density_w = momentum_density_w,
         volumetric_energy = volumetric_energy,
+        turbulent_kinetic_energy_density = turbulent_kinetic_energy_density,
+        specific_dissipation_rate_density = specific_dissipation_rate_density,
         species_densities = species_densities,
     ), ComponentVector(
         cp = u.cp,
@@ -197,6 +228,7 @@ function construct_initial_conditions_from_intuitive_inputs(u)
         R_gas = u.R_gas,
         mw = u.mw,
         mu = u.mu, 
+        molecular_viscosity = u.mu,
         prandtl_number = u.prandtl_number,
         diffusion_coefficients = u.diffusion_coefficients,
     )
@@ -214,6 +246,8 @@ fluid_initial_conditions, fluid_properties = construct_initial_conditions_from_i
         R_gas = 8.314u"J/(mol*K)",
         mw = 28.97u"g/mol",
         mu = 1e-5u"Pa*s",
+        turbulent_kinetic_energy = 0.1u"m^2/s^2",
+        specific_dissipation_rate = 100.0u"1/s",
         #k = 0.026u"W/(m*K)",
         prandtl_number = 0.705,
         mass_fractions = ComponentVector(
@@ -237,10 +271,12 @@ add_region!(
     function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
         update_k_from_prandtl!(du, u, p, t, system, geo, cell_id)
         overall_navier_stokes_property_update!(du, u, p, t, system, geo, cell_id)
+        update_sst_primitives!(du, u, p, t, system, geo, cell_id)
     end,
     region_function = 
     function fluid_physics!(du, u, p, t, system, geo, cell_id)
         cap_navier_stokes_flow!(du, u, p, t, system, geo, cell_id)
+        cap_sst_transport!(du, u, geo, cell_id)
     end,
 )
 
@@ -256,6 +292,8 @@ supersonic_inlet_initial_conditions, supersonic_inlet_properties = construct_ini
         R_gas = 8.314u"J/(mol*K)",
         mw = 28.97u"g/mol",
         mu = 1e-5u"Pa*s",
+        turbulent_kinetic_energy = 54.0u"m^2/s^2",
+        specific_dissipation_rate = 1900.0u"1/s",
         #k = 0.026u"W/(m*K)",
         prandtl_number = 0.705,
         mass_fractions = ComponentVector(
@@ -344,6 +382,16 @@ add_patch!(
             F_density,
             supersonic_inlet_mass_fractions_stripped,
         )
+        add_prescribed_boundary_sst_advection_flux!(
+            du,
+            idx_a,
+            face_area,
+            F_density,
+            supersonic_inlet_initial_conditions_stripped.turbulent_kinetic_energy_density /
+                supersonic_inlet_initial_conditions_stripped.density,
+            supersonic_inlet_initial_conditions_stripped.specific_dissipation_rate_density /
+                supersonic_inlet_initial_conditions_stripped.density,
+        )
     end
 )
 
@@ -402,6 +450,7 @@ add_patch!(
             face_area,
             F_density,
         )
+        add_boundary_sst_advection_flux!(du, u, idx_a, face_area, F_density)
     end
 )
 
@@ -435,6 +484,7 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
             du.momentum_density_w_flow[idx_a] -= face_area * pressure * face_normal[3]
 
             non_moving_wall_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+            add_sst_wall_flux!(du, u, geo, idx_a, face_a)
         end
     ) 
 end
@@ -447,11 +497,20 @@ additional_data = (
 
 du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, additional_data, check_units = false);
 WLS_STENCIL = build_weighted_least_squares_stencil(geo)
+SST_WALL_DISTANCES = [
+    min(
+        geo.cell_centroids[cell_id][2],
+        grid_y_length - geo.cell_centroids[cell_id][2],
+        geo.cell_centroids[cell_id][3],
+        grid_z_length - geo.cell_centroids[cell_id][3],
+    ) for cell_id in eachindex(geo.cell_centroids)
+]
 
 # System solver function
 function solve_system!(du, u, p, t, system, geo)
     update_region_groups!(du, u, p, t, system, geo)
     update_weighted_least_squares_gradients!(u, WLS_STENCIL)
+    update_sst_closure!(u, SST_WALL_DISTANCES)
     update_MUSCL_gradients!(u, WLS_STENCIL)
     solve_connection_groups!(du, u, p, t, system, geo)
     solve_patch_groups!(du, u, p, t, system, geo)
@@ -459,6 +518,16 @@ function solve_system!(du, u, p, t, system, geo)
 end
 
 f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
+
+if "--setup-only" in ARGS
+    setup_derivative = similar(u0_vec)
+    f_closure_implicit(setup_derivative, u0_vec, 0.0, 0.0)
+    if !all(isfinite, setup_derivative)
+        error("SST setup smoke check produced a non-finite residual")
+    end
+    println("SST setup smoke check passed with $(length(u0_vec)) conservative degrees of freedom")
+    exit()
+end
 
 #=
 function f_closure_implicit(du, u, p, t)
@@ -498,7 +567,13 @@ function state_is_invalid(u, p, t, system)
                 u_named.momentum_density_w[i],
                 u_named.volumetric_energy[i],
                 internal_energy_density,
+                u_named.turbulent_kinetic_energy_density[i],
+                u_named.specific_dissipation_rate_density[i],
             )) || u_named.density[i] <= 0.0 || internal_energy_density <= 0.0
+            return true
+        end
+        if u_named.turbulent_kinetic_energy_density[i] <= 0.0 ||
+            u_named.specific_dissipation_rate_density[i] <= 0.0
             return true
         end
 
@@ -563,7 +638,7 @@ VSCodeServer.@profview @time sol = solve(
     #FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
     #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
     callback = callbacks,
-    #isoutofdomain = state_is_invalid_closure,
+    isoutofdomain = state_is_invalid_closure,
     #saveat = (tMax / 300),
     #dtmax = 100
     #dtmax = early_dtmax

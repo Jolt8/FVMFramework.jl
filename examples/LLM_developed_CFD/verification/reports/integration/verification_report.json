@@ -13,10 +13,11 @@
       "first-order HLLC",
       "MUSCL HLLC"
     ],
-    "species_model": "oriented upwind advection and Fickian mass-fraction diffusion",
+    "species_model": "conservative rho*Y state with HLLC upwinding and mixture-corrected Fickian diffusion",
+    "turbulence_model": "SST k-omega with conservative rho*k and rho*omega transport",
     "unit_mesh_cells": 5
   },
-  "finished_at": "2026-09-30T16:52:07.589",
+  "finished_at": "2026-10-01T12:01:20.375",
   "level": "integration",
   "results": [
     {
@@ -37,7 +38,7 @@
           4.357694040000001e7
         ]
       },
-      "elapsed_seconds": 0.18400001525878906,
+      "elapsed_seconds": 0.15899991989135742,
       "expected": {
         "oracle": "independently evaluated physical Euler flux",
         "relative_tolerance": 4.440892098500626e-14
@@ -49,6 +50,401 @@
       "name": "uniform_hllc_flux",
       "status": "pass",
       "summary": "identical-state HLLC equals the analytical Euler flux"
+    },
+    {
+      "component": "viscous_thermal",
+      "diagnostics": {},
+      "elapsed_seconds": 0.06500005722045898,
+      "expected": {
+        "absolute_tolerance": 4.440892098500626e-14,
+        "gradient": [
+          -0.45,
+          0.0,
+          0.0
+        ]
+      },
+      "metrics": {
+        "cells_checked": 5,
+        "maximum_absolute_error": 4.440892098500626e-16
+      },
+      "name": "weighted_least_squares_linear_gradient",
+      "status": "pass",
+      "summary": "weighted least squares recovers a resolved linear gradient"
+    },
+    {
+      "component": "viscous_thermal",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "absolute_tolerance": 2.220446049250313e-14,
+        "normal_derivative": 1.25,
+        "tangential_component": "unchanged from the interpolated cell gradient"
+      },
+      "metrics": {
+        "maximum_component_error": 0.0,
+        "normal_derivative_error": 2.220446049250313e-16,
+        "tangential_gradient_error": 1.7772239894833365e-16
+      },
+      "name": "corrected_face_gradient_projection",
+      "status": "pass",
+      "summary": "face correction replaces only the full normal-gradient component"
+    },
+    {
+      "component": "viscous_thermal",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "absolute_tolerance": 1.0e-12
+      },
+      "metrics": {
+        "maximum_error": 4.973799150320701e-14,
+        "normal_derivative_errors": {
+          "temperature": 4.973799150320701e-14,
+          "u": 2.220446049250313e-16,
+          "v": 6.661338147750939e-16,
+          "w": 1.6653345369377348e-16
+        }
+      },
+      "name": "all_transport_gradients_corrected",
+      "status": "pass",
+      "summary": "u, v, w, and temperature use the same corrected normal gradient"
+    },
+    {
+      "component": "viscous_thermal",
+      "diagnostics": {},
+      "elapsed_seconds": 3.7319998741149902,
+      "expected": {
+        "absolute_tolerance": 2.0e-13,
+        "oracle": "independent tensor stress, traction, viscous work, and heat flux"
+      },
+      "metrics": {
+        "face_conservation_error": 0.0,
+        "maximum_flux_error": 0.0
+      },
+      "name": "complete_viscous_face_flux",
+      "status": "pass",
+      "summary": "the complete Newtonian stress and Fourier face flux match an independent oracle"
+    },
+    {
+      "component": "viscous_thermal",
+      "diagnostics": {},
+      "elapsed_seconds": 0.10100007057189941,
+      "expected": {
+        "Linf_tolerance": 2.0e-12,
+        "analytical_profile": "u(y) = U*y/H"
+      },
+      "metrics": {
+        "L1_error": 8.179221189230645e-16,
+        "L2_error": 9.13940837222463e-16,
+        "Linf_error": 1.3322676295501878e-15,
+        "cells": 16,
+        "shear_rate_error": 2.886579864025407e-15,
+        "steady_residual_Linf": 4.440892098500626e-15
+      },
+      "name": "couette_flow",
+      "status": "pass",
+      "summary": "plane Couette flow reproduces the linear velocity and constant shear"
+    },
+    {
+      "component": "viscous_thermal",
+      "diagnostics": {},
+      "elapsed_seconds": 0.2950000762939453,
+      "expected": {
+        "analytical_profile": "u(y) = g*y*(H-y)/(2*nu)",
+        "finest_Linf_tolerance": 0.001,
+        "minimum_asymptotic_order": 1.8
+      },
+      "metrics": {
+        "asymptotic_minimum_order": 1.9999999999909794,
+        "grid_results": [
+          {
+            "L2_error": 0.014648437500000281,
+            "Linf_error": 0.014648437500000555,
+            "cells": 8,
+            "steady_residual_Linf": 1.1102230246251565e-15
+          },
+          {
+            "L2_error": 0.0036621093750008335,
+            "Linf_error": 0.0036621093750013323,
+            "cells": 16,
+            "steady_residual_Linf": 4.884981308350689e-15
+          },
+          {
+            "L2_error": 0.0009155273437509608,
+            "Linf_error": 0.0009155273437521094,
+            "cells": 32,
+            "steady_residual_Linf": 1.84297022087776e-14
+          },
+          {
+            "L2_error": 0.0002288818359391713,
+            "Linf_error": 0.00022888183594016454,
+            "cells": 64,
+            "steady_residual_Linf": 1.092459456231154e-13
+          }
+        ],
+        "observed_L2_orders": [
+          1.9999999999996996,
+          1.9999999999988145,
+          1.9999999999909794
+        ]
+      },
+      "name": "poiseuille_flow",
+      "status": "pass",
+      "summary": "plane Poiseuille flow converges to the pressure-driven parabola"
+    },
+    {
+      "component": "viscous_thermal",
+      "diagnostics": {},
+      "elapsed_seconds": 0.05799984931945801,
+      "expected": {
+        "Linf_tolerance_K": 2.0e-10,
+        "analytical_profile": "T(y) = T_cold + (T_hot-T_cold)*y/H",
+        "scaled_residual_tolerance": 1.0e-10
+      },
+      "metrics": {
+        "L1_error_K": 1.3237411167210666e-11,
+        "L2_error_K": 1.33488118960417e-11,
+        "Linf_error_K": 1.6086687537608668e-11,
+        "cells": 16,
+        "scaled_steady_residual_Linf": 5.558654771044126e-11,
+        "steady_residual_Linf": 1.0005578587879427e-9,
+        "temperature_gradient_error_K_per_m": 4.547473508864641e-12
+      },
+      "name": "one_dimensional_heat_conduction",
+      "status": "pass",
+      "summary": "one-dimensional conduction reproduces a linear temperature field and heat flux"
+    },
+    {
+      "component": "turbulence",
+      "diagnostics": {
+        "violations": [
+          {
+            "cell_index": 2,
+            "nearby_state": {
+              "density": 1.0,
+              "momentum_density_u": 0.0,
+              "momentum_density_v": 0.0,
+              "momentum_density_w": 0.0,
+              "specific_dissipation_rate_density": 0.0,
+              "turbulent_kinetic_energy_density": -0.01,
+              "volumetric_energy": 2.5
+            },
+            "reason": "SST k-omega state variables must be finite and strictly positive",
+            "time": 0.0,
+            "value": -0.01,
+            "variable": "turbulent_kinetic_energy_density"
+          },
+          {
+            "cell_index": 2,
+            "nearby_state": {
+              "density": 1.0,
+              "momentum_density_u": 0.0,
+              "momentum_density_v": 0.0,
+              "momentum_density_w": 0.0,
+              "specific_dissipation_rate_density": 0.0,
+              "turbulent_kinetic_energy_density": -0.01,
+              "volumetric_energy": 2.5
+            },
+            "reason": "SST k-omega state variables must be finite and strictly positive",
+            "time": 0.0,
+            "value": 0.0,
+            "variable": "specific_dissipation_rate_density"
+          }
+        ]
+      },
+      "elapsed_seconds": 0.3259999752044678,
+      "expected": {
+        "constraint": "k > 0 and omega > 0",
+        "reported_variables": [
+          "specific_dissipation_rate_density",
+          "turbulent_kinetic_energy_density"
+        ]
+      },
+      "metrics": {
+        "reported_variables": [
+          "specific_dissipation_rate_density",
+          "turbulent_kinetic_energy_density"
+        ],
+        "violation_count": 2
+      },
+      "name": "sst_admissibility_guards",
+      "status": "pass",
+      "summary": "SST k and omega admissibility guards reject non-positive states"
+    },
+    {
+      "component": "turbulence",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "absolute_tolerance": 1.0e-8,
+        "free_stream_limit": 0.0,
+        "near_wall_limit": 1.0
+      },
+      "metrics": {
+        "free_stream_F1": 1.524157902758726e-20,
+        "free_stream_F2": 4.938271604938272e-10,
+        "near_wall_F1": 1.0,
+        "near_wall_F2": 1.0
+      },
+      "name": "sst_blending_limits",
+      "status": "pass",
+      "summary": "SST blending selects the k-omega wall limit and outer-flow limit"
+    },
+    {
+      "component": "turbulence",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "absolute_tolerance": 1.0e-14,
+        "k_source": -0.1296,
+        "omega_source": -0.8099999999999999
+      },
+      "metrics": {
+        "k_source": -0.1296,
+        "maximum_error": 0.0,
+        "omega_source": -0.8099999999999999
+      },
+      "name": "sst_homogeneous_decay_sources",
+      "status": "pass",
+      "summary": "homogeneous zero-strain SST turbulence decays at the analytical rates"
+    },
+    {
+      "component": "turbulence",
+      "diagnostics": {},
+      "elapsed_seconds": 0.6380000114440918,
+      "expected": {
+        "absolute_tolerance": 1.0e-14
+      },
+      "metrics": {
+        "flux_activity": 0.8604190254545453,
+        "k_global_imbalance": 0.0,
+        "omega_global_imbalance": 0.0
+      },
+      "name": "sst_face_conservation",
+      "status": "pass",
+      "summary": "SST conservative advection and diffusion are equal and opposite across a face"
+    },
+    {
+      "component": "turbulence",
+      "diagnostics": {},
+      "elapsed_seconds": 8.28600001335144,
+      "expected": {
+        "absolute_tolerance": 2.0e-12,
+        "state": "conservative rho*k and rho*omega"
+      },
+      "metrics": {
+        "mean_flow_residual_Linf": 9.71445146547012e-16,
+        "rho_k_source_error_Linf": 0.0,
+        "rho_omega_source_error_Linf": 0.0
+      },
+      "name": "sst_conservative_operator",
+      "status": "pass",
+      "summary": "the full FVM operator evolves conservative rho*k and rho*omega with the SST sources"
+    },
+    {
+      "component": "turbulence",
+      "diagnostics": {
+        "return_code": "Success"
+      },
+      "elapsed_seconds": 6.30400013923645,
+      "expected": {
+        "positive_k_and_omega": true,
+        "relative_tolerance": 2.0e-8
+      },
+      "metrics": {
+        "accepted_steps": 5,
+        "final_k": 0.18971009745092737,
+        "final_omega": 2.870813397129323,
+        "rejected_steps": 0,
+        "relative_k_error": 7.563979348538935e-14,
+        "relative_omega_error": 4.733546887791817e-14,
+        "rhs_evaluations": 33
+      },
+      "name": "sst_homogeneous_decay_integration",
+      "status": "pass",
+      "summary": "conservative SST turbulence follows the analytical homogeneous-decay solution"
+    },
+    {
+      "component": "turbulence",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "absolute_tolerance": 2.0e-12,
+        "eddy_viscosity_ratio": 1.0,
+        "production_destruction_ratio": 1.0,
+        "regime": "equilibrium turbulent channel log layer"
+      },
+      "metrics": {
+        "F2": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "eddy_viscosity_ratios": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "maximum_eddy_viscosity_error": 0.0,
+        "maximum_k_equilibrium_error": 0.0,
+        "production_destruction_ratios": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "y_plus": [
+          50.0,
+          100.0,
+          200.0
+        ]
+      },
+      "name": "sst_channel_log_layer",
+      "status": "pass",
+      "summary": "SST recovers log-layer channel eddy viscosity and k-equilibrium"
+    },
+    {
+      "component": "turbulence",
+      "diagnostics": {},
+      "elapsed_seconds": 0.03899979591369629,
+      "expected": {
+        "maximum_relative_error": 2.0e-12,
+        "reference": "one-fifth-power-law smooth turbulent flat plate",
+        "reference_data_path": "C:\\Users\\wille\\OneDrive\\Desktop\\FVMFramework\\examples\\LLM_developed_CFD\\verification\\turbulence\\..\\reference_data\\turbulent_flat_plate.csv"
+      },
+      "metrics": {
+        "maximum_relative_error": 1.825520345829949e-16,
+        "predicted_skin_friction": [
+          0.005920000000000001,
+          0.004751312358526843,
+          0.003735023350520292,
+          0.0029980788869934426,
+          0.002356796112378408
+        ],
+        "reference_skin_friction": [
+          0.00592,
+          0.004751312358526844,
+          0.003735023350520292,
+          0.002998078886993443,
+          0.002356796112378408
+        ],
+        "relative_errors": [
+          1.4651380709263575e-16,
+          1.825520345829949e-16,
+          0.0,
+          1.446529212008524e-16,
+          0.0
+        ],
+        "reynolds_x": [
+          100000.0,
+          300000.0,
+          1.0e6,
+          3.0e6,
+          1.0e7
+        ]
+      },
+      "name": "sst_flat_plate_equilibrium",
+      "status": "pass",
+      "summary": "SST log-layer stress matches the turbulent flat-plate skin-friction reference"
     },
     {
       "component": "component",
@@ -63,7 +459,7 @@
           "volumetric_energy": 0.0
         }
       },
-      "elapsed_seconds": 0.503000020980835,
+      "elapsed_seconds": 0.4630000591278076,
       "expected": {
         "identity": "flow_into_cell_a + flow_into_cell_b = 0",
         "normalized_tolerance": 4.440892098500626e-15
@@ -84,7 +480,7 @@
       "diagnostics": {
         "state_violations": []
       },
-      "elapsed_seconds": 0.6110000610351562,
+      "elapsed_seconds": 0.6030001640319824,
       "expected": {
         "boundary_condition": "transmissive physical flux",
         "maximum_normalized_norm": 5.0e-13
@@ -119,7 +515,7 @@
       "diagnostics": {
         "state_violations": []
       },
-      "elapsed_seconds": 0.2330000400543213,
+      "elapsed_seconds": 0.20300006866455078,
       "expected": {
         "normalized_tolerance": 1.0e-12,
         "oracle": "pairwise internal cancellation plus balanced constant wall pressure"
@@ -335,7 +731,7 @@
       "diagnostics": {
         "unexpected_dependencies": []
       },
-      "elapsed_seconds": 1.6019999980926514,
+      "elapsed_seconds": 1.7030000686645508,
       "expected": {
         "comparison_policy": "declared supersets are allowed because one state cannot activate every branch",
         "unexpected_dependency_count": 0
@@ -360,7 +756,7 @@
           "good agreement"
         ]
       },
-      "elapsed_seconds": 2.0979998111724854,
+      "elapsed_seconds": 2.3469998836517334,
       "expected": {
         "finite_difference_scheme": "centered",
         "random_seed": 4609613,
@@ -475,7 +871,7 @@
     {
       "component": "muscl",
       "diagnostics": {},
-      "elapsed_seconds": 2.7690000534057617,
+      "elapsed_seconds": 2.953000068664551,
       "expected": {
         "absolute_tolerance": 8.881784197001252e-15,
         "oracle": "constant-field identity"
@@ -491,7 +887,7 @@
     {
       "component": "muscl",
       "diagnostics": {},
-      "elapsed_seconds": 2.74399995803833,
+      "elapsed_seconds": 2.938999891281128,
       "expected": {
         "absolute_tolerance": 6.25e-6,
         "oracle": "analytical linear value at each face"
@@ -507,7 +903,7 @@
     {
       "component": "muscl",
       "diagnostics": {},
-      "elapsed_seconds": 5.515000104904175,
+      "elapsed_seconds": 6.108000040054321,
       "expected": {
         "minimum_asymptotic_order": 1.8,
         "norm": "L2",
@@ -549,7 +945,7 @@
     {
       "component": "muscl",
       "diagnostics": {},
-      "elapsed_seconds": 0.06699991226196289,
+      "elapsed_seconds": 0.0559999942779541,
       "expected": {
         "maximum_allowed": 1.55,
         "minimum_allowed": 0.45,
@@ -569,7 +965,7 @@
       "diagnostics": {
         "state_violations": []
       },
-      "elapsed_seconds": 0.1119999885559082,
+      "elapsed_seconds": 0.11999988555908203,
       "expected": {
         "boundary_condition": "transmissive physical flux",
         "maximum_normalized_norm": 5.0e-13
@@ -602,7 +998,7 @@
     {
       "component": "jacobian",
       "diagnostics": {},
-      "elapsed_seconds": 2.3309998512268066,
+      "elapsed_seconds": 2.440000057220459,
       "expected": {
         "first_order_maximum_radius": 1,
         "missing_declared_dependencies": 0,
@@ -625,7 +1021,7 @@
       "diagnostics": {
         "unexpected_dependencies": []
       },
-      "elapsed_seconds": 0.0019998550415039062,
+      "elapsed_seconds": 0.002000093460083008,
       "expected": {
         "comparison_policy": "declared supersets are allowed because one state cannot activate every branch",
         "unexpected_dependency_count": 0
@@ -650,7 +1046,7 @@
           "good agreement"
         ]
       },
-      "elapsed_seconds": 2.190000057220459,
+      "elapsed_seconds": 2.32099986076355,
       "expected": {
         "finite_difference_scheme": "centered",
         "random_seed": 4609614,
@@ -795,16 +1191,16 @@
     {
       "component": "low_mach",
       "diagnostics": {},
-      "elapsed_seconds": 0.0,
+      "elapsed_seconds": 0.0010001659393310547,
       "expected": {
         "absolute_tolerance": 1.7763568394002505e-13,
         "oracle": "independent Thornber normal-jump decomposition"
       },
       "metrics": {
-        "Mach_coefficient": 0.014997116216449367,
-        "corrected_normal_jump": 0.059988464865797564,
-        "expected_normal_jump": 0.05998846486579747,
-        "maximum_absolute_error": 9.71445146547012e-17,
+        "Mach_coefficient": 0.015030418983171713,
+        "corrected_normal_jump": 0.060121675932687246,
+        "expected_normal_jump": 0.06012167593268685,
+        "maximum_absolute_error": 3.95516952522712e-16,
         "original_normal_jump": 4.0
       },
       "name": "thornber_low_mach_jump",
@@ -820,7 +1216,7 @@
         "unchanged_quantities": "both tangential velocity components"
       },
       "metrics": {
-        "maximum_tangential_error": 1.7763568394002505e-15
+        "maximum_tangential_error": 1.887379141862766e-15
       },
       "name": "thornber_tangential_preservation",
       "status": "pass",
@@ -828,10 +1224,162 @@
     },
     {
       "component": "low_mach",
+      "diagnostics": {},
+      "elapsed_seconds": 0.622999906539917,
+      "expected": {
+        "nonfinite_entries": 0
+      },
+      "metrics": {
+        "Jacobian_columns": 10,
+        "Jacobian_rows": 5,
+        "nonfinite_entries": 0
+      },
+      "name": "thornber_zero_velocity_hllc_jacobian",
+      "status": "pass",
+      "summary": "Thornber HLLC has a finite ForwardDiff Jacobian at zero velocity"
+    },
+    {
+      "component": "low_mach",
+      "diagnostics": {},
+      "elapsed_seconds": 0.003999948501586914,
+      "expected": {
+        "absolute_tolerance": 2.9103830456733704e-10,
+        "preserved_quantity": "internal energy and pressure"
+      },
+      "metrics": {
+        "maximum_pressure_error": 0.0
+      },
+      "name": "thornber_energy_consistency",
+      "status": "pass",
+      "summary": "Thornber velocity correction preserves reconstructed pressure"
+    },
+    {
+      "component": "jacobian",
+      "diagnostics": {
+        "classifications": [
+          "good agreement",
+          "good agreement",
+          "good agreement"
+        ]
+      },
+      "elapsed_seconds": 0.5420000553131104,
+      "expected": {
+        "finite_difference_scheme": "centered",
+        "random_seed": 4609615,
+        "relative_tolerance": 2.0e-5
+      },
+      "metrics": {
+        "base_finite_difference_step": 6.0554544523933395e-6,
+        "directions": [
+          {
+            "absolute_error_norm": 22.426571607463405,
+            "classification": "good agreement",
+            "direction": 1,
+            "maximum_component_error": 13.0556543356015,
+            "maximum_error_index": 27,
+            "relative_error": 1.7933785831950906e-7,
+            "selected_step": 1.5138636130983349e-6,
+            "step_sweep": [
+              {
+                "absolute_error_norm": 22.966193107654917,
+                "maximum_component_error": 13.055480783450559,
+                "maximum_error_index": 27,
+                "relative_error": 1.8365302603045584e-7,
+                "step": 2.4221817809573358e-5
+              },
+              {
+                "absolute_error_norm": 22.458679687592245,
+                "maximum_component_error": 13.055619611283934,
+                "maximum_error_index": 27,
+                "relative_error": 1.7959461471520047e-7,
+                "step": 6.0554544523933395e-6
+              },
+              {
+                "absolute_error_norm": 22.426571607463405,
+                "maximum_component_error": 13.0556543356015,
+                "maximum_error_index": 27,
+                "relative_error": 1.7933785831950906e-7,
+                "step": 1.5138636130983349e-6
+              }
+            ]
+          },
+          {
+            "absolute_error_norm": 46.19194815898566,
+            "classification": "good agreement",
+            "direction": 2,
+            "maximum_component_error": 32.42375496418714,
+            "maximum_error_index": 28,
+            "relative_error": 1.4812600538758582e-7,
+            "selected_step": 1.5138636130983349e-6,
+            "step_sweep": [
+              {
+                "absolute_error_norm": 60.07938033772224,
+                "maximum_component_error": 32.426002931251446,
+                "maximum_error_index": 28,
+                "relative_error": 1.926594995615297e-7,
+                "step": 2.4221817809573358e-5
+              },
+              {
+                "absolute_error_norm": 47.11730012937927,
+                "maximum_component_error": 32.424204597050846,
+                "maximum_error_index": 28,
+                "relative_error": 1.5109337398241493e-7,
+                "step": 6.0554544523933395e-6
+              },
+              {
+                "absolute_error_norm": 46.19194815898566,
+                "maximum_component_error": 32.42375496418714,
+                "maximum_error_index": 28,
+                "relative_error": 1.4812600538758582e-7,
+                "step": 1.5138636130983349e-6
+              }
+            ]
+          },
+          {
+            "absolute_error_norm": 39.74782345582079,
+            "classification": "good agreement",
+            "direction": 3,
+            "maximum_component_error": 27.417320880109656,
+            "maximum_error_index": 28,
+            "relative_error": 1.333533612942019e-7,
+            "selected_step": 1.5138636130983349e-6,
+            "step_sweep": [
+              {
+                "absolute_error_norm": 51.58295257121526,
+                "maximum_component_error": 27.41713147040545,
+                "maximum_error_index": 28,
+                "relative_error": 1.730600273235002e-7,
+                "step": 2.4221817809573358e-5
+              },
+              {
+                "absolute_error_norm": 40.542230669802336,
+                "maximum_component_error": 27.417282966308193,
+                "maximum_error_index": 28,
+                "relative_error": 1.36018583001093e-7,
+                "step": 6.0554544523933395e-6
+              },
+              {
+                "absolute_error_norm": 39.74782345582079,
+                "maximum_component_error": 27.417320880109656,
+                "maximum_error_index": 28,
+                "relative_error": 1.333533612942019e-7,
+                "step": 1.5138636130983349e-6
+              }
+            ]
+          }
+        ],
+        "maximum_relative_error": 1.7933785831950906e-7
+      },
+      "name": "thornber_zero_velocity_ad_vs_finite_difference_jvp",
+      "status": "pass",
+      "summary": "ForwardDiff Jacobian-vector products agree with central finite differences"
+    },
+    {
+      "component": "low_mach",
       "diagnostics": {
         "state_violations": []
       },
-      "elapsed_seconds": 0.10700011253356934,
+      "elapsed_seconds": 0.0,
       "expected": {
         "boundary_condition": "transmissive physical flux",
         "maximum_normalized_norm": 5.0e-13
@@ -866,7 +1414,7 @@
       "diagnostics": {
         "state_violations": []
       },
-      "elapsed_seconds": 0.059999942779541016,
+      "elapsed_seconds": 0.06399989128112793,
       "expected": {
         "boundary_condition": "transmissive physical flux",
         "maximum_normalized_norm": 5.0e-13
@@ -933,7 +1481,7 @@
     {
       "component": "species",
       "diagnostics": {},
-      "elapsed_seconds": 0.4700000286102295,
+      "elapsed_seconds": 0.39800000190734863,
       "expected": {
         "absolute_tolerance": 2.220446049250313e-14,
         "constraint": "equal diffusion coefficients and sum(Y)=1 imply sum(J)=0"
@@ -951,7 +1499,7 @@
     {
       "component": "species",
       "diagnostics": {},
-      "elapsed_seconds": 0.2709999084472656,
+      "elapsed_seconds": 0.26600003242492676,
       "expected": {
         "absolute_tolerance": 2.220446049250313e-14,
         "constraint": "sum of species mass fluxes equals total mass flux",
@@ -989,7 +1537,7 @@
     {
       "component": "species",
       "diagnostics": {},
-      "elapsed_seconds": 0.11999988555908203,
+      "elapsed_seconds": 0.13199996948242188,
       "expected": {
         "absolute_tolerance": 2.220446049250313e-14,
         "species_flux_sum": 1.4
@@ -1006,7 +1554,7 @@
     {
       "component": "species",
       "diagnostics": {},
-      "elapsed_seconds": 0.2720000743865967,
+      "elapsed_seconds": 0.2969999313354492,
       "expected": {
         "absolute_tolerance": 1.0e-14,
         "constraint": "sum(J_k)=0 with unequal diffusion coefficients"
@@ -1024,7 +1572,7 @@
       "diagnostics": {
         "state_violations": []
       },
-      "elapsed_seconds": 0.8990001678466797,
+      "elapsed_seconds": 0.8730001449584961,
       "expected": {
         "maximum_normalized_norm": 1.0e-12,
         "oracle": "exact stationary Euler contact with equal pressure and velocity"
@@ -1060,7 +1608,7 @@
       "diagnostics": {
         "state_violations": []
       },
-      "elapsed_seconds": 0.11400008201599121,
+      "elapsed_seconds": 0.11800003051757812,
       "expected": {
         "maximum_normalized_norm": 1.0e-12,
         "oracle": "exact stationary Euler contact with equal pressure and velocity"
@@ -1092,11 +1640,151 @@
       "summary": "HLLC exactly preserves a stationary ideal-gas contact discontinuity"
     },
     {
+      "component": "mms",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "density_residual": 0.0,
+        "manufactured_field": "rho,p,T constant; u(y)=u0+A*sin(2*pi*y)",
+        "minimum_asymptotic_order": 1.8,
+        "norm_domain": "interior cells; analytical boundary fluxes are tested separately"
+      },
+      "metrics": {
+        "asymptotic_minimum_order": 1.982541690311194,
+        "density_L2_errors": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "energy_orders": [
+          1.9681574998006852,
+          1.982541690311194,
+          1.9919355410232205
+        ],
+        "grid_sizes": [
+          16,
+          32,
+          64,
+          128
+        ],
+        "interior_energy_L2_errors": [
+          0.0004602220029426496,
+          0.0001176231848678619,
+          2.9763802777041473e-5,
+          7.482661013355137e-6
+        ],
+        "interior_momentum_L2_errors": [
+          0.0011391800920530456,
+          0.0002773574705649978,
+          6.831349005448089e-5,
+          1.694748617319958e-5
+        ],
+        "momentum_orders": [
+          2.038177349774097,
+          2.021504179918534,
+          2.0110992058923367
+        ]
+      },
+      "name": "viscous_compressible_mms",
+      "status": "pass",
+      "summary": "viscous compressible shear MMS converges in momentum and total energy"
+    },
+    {
+      "component": "mms",
+      "diagnostics": {},
+      "elapsed_seconds": 1.7769999504089355,
+      "expected": {
+        "manufactured_field": "Y_a=0.4+0.1*sin(2*pi*y), Y_b=1-Y_a",
+        "minimum_asymptotic_order": 1.8,
+        "norm_domain": "interior cells; analytical boundary fluxes are tested separately",
+        "species_sum_tolerance": 1.0e-12
+      },
+      "metrics": {
+        "asymptotic_minimum_order": 2.01109920589026,
+        "grid_sizes": [
+          16,
+          32,
+          64,
+          128
+        ],
+        "interior_species_a_L2_errors": [
+          0.001974578826225283,
+          0.00048075294897930023,
+          0.00011841004942773941,
+          2.9375642700248072e-5
+        ],
+        "interior_species_b_L2_errors": [
+          0.001974578826225283,
+          0.00048075294897930023,
+          0.00011841004942773941,
+          2.9375642700248072e-5
+        ],
+        "species_a_orders": [
+          2.038177349774188,
+          2.0215041799187805,
+          2.01109920589026
+        ],
+        "species_b_orders": [
+          2.038177349774188,
+          2.0215041799187805,
+          2.01109920589026
+        ],
+        "species_sum_Linf_errors": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "name": "species_mms",
+      "status": "pass",
+      "summary": "conservative two-species diffusion MMS converges while preserving the mixture sum"
+    },
+    {
+      "component": "mutation",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "mutation": "replace the full dot product with independent scalar products",
+        "rejection_threshold": 2.220446049250313e-14
+      },
+      "metrics": {
+        "mutated_normal_derivative_error": 0.017099723643873688
+      },
+      "name": "gradient_mutation_detection",
+      "status": "pass",
+      "summary": "the direct gradient oracle rejects the historical componentwise-projection mutation"
+    },
+    {
+      "component": "mutation",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "minimum_error_amplification": 100.0,
+        "mutations": [
+          "reverse viscous flux sign",
+          "reverse species-diffusion flux sign"
+        ]
+      },
+      "metrics": {
+        "correct_species_error": 0.00011841004942773941,
+        "correct_viscous_error": 6.831349005448089e-5,
+        "mutated_species_error": 0.2948255739424614,
+        "mutated_viscous_error": 0.17009167727449698,
+        "species_error_amplification": 2489.869528535083,
+        "viscous_error_amplification": 2489.8695285345057
+      },
+      "name": "mms_mutation_detection",
+      "status": "pass",
+      "summary": "MMS rejects reversed viscous and species-diffusion flux signs"
+    },
+    {
       "component": "integration",
       "diagnostics": {
         "state_violations": []
       },
-      "elapsed_seconds": 2.7950000762939453,
+      "elapsed_seconds": 2.0399999618530273,
       "expected": {
         "CFL_number": 0.2,
         "state_violations": 0,
@@ -1107,18 +1795,19 @@
         "solver_statistics": {
           "accepted_steps": 23,
           "algorithm": "SSPRK43",
-          "allocated_bytes": 314671918,
-          "garbage_collection_seconds": 0.3669836,
+          "allocated_bytes": 217148803,
+          "garbage_collection_seconds": 0.0517811,
           "jacobian_evaluations": 0,
           "linear_solves": 0,
           "maximum_saved_timestep": 0.0052822140920532334,
           "minimum_saved_timestep": 0.003791289974828929,
+          "minimum_timestep": 0.003791289974828929,
           "nonlinear_convergence_failures": 0,
           "nonlinear_iterations": 0,
           "rejected_steps": 0,
           "return_code": "Success",
           "rhs_evaluations": 92,
-          "runtime_seconds": 2.3513966,
+          "runtime_seconds": 1.6183746,
           "secondary_rhs_evaluations": 0
         }
       },
@@ -1131,7 +1820,7 @@
       "diagnostics": {
         "state_violations": []
       },
-      "elapsed_seconds": 10.803999900817871,
+      "elapsed_seconds": 11.882000207901001,
       "expected": {
         "state_violations": 0,
         "successful_return_code": true
@@ -1141,24 +1830,145 @@
         "solver_statistics": {
           "accepted_steps": 104,
           "algorithm": "FBDF(ForwardDiff)",
-          "allocated_bytes": 1316687128,
-          "garbage_collection_seconds": 0.2168668,
+          "allocated_bytes": 1313940928,
+          "garbage_collection_seconds": 0.5544313,
           "jacobian_evaluations": 1,
           "linear_solves": 202,
-          "maximum_saved_timestep": 0.002200165478154034,
+          "maximum_saved_timestep": 0.0022001654781740737,
           "minimum_saved_timestep": 9.349589012787291e-10,
+          "minimum_timestep": 9.349589012787291e-10,
           "nonlinear_convergence_failures": 0,
           "nonlinear_iterations": 202,
           "rejected_steps": 7,
           "return_code": "Success",
           "rhs_evaluations": 224,
-          "runtime_seconds": 9.5145373,
+          "runtime_seconds": 10.3948969,
           "secondary_rhs_evaluations": 0
         }
       },
       "name": "implicit_smoke",
       "status": "pass",
       "summary": "FBDF completed the diagnostic Sod solve with admissible states"
+    },
+    {
+      "component": "performance",
+      "diagnostics": {
+        "baseline_path": "C:\\Users\\wille\\OneDrive\\Desktop\\FVMFramework\\examples\\LLM_developed_CFD\\verification\\performance\\performance_baselines.toml",
+        "count_regressions": [],
+        "minimum_timestep_regression": false,
+        "missing_metrics": [],
+        "runtime_warning": false
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "count_metrics": "no larger than their baseline allowances",
+        "minimum_timestep": "no smaller than its baseline allowance",
+        "runtime": "non-gating secondary warning"
+      },
+      "metrics": {
+        "comparisons": {
+          "accepted_steps": {
+            "maximum": 30,
+            "observed": 23,
+            "reference": 23
+          },
+          "linear_solves": {
+            "maximum": 2,
+            "observed": 0,
+            "reference": 0
+          },
+          "minimum_timestep": {
+            "minimum": 0.00018956449874144645,
+            "observed": 0.003791289974828929,
+            "reference": 0.003791289974828929
+          },
+          "nonlinear_iterations": {
+            "maximum": 2,
+            "observed": 0,
+            "reference": 0
+          },
+          "rejected_steps": {
+            "maximum": 2,
+            "observed": 0,
+            "reference": 0
+          },
+          "rhs_evaluations": {
+            "maximum": 113,
+            "observed": 92,
+            "reference": 92
+          },
+          "runtime_seconds": {
+            "gating": false,
+            "observed": 1.6183746,
+            "reference": 2.3897585,
+            "warning_threshold": 11.9487925
+          }
+        },
+        "runtime_warning": false
+      },
+      "name": "performance_32_cells_first_order_explicit",
+      "status": "pass",
+      "summary": "solver work counters and minimum timestep remain within the persistent baseline"
+    },
+    {
+      "component": "performance",
+      "diagnostics": {
+        "baseline_path": "C:\\Users\\wille\\OneDrive\\Desktop\\FVMFramework\\examples\\LLM_developed_CFD\\verification\\performance\\performance_baselines.toml",
+        "count_regressions": [],
+        "minimum_timestep_regression": false,
+        "missing_metrics": [],
+        "runtime_warning": false
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "count_metrics": "no larger than their baseline allowances",
+        "minimum_timestep": "no smaller than its baseline allowance",
+        "runtime": "non-gating secondary warning"
+      },
+      "metrics": {
+        "comparisons": {
+          "accepted_steps": {
+            "maximum": 130,
+            "observed": 104,
+            "reference": 104
+          },
+          "linear_solves": {
+            "maximum": 248,
+            "observed": 202,
+            "reference": 202
+          },
+          "minimum_timestep": {
+            "minimum": 4.6747945063936457e-11,
+            "observed": 9.349589012787291e-10,
+            "reference": 9.349589012787291e-10
+          },
+          "nonlinear_iterations": {
+            "maximum": 248,
+            "observed": 202,
+            "reference": 202
+          },
+          "rejected_steps": {
+            "maximum": 14,
+            "observed": 7,
+            "reference": 7
+          },
+          "rhs_evaluations": {
+            "maximum": 274,
+            "observed": 224,
+            "reference": 224
+          },
+          "runtime_seconds": {
+            "gating": false,
+            "observed": 10.3948969,
+            "reference": 9.9391712,
+            "warning_threshold": 49.695856000000006
+          }
+        },
+        "runtime_warning": false
+      },
+      "name": "performance_32_cells_first_order_implicit",
+      "status": "pass",
+      "summary": "solver work counters and minimum timestep remain within the persistent baseline"
     },
     {
       "component": "integration",
@@ -1285,7 +2095,7 @@
           0.12500672379952002
         ]
       },
-      "elapsed_seconds": 0.21799993515014648,
+      "elapsed_seconds": 0.21900010108947754,
       "expected": {
         "density_L1_maximum": 0.08,
         "oracle": "independent exact ideal-gas Riemann solution sampled at cell centers",
@@ -1306,7 +2116,7 @@
       "diagnostics": {
         "state_violations": []
       },
-      "elapsed_seconds": 0.1269998550415039,
+      "elapsed_seconds": 0.125,
       "expected": {
         "CFL_number": 0.2,
         "state_violations": 0,
@@ -1317,18 +2127,19 @@
         "solver_statistics": {
           "accepted_steps": 23,
           "algorithm": "SSPRK43",
-          "allocated_bytes": 17183250,
+          "allocated_bytes": 17240171,
           "garbage_collection_seconds": 0.0,
           "jacobian_evaluations": 0,
           "linear_solves": 0,
           "maximum_saved_timestep": 0.0052822140920532334,
           "minimum_saved_timestep": 0.003791289974828929,
+          "minimum_timestep": 0.003791289974828929,
           "nonlinear_convergence_failures": 0,
           "nonlinear_iterations": 0,
           "rejected_steps": 0,
           "return_code": "Success",
           "rhs_evaluations": 92,
-          "runtime_seconds": 0.1255678,
+          "runtime_seconds": 0.1245955,
           "secondary_rhs_evaluations": 0
         }
       },
@@ -1341,7 +2152,7 @@
       "diagnostics": {
         "state_violations": []
       },
-      "elapsed_seconds": 2.754000186920166,
+      "elapsed_seconds": 2.8420000076293945,
       "expected": {
         "state_violations": 0,
         "successful_return_code": true
@@ -1351,24 +2162,145 @@
         "solver_statistics": {
           "accepted_steps": 513,
           "algorithm": "FBDF(AutoFiniteDiff)",
-          "allocated_bytes": 255517484,
-          "garbage_collection_seconds": 0.0779524,
+          "allocated_bytes": 255865867,
+          "garbage_collection_seconds": 0.0625576,
           "jacobian_evaluations": 1,
-          "linear_solves": 1055,
-          "maximum_saved_timestep": 0.0011048846966393404,
+          "linear_solves": 1059,
+          "maximum_saved_timestep": 0.0011048846966393421,
           "minimum_saved_timestep": 9.406236881019732e-10,
+          "minimum_timestep": 9.406236881019732e-10,
           "nonlinear_convergence_failures": 0,
-          "nonlinear_iterations": 1055,
+          "nonlinear_iterations": 1059,
           "rejected_steps": 99,
           "return_code": "Success",
-          "rhs_evaluations": 1088,
-          "runtime_seconds": 2.2556375,
+          "rhs_evaluations": 1092,
+          "runtime_seconds": 2.3305265,
           "secondary_rhs_evaluations": 0
         }
       },
       "name": "implicit_smoke_muscl",
       "status": "pass",
       "summary": "FBDF completed the diagnostic Sod solve with admissible states"
+    },
+    {
+      "component": "performance",
+      "diagnostics": {
+        "baseline_path": "C:\\Users\\wille\\OneDrive\\Desktop\\FVMFramework\\examples\\LLM_developed_CFD\\verification\\performance\\performance_baselines.toml",
+        "count_regressions": [],
+        "minimum_timestep_regression": false,
+        "missing_metrics": [],
+        "runtime_warning": false
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "count_metrics": "no larger than their baseline allowances",
+        "minimum_timestep": "no smaller than its baseline allowance",
+        "runtime": "non-gating secondary warning"
+      },
+      "metrics": {
+        "comparisons": {
+          "accepted_steps": {
+            "maximum": 30,
+            "observed": 23,
+            "reference": 23
+          },
+          "linear_solves": {
+            "maximum": 2,
+            "observed": 0,
+            "reference": 0
+          },
+          "minimum_timestep": {
+            "minimum": 0.00018956449874144645,
+            "observed": 0.003791289974828929,
+            "reference": 0.003791289974828929
+          },
+          "nonlinear_iterations": {
+            "maximum": 2,
+            "observed": 0,
+            "reference": 0
+          },
+          "rejected_steps": {
+            "maximum": 2,
+            "observed": 0,
+            "reference": 0
+          },
+          "rhs_evaluations": {
+            "maximum": 113,
+            "observed": 92,
+            "reference": 92
+          },
+          "runtime_seconds": {
+            "gating": false,
+            "observed": 0.1245955,
+            "reference": 0.1206215,
+            "warning_threshold": 5.1206215
+          }
+        },
+        "runtime_warning": false
+      },
+      "name": "performance_32_cells_muscl_explicit",
+      "status": "pass",
+      "summary": "solver work counters and minimum timestep remain within the persistent baseline"
+    },
+    {
+      "component": "performance",
+      "diagnostics": {
+        "baseline_path": "C:\\Users\\wille\\OneDrive\\Desktop\\FVMFramework\\examples\\LLM_developed_CFD\\verification\\performance\\performance_baselines.toml",
+        "count_regressions": [],
+        "minimum_timestep_regression": false,
+        "missing_metrics": [],
+        "runtime_warning": false
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "count_metrics": "no larger than their baseline allowances",
+        "minimum_timestep": "no smaller than its baseline allowance",
+        "runtime": "non-gating secondary warning"
+      },
+      "metrics": {
+        "comparisons": {
+          "accepted_steps": {
+            "maximum": 631,
+            "observed": 513,
+            "reference": 517
+          },
+          "linear_solves": {
+            "maximum": 1275,
+            "observed": 1059,
+            "reference": 1054
+          },
+          "minimum_timestep": {
+            "minimum": 4.703118440509866e-11,
+            "observed": 9.406236881019732e-10,
+            "reference": 9.406236881019732e-10
+          },
+          "nonlinear_iterations": {
+            "maximum": 1275,
+            "observed": 1059,
+            "reference": 1054
+          },
+          "rejected_steps": {
+            "maximum": 123,
+            "observed": 99,
+            "reference": 94
+          },
+          "rhs_evaluations": {
+            "maximum": 1315,
+            "observed": 1092,
+            "reference": 1087
+          },
+          "runtime_seconds": {
+            "gating": false,
+            "observed": 2.3305265,
+            "reference": 2.3240166,
+            "warning_threshold": 11.620083000000001
+          }
+        },
+        "runtime_warning": false
+      },
+      "name": "performance_32_cells_muscl_implicit",
+      "status": "pass",
+      "summary": "solver work counters and minimum timestep remain within the persistent baseline"
     },
     {
       "component": "integration",
@@ -1516,7 +2448,339 @@
       "diagnostics": {
         "state_violations": []
       },
-      "elapsed_seconds": 0.023000001907348633,
+      "elapsed_seconds": 0.09399986267089844,
+      "expected": {
+        "CFL_number": 0.2,
+        "state_violations": 0,
+        "successful_return_code": true
+      },
+      "metrics": {
+        "CFL_timestep": 0.005282214092053229,
+        "solver_statistics": {
+          "accepted_steps": 23,
+          "algorithm": "SSPRK43",
+          "allocated_bytes": 14793182,
+          "garbage_collection_seconds": 0.0,
+          "jacobian_evaluations": 0,
+          "linear_solves": 0,
+          "maximum_saved_timestep": 0.0052822140920532334,
+          "minimum_saved_timestep": 0.003791289974828929,
+          "minimum_timestep": 0.003791289974828929,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 0,
+          "rejected_steps": 0,
+          "return_code": "Success",
+          "rhs_evaluations": 92,
+          "runtime_seconds": 0.0941081,
+          "secondary_rhs_evaluations": 0
+        }
+      },
+      "name": "explicit_smoke_thornber",
+      "status": "pass",
+      "summary": "SSPRK43 completed the diagnostic Sod solve with admissible states"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.8489999771118164,
+      "expected": {
+        "state_violations": 0,
+        "successful_return_code": true
+      },
+      "metrics": {
+        "initial_timestep": 0.00026411070460266144,
+        "solver_statistics": {
+          "accepted_steps": 128,
+          "algorithm": "FBDF(ForwardDiff)",
+          "allocated_bytes": 66006654,
+          "garbage_collection_seconds": 0.0311058,
+          "jacobian_evaluations": 1,
+          "linear_solves": 273,
+          "maximum_saved_timestep": 0.0018315921326456097,
+          "minimum_saved_timestep": 9.349586936775575e-10,
+          "minimum_timestep": 9.349586936775575e-10,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 273,
+          "rejected_steps": 10,
+          "return_code": "Success",
+          "rhs_evaluations": 295,
+          "runtime_seconds": 0.4798499,
+          "secondary_rhs_evaluations": 0
+        }
+      },
+      "name": "implicit_smoke_thornber",
+      "status": "pass",
+      "summary": "FBDF completed the diagnostic Sod solve with admissible states"
+    },
+    {
+      "component": "performance",
+      "diagnostics": {
+        "baseline_path": "C:\\Users\\wille\\OneDrive\\Desktop\\FVMFramework\\examples\\LLM_developed_CFD\\verification\\performance\\performance_baselines.toml",
+        "count_regressions": [],
+        "minimum_timestep_regression": false,
+        "missing_metrics": [],
+        "runtime_warning": false
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "count_metrics": "no larger than their baseline allowances",
+        "minimum_timestep": "no smaller than its baseline allowance",
+        "runtime": "non-gating secondary warning"
+      },
+      "metrics": {
+        "comparisons": {
+          "accepted_steps": {
+            "maximum": 30,
+            "observed": 23,
+            "reference": 23
+          },
+          "linear_solves": {
+            "maximum": 2,
+            "observed": 0,
+            "reference": 0
+          },
+          "minimum_timestep": {
+            "minimum": 0.00018956449874144645,
+            "observed": 0.003791289974828929,
+            "reference": 0.003791289974828929
+          },
+          "nonlinear_iterations": {
+            "maximum": 2,
+            "observed": 0,
+            "reference": 0
+          },
+          "rejected_steps": {
+            "maximum": 2,
+            "observed": 0,
+            "reference": 0
+          },
+          "rhs_evaluations": {
+            "maximum": 113,
+            "observed": 92,
+            "reference": 92
+          },
+          "runtime_seconds": {
+            "gating": false,
+            "observed": 0.0941081,
+            "reference": 0.0917892,
+            "warning_threshold": 5.0917892
+          }
+        },
+        "runtime_warning": false
+      },
+      "name": "performance_32_cells_thornber_explicit",
+      "status": "pass",
+      "summary": "solver work counters and minimum timestep remain within the persistent baseline"
+    },
+    {
+      "component": "performance",
+      "diagnostics": {
+        "baseline_path": "C:\\Users\\wille\\OneDrive\\Desktop\\FVMFramework\\examples\\LLM_developed_CFD\\verification\\performance\\performance_baselines.toml",
+        "count_regressions": [],
+        "minimum_timestep_regression": false,
+        "missing_metrics": [],
+        "runtime_warning": false
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "count_metrics": "no larger than their baseline allowances",
+        "minimum_timestep": "no smaller than its baseline allowance",
+        "runtime": "non-gating secondary warning"
+      },
+      "metrics": {
+        "comparisons": {
+          "accepted_steps": {
+            "maximum": 159,
+            "observed": 128,
+            "reference": 128
+          },
+          "linear_solves": {
+            "maximum": 333,
+            "observed": 273,
+            "reference": 273
+          },
+          "minimum_timestep": {
+            "minimum": 4.6747934683877875e-11,
+            "observed": 9.349586936775575e-10,
+            "reference": 9.349586936775575e-10
+          },
+          "nonlinear_iterations": {
+            "maximum": 333,
+            "observed": 273,
+            "reference": 273
+          },
+          "rejected_steps": {
+            "maximum": 17,
+            "observed": 10,
+            "reference": 10
+          },
+          "rhs_evaluations": {
+            "maximum": 359,
+            "observed": 295,
+            "reference": 295
+          },
+          "runtime_seconds": {
+            "gating": false,
+            "observed": 0.4798499,
+            "reference": 0.4218152,
+            "warning_threshold": 5.4218152
+          }
+        },
+        "runtime_warning": false
+      },
+      "name": "performance_32_cells_thornber_implicit",
+      "status": "pass",
+      "summary": "solver work counters and minimum timestep remain within the persistent baseline"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "likely_categories": [],
+        "qualification": "categories are diagnostic leads, not mathematical proof"
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "explicit_status": "pass",
+        "implicit_status": "pass"
+      },
+      "metrics": {
+        "explicit_status": "pass",
+        "implicit_status": "pass"
+      },
+      "name": "explicit_vs_implicit_classification_thornber",
+      "status": "pass",
+      "summary": "both spatial/time-integration paths completed"
+    },
+    {
+      "component": "benchmark",
+      "diagnostics": {
+        "exact_density": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.9920380971210215,
+          0.822705358070425,
+          0.6773277969654586,
+          0.5532687865886997,
+          0.4480926807471252,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125
+        ],
+        "exact_pressure": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.9888711140554343,
+          0.7609253558494637,
+          0.5795867636382457,
+          0.4366270497273658,
+          0.3250236702345099,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "numerical_density": [
+          0.999998830748772,
+          0.9999957378284241,
+          0.9999826806839364,
+          0.999933840651913,
+          0.9997656014280397,
+          0.9992345260780968,
+          0.9977104835560029,
+          0.9937737380551513,
+          0.9847004709047122,
+          0.9662610713627757,
+          0.933283351988079,
+          0.8819962134347433,
+          0.8113190499069176,
+          0.7254933781708738,
+          0.6303566088773961,
+          0.533365935468088,
+          0.44841876458125807,
+          0.3928815692356669,
+          0.362618495687021,
+          0.3292981913168386,
+          0.29419548671206647,
+          0.26035187001587445,
+          0.22553750601592468,
+          0.18749374767978405,
+          0.15396931737581857,
+          0.13475620650220801,
+          0.12756099682229557,
+          0.1255885600886062,
+          0.12512611175453922,
+          0.12502561419766967,
+          0.1250049736268328,
+          0.1250010692436588
+        ]
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "density_L1_maximum": 0.08,
+        "oracle": "independent exact ideal-gas Riemann solution sampled at cell centers",
+        "pressure_L1_maximum": 0.08
+      },
+      "metrics": {
+        "cells": 32,
+        "density_L1_error": 0.026624384411083314,
+        "final_time": 0.12,
+        "pressure_L1_error": 0.0282146084679869
+      },
+      "name": "sod_shock_tube_thornber",
+      "status": "pass",
+      "summary": "Sod shock tube agrees with the exact Euler Riemann solution"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.01399993896484375,
       "expected": {
         "absolute_tolerance": 2.0e-11,
         "oracle": "boundary flux balance for a passively advected two-species contact"
@@ -1537,28 +2801,869 @@
           "linear_solves": 0,
           "maximum_saved_timestep": 0.0037131301990213222,
           "minimum_saved_timestep": 0.0034586148254456273,
+          "minimum_timestep": 0.0034586148254456273,
           "nonlinear_convergence_failures": 0,
           "nonlinear_iterations": 0,
           "rejected_steps": 0,
           "return_code": "Success",
           "rhs_evaluations": 108,
-          "runtime_seconds": 0.0032833,
+          "runtime_seconds": 0.0034177,
           "secondary_rhs_evaluations": 0
         }
       },
       "name": "coupled_species_advection",
       "status": "pass",
       "summary": "the integrated compressible ODE advects rho*Y conservatively and preserves sum(Y)=1"
+    },
+    {
+      "component": "long_time",
+      "diagnostics": {
+        "explicit_violations": [],
+        "implicit_violations": []
+      },
+      "elapsed_seconds": 8.662999868392944,
+      "expected": {
+        "explicit_and_implicit_completion": true,
+        "known_steady_state_tolerance": 2.0e-11,
+        "positive_density_and_pressure": true
+      },
+      "metrics": {
+        "explicit_change_Linf": 8.868584983854544e-16,
+        "explicit_implicit_difference_Linf": 4.3298697960381105e-15,
+        "explicit_solver_statistics": {
+          "accepted_steps": 201,
+          "algorithm": "SSPRK43",
+          "allocated_bytes": 109775978,
+          "garbage_collection_seconds": 0.0,
+          "jacobian_evaluations": 0,
+          "linear_solves": 0,
+          "maximum_saved_timestep": 0.004980119205559991,
+          "minimum_saved_timestep": 0.003976158888007286,
+          "minimum_timestep": 0.003976158888007286,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 0,
+          "rejected_steps": 0,
+          "return_code": "Success",
+          "rhs_evaluations": 804,
+          "runtime_seconds": 0.7572287,
+          "secondary_rhs_evaluations": 0
+        },
+        "explicit_trajectory": {
+          "minimum_density": [
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125,
+            0.125
+          ],
+          "minimum_pressure": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "scaled_residual_Linf": [
+            1.4210854715201993e-15,
+            1.7834481124639177e-15,
+            1.1889654083092809e-14,
+            1.2038274759131469e-14,
+            1.3375860843479411e-14,
+            1.4713446927827333e-14,
+            2.407654951826291e-14,
+            2.6305859658842805e-14,
+            2.214448072976033e-14,
+            2.4373790870340225e-14,
+            1.8874825856909803e-14,
+            2.779206641922939e-14,
+            2.957551453169331e-14,
+            3.135896264415722e-14,
+            2.6751721686958746e-14,
+            3.566896224927833e-14,
+            2.8683790475461295e-14,
+            2.8237928447345313e-14,
+            2.7792066419229322e-14,
+            2.719758371507467e-14,
+            2.675172168695868e-14,
+            2.6305859658842695e-14,
+            3.2993790080582374e-14,
+            3.2547928052466386e-14,
+            3.1953445348311735e-14,
+            3.150758332019574e-14,
+            3.106172129207976e-14,
+            2.3482066814108097e-14,
+            2.3036204785992106e-14,
+            2.2590342757876115e-14,
+            2.2590342757876115e-14,
+            2.2590342757876115e-14,
+            2.2590342757876115e-14,
+            2.2590342757876115e-14,
+            2.2590342757876115e-14,
+            2.2590342757876115e-14,
+            2.2590342757876115e-14,
+            2.2590342757876115e-14,
+            2.2590342757876115e-14,
+            2.2590342757876115e-14,
+            2.2441722081837452e-14,
+            2.2441722081837452e-14,
+            2.2441722081837452e-14,
+            2.2441722081837452e-14,
+            2.2441722081837452e-14,
+            2.1995860053721477e-14,
+            2.1995860053721477e-14,
+            2.1995860053721477e-14,
+            2.1995860053721477e-14,
+            2.1995860053721477e-14,
+            2.1995860053721477e-14,
+            2.1995860053721477e-14,
+            2.1995860053721477e-14,
+            2.1995860053721477e-14,
+            2.1995860053721477e-14,
+            2.1995860053721477e-14,
+            2.1549998025605495e-14,
+            2.1549998025605495e-14,
+            2.1549998025605495e-14,
+            2.1549998025605495e-14,
+            2.1549998025605495e-14,
+            2.1549998025605495e-14,
+            2.1549998025605495e-14,
+            2.1431338331413232e-14
+          ],
+          "times": [
+            0.0,
+            0.014940357616679906,
+            0.029880715233359816,
+            0.04980119205559969,
+            0.0647415496722796,
+            0.07968190728895949,
+            0.09462226490563938,
+            0.10956262252231927,
+            0.12948309934455912,
+            0.144423456961239,
+            0.1593638145779189,
+            0.1743041721945988,
+            0.18924452981127868,
+            0.20418488742795857,
+            0.22410536425019842,
+            0.2390457218668783,
+            0.2539860794835582,
+            0.2689264371002381,
+            0.283866794716918,
+            0.30378727153915785,
+            0.31872762915583774,
+            0.33366798677251763,
+            0.3486083443891975,
+            0.3635487020058774,
+            0.38346917882811726,
+            0.39840953644479715,
+            0.41334989406147704,
+            0.42829025167815693,
+            0.4432306092948368,
+            0.46315108611707667,
+            0.47809144373375656,
+            0.49303180135043645,
+            0.5079721589671163,
+            0.5229125165837962,
+            0.5378528742004761,
+            0.557773351022716,
+            0.5727137086393959,
+            0.5876540662560757,
+            0.6025944238727556,
+            0.6175347814894355,
+            0.6374552583116754,
+            0.6523956159283553,
+            0.6673359735450352,
+            0.682276331161715,
+            0.6972166887783949,
+            0.7171371656006348,
+            0.7320775232173147,
+            0.7470178808339946,
+            0.7619582384506745,
+            0.7768985960673543,
+            0.7968190728895942,
+            0.8117594305062741,
+            0.826699788122954,
+            0.8416401457396339,
+            0.8565805033563137,
+            0.8715208609729936,
+            0.8914413377952335,
+            0.9063816954119134,
+            0.9213220530285933,
+            0.9362624106452732,
+            0.951202768261953,
+            0.9711232450841929,
+            0.9860636027008728,
+            1.0
+          ]
+        },
+        "final_time": 1.0,
+        "implicit_change_Linf": 4.3298697960381105e-15,
+        "implicit_solver_statistics": {
+          "accepted_steps": 2,
+          "algorithm": "FBDF(ForwardDiff)",
+          "allocated_bytes": 358817039,
+          "garbage_collection_seconds": 0.0468418,
+          "jacobian_evaluations": 1,
+          "linear_solves": 2,
+          "maximum_saved_timestep": 0.999750994039722,
+          "minimum_saved_timestep": 0.00024900596027799845,
+          "minimum_timestep": 0.00024900596027799845,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 2,
+          "rejected_steps": 0,
+          "return_code": "Success",
+          "rhs_evaluations": 19,
+          "runtime_seconds": 3.3464506,
+          "secondary_rhs_evaluations": 0
+        },
+        "implicit_trajectory": {
+          "minimum_density": [
+            0.125,
+            0.125,
+            0.12499999999999938
+          ],
+          "minimum_pressure": [
+            1.0,
+            1.0,
+            0.9999999999999998
+          ],
+          "scaled_residual_Linf": [
+            1.4210854715201993e-15,
+            1.4210854715201993e-15,
+            4.987550029272017e-15
+          ],
+          "times": [
+            0.0,
+            0.00024900596027799845,
+            1.0
+          ]
+        },
+        "maximum_scaled_residual_Linf": 3.566896224927833e-14,
+        "minimum_density": 0.12499999999999938,
+        "minimum_pressure": 0.9999999999999998
+      },
+      "name": "long_time_known_steady",
+      "status": "pass",
+      "summary": "a nonuniform stationary contact remains an admissible long-time steady solution"
+    },
+    {
+      "component": "long_time",
+      "diagnostics": {
+        "explicit_violations": [],
+        "implicit_violations": []
+      },
+      "elapsed_seconds": 3.76200008392334,
+      "expected": {
+        "maximum_relative_method_difference": 0.002,
+        "minimum_relative_startup_change": 0.0001,
+        "positive_density_and_pressure": true
+      },
+      "metrics": {
+        "explicit_solver_statistics": {
+          "accepted_steps": 38,
+          "algorithm": "SSPRK43",
+          "allocated_bytes": 4274240,
+          "garbage_collection_seconds": 0.0,
+          "jacobian_evaluations": 0,
+          "linear_solves": 0,
+          "maximum_saved_timestep": 0.013267489392330523,
+          "minimum_saved_timestep": 0.009102892483770775,
+          "minimum_timestep": 0.009102892483770775,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 0,
+          "rejected_steps": 0,
+          "return_code": "Success",
+          "rhs_evaluations": 152,
+          "runtime_seconds": 0.0018477,
+          "secondary_rhs_evaluations": 0
+        },
+        "explicit_trajectory": {
+          "minimum_density": [
+            0.9517037086855465,
+            0.9508305069369419,
+            0.9499648233913018,
+            0.9491300628617467,
+            0.9483403923564984,
+            0.9476035531493161,
+            0.9469229475089862,
+            0.9462991547908376,
+            0.9457310286594627,
+            0.9452164950927545,
+            0.9447530415233965,
+            0.9436407772917305,
+            0.9423189230795039,
+            0.9411182888826158,
+            0.9400447292083971,
+            0.9391031623569851,
+            0.93829738317671,
+            0.9376298940594969,
+            0.937102024423215,
+            0.9367138351703421,
+            0.9364651507068011,
+            0.9363557777029943,
+            0.9363813078685855,
+            0.936536877619046,
+            0.9368165996996696,
+            0.9372136595286437,
+            0.9377204173446951,
+            0.938328513748204,
+            0.9390289766732782,
+            0.9398123282659191,
+            0.9406686905167008,
+            0.9415878888017334,
+            0.9425595527226672,
+            0.9435732138056194,
+            0.9446183930802887,
+            0.9450981801873399,
+            0.9454543162506273,
+            0.9458201603307711,
+            0.9460752972050235
+          ],
+          "minimum_pressure": [
+            0.9710222252113279,
+            0.9759806291507294,
+            0.980950021389698,
+            0.9858821960862861,
+            0.990730922157504,
+            0.9954527476195879,
+            0.9972612106851946,
+            0.9923331386698917,
+            0.9876604903273059,
+            0.9832859973495709,
+            0.9792461077751553,
+            0.9755458644788759,
+            0.9721832073969471,
+            0.9692077961828761,
+            0.966632616394931,
+            0.9644659525505155,
+            0.9627116455339058,
+            0.9613693505356193,
+            0.9604347952609327,
+            0.9599000388191979,
+            0.9597537330603346,
+            0.9599814071881126,
+            0.9605656984173438,
+            0.9614866199193018,
+            0.9627218585184245,
+            0.9642470618775332,
+            0.9660361328711635,
+            0.9680615300362626,
+            0.9702945726925019,
+            0.9727057488178038,
+            0.9752650233215618,
+            0.9779421439952856,
+            0.9807069421547355,
+            0.9835296248311317,
+            0.9863810553167349,
+            0.989233018923755,
+            0.9908011806390437,
+            0.9923222717885127,
+            0.9933659510716595
+          ],
+          "scaled_residual_Linf": [
+            0.37352924047546865,
+            0.38808947275631694,
+            0.39711093777010165,
+            0.4005499332718934,
+            0.3986000717214794,
+            0.39092564995160667,
+            0.37872091620318005,
+            0.36055201759258276,
+            0.3394519382563828,
+            0.31586938139915827,
+            0.290208514212309,
+            0.26288016243367457,
+            0.23426794063124057,
+            0.20472938383679098,
+            0.1745970125655889,
+            0.14418016255650692,
+            0.11376132249627983,
+            0.0836162057463439,
+            0.08452698247585429,
+            0.08483311751241304,
+            0.08440245011342244,
+            0.08325842860399307,
+            0.0814317184599211,
+            0.0964242468516834,
+            0.11860849504326215,
+            0.13878653605154248,
+            0.15685024121066965,
+            0.1727133036436639,
+            0.18631149131453126,
+            0.19760280017559714,
+            0.20656746952874103,
+            0.21320783055132822,
+            0.21754794889420098,
+            0.21963304637889974,
+            0.21952854315264372,
+            0.21731948343865523,
+            0.21310930319948707,
+            0.20701767005428454,
+            0.2018189806470742
+          ],
+          "times": [
+            0.0,
+            0.013267489392330512,
+            0.026534978784661024,
+            0.03980246817699154,
+            0.05306995756932205,
+            0.06633744696165256,
+            0.07960493635398307,
+            0.09287242574631357,
+            0.10613991513864408,
+            0.11940740453097459,
+            0.13267489392330511,
+            0.14594238331563564,
+            0.15920987270796616,
+            0.17247736210029668,
+            0.1857448514926272,
+            0.19901234088495773,
+            0.21227983027728825,
+            0.22554731966961877,
+            0.2388148090619493,
+            0.2520822984542798,
+            0.26534978784661034,
+            0.27861727723894086,
+            0.2918847666312714,
+            0.3051522560236019,
+            0.31841974541593243,
+            0.33168723480826295,
+            0.3449547242005935,
+            0.358222213592924,
+            0.3714897029852545,
+            0.38475719237758504,
+            0.39802468176991557,
+            0.4112921711622461,
+            0.4245596605545766,
+            0.43782714994690713,
+            0.45109463933923766,
+            0.4643621287315682,
+            0.4776296181238987,
+            0.4908971075162292,
+            0.5
+          ]
+        },
+        "final_time": 0.5,
+        "implicit_solver_statistics": {
+          "accepted_steps": 73,
+          "algorithm": "FBDF(ForwardDiff)",
+          "allocated_bytes": 373312198,
+          "garbage_collection_seconds": 0.0422395,
+          "jacobian_evaluations": 1,
+          "linear_solves": 151,
+          "maximum_saved_timestep": 0.017685589093336396,
+          "minimum_saved_timestep": 3.2251554008124634e-8,
+          "minimum_timestep": 3.2251554008124634e-8,
+          "nonlinear_convergence_failures": 0,
+          "nonlinear_iterations": 151,
+          "rejected_steps": 10,
+          "return_code": "Success",
+          "rhs_evaluations": 170,
+          "runtime_seconds": 3.416328,
+          "secondary_rhs_evaluations": 0
+        },
+        "implicit_trajectory": {
+          "minimum_density": [
+            0.9517037086855465,
+            0.9517037065790032,
+            0.9517037009683266,
+            0.9517036918116456,
+            0.9517024592529373,
+            0.9516963909867375,
+            0.9516862416328766,
+            0.95167411606439,
+            0.9516619854699955,
+            0.9515918236833247,
+            0.9513463143228398,
+            0.9512145691331573,
+            0.9510827087792884,
+            0.9509508471413637,
+            0.9506920058703312,
+            0.9503852664150231,
+            0.9497808070220617,
+            0.9494847851296194,
+            0.9491938069081989,
+            0.9488749977576323,
+            0.9484959485921116,
+            0.9481135389175458,
+            0.9476562944691299,
+            0.9467008091563934,
+            0.9462659776107598,
+            0.9458591784904704,
+            0.9454796724485779,
+            0.9451265981146744,
+            0.9447990301589275,
+            0.9429625235965275,
+            0.941939509545404,
+            0.9409959147248145,
+            0.9401346629051761,
+            0.9393582938505964,
+            0.9386689044227831,
+            0.9375567995819851,
+            0.9370879893373869,
+            0.9367339486565228,
+            0.9364947338004411,
+            0.9363698390904494,
+            0.9363570998754064,
+            0.9366526402426503,
+            0.9369518076622977,
+            0.9373451553272731,
+            0.9378268559182781,
+            0.9383905027758175,
+            0.9391260094745868,
+            0.9399490238696212,
+            0.9420955924378634,
+            0.9434308615014515,
+            0.9448201633253213,
+            0.9452846280051382,
+            0.9452902615040224,
+            0.9452958923563652,
+            0.9453088611673672,
+            0.9453153506888818,
+            0.9453368124961468,
+            0.9453671969964283,
+            0.9454140093346087,
+            0.9454763889173636,
+            0.9456441218668051,
+            0.9457669213923341,
+            0.9459253836050687,
+            0.9460752993959971
+          ],
+          "minimum_pressure": [
+            0.9710222252113279,
+            0.9710222372113511,
+            0.9710222691728292,
+            0.971022321334275,
+            0.9710293425714945,
+            0.9710639074771379,
+            0.971121708325214,
+            0.9711907476203869,
+            0.971259798400267,
+            0.9716588734827182,
+            0.973052387560899,
+            0.9737992894012913,
+            0.9745469274065002,
+            0.9752951339211554,
+            0.9767671475750915,
+            0.9785206189147475,
+            0.9820202766857091,
+            0.9837622777430397,
+            0.9854963245625732,
+            0.9874238248320584,
+            0.9897569105473797,
+            0.9921604466060246,
+            0.9951056448400468,
+            0.9955321819549638,
+            0.992065814199898,
+            0.9887296784210814,
+            0.9855392439923137,
+            0.9825083837720333,
+            0.979649422382074,
+            0.9738095277756154,
+            0.9712328062627207,
+            0.9689088126910759,
+            0.9668437547724401,
+            0.965041893360328,
+            0.9635056312038146,
+            0.9612307520530489,
+            0.9604117518662951,
+            0.95992105568127,
+            0.9597502480684736,
+            0.9598887930212308,
+            0.9603241833481325,
+            0.9620265438537605,
+            0.9632601028306595,
+            0.9647240522542476,
+            0.9663985746533652,
+            0.9682629331201242,
+            0.9705976403710804,
+            0.9731192243375979,
+            0.9793946562680975,
+            0.983136892348873,
+            0.9869373820716875,
+            0.9900860995572411,
+            0.9901099611841514,
+            0.9901337979237024,
+            0.9901886636306295,
+            0.9902161040193844,
+            0.9903067848042321,
+            0.9904349992540327,
+            0.9906321364824343,
+            0.9908940967141008,
+            0.9915942853773618,
+            0.9921030249529371,
+            0.9927546958426056,
+            0.9933662352611884
+          ],
+          "scaled_residual_Linf": [
+            0.37352924047546865,
+            0.37352928133683533,
+            0.3735293901688325,
+            0.3735295677830463,
+            0.3735534698452356,
+            0.37367095750099816,
+            0.3738667693211172,
+            0.37409957557625534,
+            0.3743312469792149,
+            0.3756473003978004,
+            0.3800512578467642,
+            0.3822996370736741,
+            0.38441363512613347,
+            0.386393921014053,
+            0.38990015859511473,
+            0.3934134139900371,
+            0.3983193080928787,
+            0.399735542885677,
+            0.40047759962200613,
+            0.40052536703983616,
+            0.39949144484393906,
+            0.3968041223411168,
+            0.39166270349743276,
+            0.37331507641331246,
+            0.3594221386203774,
+            0.344632393702731,
+            0.32852045721004297,
+            0.3112470365486069,
+            0.2929658300783717,
+            0.2486540359076874,
+            0.22533830295119436,
+            0.20149270043492354,
+            0.1772868816676152,
+            0.15288085741129676,
+            0.12842255386350743,
+            0.0836425710902298,
+            0.08455037028262727,
+            0.08483920333961682,
+            0.08452142544364201,
+            0.08361409984498919,
+            0.08213876331482742,
+            0.10707218078266567,
+            0.12642848080984312,
+            0.144100649071778,
+            0.160013446448304,
+            0.17410643073954613,
+            0.18792213021644566,
+            0.19925984494183793,
+            0.2157989206133018,
+            0.21948838730855025,
+            0.21927110132200453,
+            0.21534948827308878,
+            0.2152815274208763,
+            0.21521333391539013,
+            0.21505478483442145,
+            0.21497456594910994,
+            0.21470514710622154,
+            0.2143126093567204,
+            0.2136831043712809,
+            0.21279802232794456,
+            0.21016572196853253,
+            0.2080144783428177,
+            0.20497108484850435,
+            0.20182587089809972
+          ],
+          "times": [
+            0.0,
+            3.2251554008124634e-8,
+            1.1815199331778989e-7,
+            2.583423345408254e-7,
+            1.912862915204852e-5,
+            0.0001120204785582721,
+            0.00026734051656943276,
+            0.0004528314302059776,
+            0.0006383223438425225,
+            0.0017097736368358093,
+            0.005444188944867706,
+            0.007442103557378184,
+            0.009440018169888662,
+            0.01143793278239914,
+            0.015365907798002558,
+            0.02004423394277259,
+            0.029400886232312656,
+            0.03407921237708269,
+            0.03875753852185272,
+            0.04398984936163253,
+            0.05037980421021738,
+            0.05704311931637771,
+            0.06534621448381367,
+            0.08418778950176062,
+            0.09360857701073409,
+            0.10302936451970757,
+            0.11245015202868104,
+            0.12187093953765452,
+            0.13129172704662798,
+            0.1526010290264148,
+            0.1632556800163082,
+            0.1739103310062016,
+            0.184564981996095,
+            0.1952196329859884,
+            0.2058742839758818,
+            0.22718358595566862,
+            0.23920974829132532,
+            0.25123591062698203,
+            0.26326207296263876,
+            0.2752882352982955,
+            0.2873143976339522,
+            0.3113667223052657,
+            0.3233928846409224,
+            0.33541904697657915,
+            0.3474452093122359,
+            0.3594713716478926,
+            0.3732106210953906,
+            0.3869498705428886,
+            0.4183040170236624,
+            0.4359896061169988,
+            0.45367519521033517,
+            0.47136078430367156,
+            0.47157004335304187,
+            0.47177930240241217,
+            0.4722611141021368,
+            0.4725020199519991,
+            0.4732978887993641,
+            0.47442207397341846,
+            0.47614883730961716,
+            0.4784399625829968,
+            0.4845509253459681,
+            0.4889846013350266,
+            0.49466345635282283,
+            0.5
+          ]
+        },
+        "minimum_density": 0.9363557777029943,
+        "minimum_pressure": 0.9597502480684736,
+        "relative_explicit_implicit_difference_Linf": 1.2956388146968207e-6,
+        "relative_startup_change_Linf": 0.033370696825039264
+      },
+      "name": "long_time_nontrivial_startup",
+      "status": "pass",
+      "summary": "explicit and implicit paths agree after a nontrivial smooth long-time startup"
     }
   ],
   "schema_version": "1.0",
-  "started_at": "2026-09-30T16:51:07.177",
+  "started_at": "2026-10-01T11:59:40.170",
   "status": "pass",
   "summary": {
     "errors": 0,
     "failed": 0,
-    "passed": 39,
-    "total": 39
+    "passed": 73,
+    "total": 73
   },
-  "target": "CompressibleFlow(HLLC, first_order + MUSCL + Thornber + species)"
+  "target": "CompressibleFlow(HLLC, first_order + MUSCL + Thornber + species + SST k-omega)"
 }
