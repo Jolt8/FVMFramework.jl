@@ -1,9 +1,28 @@
 FVMFramework Verification Report
-Target: CompressibleFlow(HLLC, first_order + MUSCL + Thornber + species)    Level: unit
+Target: CompressibleFlow(HLLC, first_order + MUSCL + Thornber + species + SST k-omega)    Level: unit
 
 COMPONENT
 PASS  uniform_hllc_flux                  identical-state HLLC equals the analytical Euler flux
 PASS  internal_face_conservation         one HLLC face contributes equal and opposite integrated flux
+
+VISCOUS_THERMAL
+PASS  weighted_least_squares_linear_gradient weighted least squares recovers a resolved linear gradient
+PASS  corrected_face_gradient_projection face correction replaces only the full normal-gradient component
+PASS  all_transport_gradients_corrected  u, v, w, and temperature use the same corrected normal gradient
+PASS  complete_viscous_face_flux         the complete Newtonian stress and Fourier face flux match an independent oracle
+PASS  couette_flow                       plane Couette flow reproduces the linear velocity and constant shear
+PASS  poiseuille_flow                    plane Poiseuille flow converges to the pressure-driven parabola
+PASS  one_dimensional_heat_conduction    one-dimensional conduction reproduces a linear temperature field and heat flux
+
+TURBULENCE
+PASS  sst_admissibility_guards           SST k and omega admissibility guards reject non-positive states
+PASS  sst_blending_limits                SST blending selects the k-omega wall limit and outer-flow limit
+PASS  sst_homogeneous_decay_sources      homogeneous zero-strain SST turbulence decays at the analytical rates
+PASS  sst_face_conservation              SST conservative advection and diffusion are equal and opposite across a face
+PASS  sst_conservative_operator          the full FVM operator evolves conservative rho*k and rho*omega with the SST sources
+PASS  sst_homogeneous_decay_integration  conservative SST turbulence follows the analytical homogeneous-decay solution
+PASS  sst_channel_log_layer              SST recovers log-layer channel eddy viscosity and k-equilibrium
+PASS  sst_flat_plate_equilibrium         SST log-layer stress matches the turbulent flat-plate skin-friction reference
 
 RESIDUAL
 PASS  free_stream_residual               uniform three-dimensional flow has a zero semi-discrete residual
@@ -18,6 +37,7 @@ PASS  ad_vs_finite_difference_jvp        ForwardDiff Jacobian-vector products ag
 PASS  muscl_stencil_expansion            MUSCL expands the empirical stencil and tracer sparsity contains it
 PASS  muscl_empirical_dependency         finite-difference dependencies are contained in tracer-declared sparsity
 PASS  muscl_ad_vs_finite_difference_jvp  ForwardDiff Jacobian-vector products agree with central finite differences
+PASS  thornber_zero_velocity_ad_vs_finite_difference_jvp ForwardDiff Jacobian-vector products agree with central finite differences
 
 MUSCL
 PASS  muscl_constant_reconstruction      MUSCL exactly preserves a constant scalar field
@@ -31,6 +51,8 @@ PASS  thornber_identical_states          Thornber leaves identical velocities un
 PASS  thornber_high_mach_recovery        Thornber exactly recovers ordinary reconstruction above Mach one
 PASS  thornber_low_mach_jump             Thornber scales the low-Mach normal jump by the independent Mach coefficient
 PASS  thornber_tangential_preservation   Thornber changes only the face-normal velocity components
+PASS  thornber_zero_velocity_hllc_jacobian Thornber HLLC has a finite ForwardDiff Jacobian at zero velocity
+PASS  thornber_energy_consistency        Thornber velocity correction preserves reconstructed pressure
 PASS  thornber_free_stream               uniform three-dimensional flow has a zero semi-discrete residual
 PASS  muscl_thornber_free_stream         uniform three-dimensional flow has a zero semi-discrete residual
 
@@ -47,4 +69,12 @@ BENCHMARK
 PASS  stationary_contact                 HLLC exactly preserves a stationary ideal-gas contact discontinuity
 PASS  stationary_contact_muscl           HLLC exactly preserves a stationary ideal-gas contact discontinuity
 
-RESULT: PASS (30/30 checks passed)
+MMS
+PASS  viscous_compressible_mms           viscous compressible shear MMS converges in momentum and total energy
+PASS  species_mms                        conservative two-species diffusion MMS converges while preserving the mixture sum
+
+MUTATION
+PASS  gradient_mutation_detection        the direct gradient oracle rejects the historical componentwise-projection mutation
+PASS  mms_mutation_detection             MMS rejects reversed viscous and species-diffusion flux signs
+
+RESULT: PASS (52/52 checks passed)

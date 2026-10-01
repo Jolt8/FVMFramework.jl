@@ -126,9 +126,9 @@ function fluid_fluid_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a, 
         idx_b, face_b,
-        #MUSCL_face_reconstruction!,
-        first_order_face_reconstruction!,
-        LOW_MACH_CORRECTION,
+        MUSCL_face_reconstruction!,
+        #first_order_face_reconstruction!,
+        no_low_mach_correction,
     )
     #HLLC!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b, first_order_face_reconstruction!)
 
@@ -179,7 +179,7 @@ end
 
 fluid_initial_conditions, fluid_properties = construct_initial_conditions_from_intuitive_inputs(
     ComponentVector(
-        vel_u = 0.0u"m/s",
+        vel_u = 1.0u"m/s",
         vel_v = 0.0u"m/s",
         vel_w = 0.0u"m/s",
         density = 1.18u"kg/m^3",
@@ -475,6 +475,7 @@ function command_line_float(prefix, default)
 end
 
 tMax = command_line_float("--tmax=", 1000.0)
+tMax = 3.0
 transient_abstol = command_line_float("--abstol=", 1.0e-6)
 transient_reltol = command_line_float("--reltol=", 1.0e-4)
 tspan = (t0, tMax)
@@ -510,10 +511,13 @@ transient_solve_kwargs = (
 
 @time sol = solve(
     implicit_prob,
+    FBDF(linsolve = KrylovJL_GMRES(), autodiff = ADTypes.AutoFiniteDiff()),
     #transient_algorithm;
     #transient_solve_kwargs...,
     callback = approximate_time_to_finish_cb,
 )
+
+sol.alg
 
 sol = if "--progress" in ARGS
     @time solve(

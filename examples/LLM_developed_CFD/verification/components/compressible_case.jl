@@ -4,6 +4,10 @@ include(joinpath(
 ))
 include(joinpath(
     @__DIR__, "..", "..", "navier_stokes_testing_grounds",
+    "turbulence", "sst_k_omega.jl",
+))
+include(joinpath(
+    @__DIR__, "..", "..", "navier_stokes_testing_grounds",
     "riemann_solvers", "HLLC_low_mach_correction.jl",
 ))
 include(joinpath(
@@ -13,6 +17,10 @@ include(joinpath(
 include(joinpath(
     @__DIR__, "..", "..", "navier_stokes_testing_grounds",
     "weighted_least_squares", "weighted_least_squares.jl",
+))
+include(joinpath(
+    @__DIR__, "..", "..", "navier_stokes_testing_grounds",
+    "viscous_and_diffusive_terms", "fluid_viscous_and_diffusive_fluxes.jl",
 ))
 include(joinpath(
     @__DIR__, "..", "..", "navier_stokes_testing_grounds",
@@ -124,6 +132,13 @@ function _populate_profile!(state_vector, state_axes, geo, profile, gamma)
             vel_w = 0.0
             pressure = 101325.0
             species_a_mass_fraction = 0.35 + 0.1 * sinpi(2.0 * x)
+        elseif profile == :smooth_acoustic
+            density = 1.0 + 0.05 * sinpi(2.0 * x)
+            vel_u = 0.04 * sinpi(2.0 * x)
+            vel_v = 0.0
+            vel_w = 0.0
+            pressure = 1.0 + 0.03 * cospi(2.0 * x)
+            species_a_mass_fraction = 0.4 + 0.05 * sinpi(2.0 * x)
         elseif profile == :jacobian
             density = 1.0 + 0.04 * x + 0.001 * sinpi(3.7 * x + 0.2)
             vel_u = 35.0 + 2.0 * x + 0.03 * sinpi(2.3 * x + 0.1)

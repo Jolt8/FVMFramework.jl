@@ -24,9 +24,11 @@ function _solver_statistics(solution, timed_result, algorithm_name)
 
     if length(solution.t) > 1
         saved_steps = diff(solution.t)
+        statistics["minimum_timestep"] = minimum(saved_steps)
         statistics["minimum_saved_timestep"] = minimum(saved_steps)
         statistics["maximum_saved_timestep"] = maximum(saved_steps)
     else
+        statistics["minimum_timestep"] = nothing
         statistics["minimum_saved_timestep"] = nothing
         statistics["maximum_saved_timestep"] = nothing
     end
@@ -265,6 +267,15 @@ function run_integration_checks(case, final_time; name_suffix = "")
         )
     end
     push!(results, implicit_wrapper)
+
+    if explicit_run !== nothing
+        baseline_name = _performance_baseline_name(case, name_suffix, "explicit")
+        push!(results, check_performance_baseline(baseline_name, explicit_run.statistics))
+    end
+    if implicit_run !== nothing
+        baseline_name = _performance_baseline_name(case, name_suffix, "implicit")
+        push!(results, check_performance_baseline(baseline_name, implicit_run.statistics))
+    end
 
     if explicit_run !== nothing && implicit_run !== nothing
         push!(results, _integration_classification(

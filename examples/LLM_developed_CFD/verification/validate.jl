@@ -17,6 +17,7 @@ function _verification_environment(target, level)
         "spatial_methods" => ["first-order HLLC", "MUSCL HLLC"],
         "low_mach_method" => "Thornber velocity reconstruction correction",
         "species_model" => "conservative rho*Y state with HLLC upwinding and mixture-corrected Fickian diffusion",
+        "turbulence_model" => "SST k-omega with conservative rho*k and rho*omega transport",
         "explicit_algorithm" => "SSPRK43, fixed CFL=0.2",
         "implicit_algorithm" => "FBDF; ForwardDiff for first order and finite differences for shock-limited MUSCL",
     )
@@ -97,6 +98,51 @@ function validate(
 
     push!(results, _run_check("uniform_hllc_flux", "component") do
         check_uniform_hllc_flux(uniform_case)
+    end)
+    push!(results, _run_check("weighted_least_squares_linear_gradient", "viscous_thermal") do
+        check_weighted_least_squares_linear_gradient(max(target.unit_cells, 3))
+    end)
+    push!(results, _run_check("corrected_face_gradient_projection", "viscous_thermal") do
+        check_corrected_face_gradient_projection()
+    end)
+    push!(results, _run_check("all_transport_gradients_corrected", "viscous_thermal") do
+        check_all_transport_gradients_are_corrected()
+    end)
+    push!(results, _run_check("complete_viscous_face_flux", "viscous_thermal") do
+        check_complete_viscous_face_flux()
+    end)
+    push!(results, _run_check("couette_flow", "viscous_thermal") do
+        check_couette_flow(max(16, target.unit_cells))
+    end)
+    push!(results, _run_check("poiseuille_flow", "viscous_thermal") do
+        check_poiseuille_flow([8, 16, 32, 64])
+    end)
+    push!(results, _run_check("one_dimensional_heat_conduction", "viscous_thermal") do
+        check_one_dimensional_heat_conduction(max(16, target.unit_cells))
+    end)
+    push!(results, _run_check("sst_admissibility_guards", "turbulence") do
+        check_sst_admissibility_guards()
+    end)
+    push!(results, _run_check("sst_blending_limits", "turbulence") do
+        check_sst_blending_limits()
+    end)
+    push!(results, _run_check("sst_homogeneous_decay_sources", "turbulence") do
+        check_sst_homogeneous_decay_sources()
+    end)
+    push!(results, _run_check("sst_face_conservation", "turbulence") do
+        check_sst_face_conservation()
+    end)
+    push!(results, _run_check("sst_conservative_operator", "turbulence") do
+        check_sst_conservative_operator()
+    end)
+    push!(results, _run_check("sst_homogeneous_decay_integration", "turbulence") do
+        check_sst_homogeneous_decay_integration()
+    end)
+    push!(results, _run_check("sst_channel_log_layer", "turbulence") do
+        check_sst_channel_log_layer()
+    end)
+    push!(results, _run_check("sst_flat_plate_equilibrium", "turbulence") do
+        check_sst_flat_plate_equilibrium()
     end)
     push!(results, _run_check("internal_face_conservation", "component") do
         check_face_conservation(jacobian_case)
@@ -199,6 +245,18 @@ function validate(
     push!(results, _run_check("stationary_contact_muscl", "benchmark") do
         check_stationary_contact(muscl_contact_case)
     end)
+    push!(results, _run_check("viscous_compressible_mms", "mms") do
+        check_viscous_compressible_mms([16, 32, 64, 128])
+    end)
+    push!(results, _run_check("species_mms", "mms") do
+        check_species_mms([16, 32, 64, 128])
+    end)
+    push!(results, _run_check("gradient_mutation_detection", "mutation") do
+        check_gradient_mutation_detection()
+    end)
+    push!(results, _run_check("mms_mutation_detection", "mutation") do
+        check_mms_mutation_detection()
+    end)
 
     if level in (:integration, :full)
         if level == :full
@@ -246,10 +304,16 @@ function validate(
                 0.1,
             )
         end)
+        push!(results, _run_check("long_time_known_steady", "long_time") do
+            check_long_time_known_steady(12, 1.0)
+        end)
+        push!(results, _run_check("long_time_nontrivial_startup", "long_time") do
+            check_long_time_nontrivial_startup(12, 0.5)
+        end)
     end
 
     report = VerificationReport(
-        "CompressibleFlow(HLLC, first_order + MUSCL + Thornber + species)",
+        "CompressibleFlow(HLLC, first_order + MUSCL + Thornber + species + SST k-omega)",
         level,
         started_at,
         now(),

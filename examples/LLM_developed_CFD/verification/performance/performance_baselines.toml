@@ -1,0 +1,171 @@
+schema_version = 1
+generated_at = "2026-10-01"
+description = "Versioned solver-work baselines. Runtime is deliberately non-gating."
+
+[baselines.32_cells_first_order_explicit]
+accepted_steps = 23
+rejected_steps = 0
+rhs_evaluations = 92
+linear_solves = 0
+nonlinear_iterations = 0
+minimum_timestep = 0.003791289974828929
+runtime_seconds = 2.3897585
+count_relative_allowance = 0.20
+count_absolute_allowance = 2
+minimum_timestep_factor = 20.0
+runtime_factor = 5.0
+runtime_absolute_allowance_seconds = 5.0
+
+[baselines.32_cells_first_order_implicit]
+accepted_steps = 104
+rejected_steps = 7
+rhs_evaluations = 224
+linear_solves = 202
+nonlinear_iterations = 202
+minimum_timestep = 9.349589012787291e-10
+runtime_seconds = 9.9391712
+count_relative_allowance = 0.20
+count_absolute_allowance = 5
+minimum_timestep_factor = 20.0
+runtime_factor = 5.0
+runtime_absolute_allowance_seconds = 5.0
+
+[baselines.32_cells_muscl_explicit]
+accepted_steps = 23
+rejected_steps = 0
+rhs_evaluations = 92
+linear_solves = 0
+nonlinear_iterations = 0
+minimum_timestep = 0.003791289974828929
+runtime_seconds = 0.1206215
+count_relative_allowance = 0.20
+count_absolute_allowance = 2
+minimum_timestep_factor = 20.0
+runtime_factor = 5.0
+runtime_absolute_allowance_seconds = 5.0
+
+[baselines.32_cells_muscl_implicit]
+accepted_steps = 517
+rejected_steps = 94
+rhs_evaluations = 1087
+linear_solves = 1054
+nonlinear_iterations = 1054
+minimum_timestep = 9.406236881019732e-10
+runtime_seconds = 2.3240166
+count_relative_allowance = 0.20
+count_absolute_allowance = 10
+minimum_timestep_factor = 20.0
+runtime_factor = 5.0
+runtime_absolute_allowance_seconds = 5.0
+
+[baselines.32_cells_thornber_explicit]
+accepted_steps = 23
+rejected_steps = 0
+rhs_evaluations = 92
+linear_solves = 0
+nonlinear_iterations = 0
+minimum_timestep = 0.003791289974828929
+runtime_seconds = 0.0917892
+count_relative_allowance = 0.20
+count_absolute_allowance = 2
+minimum_timestep_factor = 20.0
+runtime_factor = 5.0
+runtime_absolute_allowance_seconds = 5.0
+
+[baselines.32_cells_thornber_implicit]
+accepted_steps = 128
+rejected_steps = 10
+rhs_evaluations = 295
+linear_solves = 273
+nonlinear_iterations = 273
+minimum_timestep = 9.349586936775575e-10
+runtime_seconds = 0.4218152
+count_relative_allowance = 0.20
+count_absolute_allowance = 5
+minimum_timestep_factor = 20.0
+runtime_factor = 5.0
+runtime_absolute_allowance_seconds = 5.0
+
+[baselines.64_cells_first_order_explicit]
+accepted_steps = 46
+rejected_steps = 0
+rhs_evaluations = 184
+linear_solves = 0
+nonlinear_iterations = 0
+minimum_timestep = 0.0011501829288022847
+runtime_seconds = 2.0618536
+count_relative_allowance = 0.20
+count_absolute_allowance = 2
+minimum_timestep_factor = 20.0
+runtime_factor = 5.0
+runtime_absolute_allowance_seconds = 5.0
+
+[baselines.64_cells_first_order_implicit]
+accepted_steps = 151
+rejected_steps = 7
+rhs_evaluations = 341
+linear_solves = 319
+nonlinear_iterations = 319
+minimum_timestep = 5.559298888178956e-10
+runtime_seconds = 9.4500421
+count_relative_allowance = 0.20
+count_absolute_allowance = 5
+minimum_timestep_factor = 20.0
+runtime_factor = 5.0
+runtime_absolute_allowance_seconds = 5.0
+
+[baselines.64_cells_muscl_explicit]
+accepted_steps = 46
+rejected_steps = 0
+rhs_evaluations = 184
+linear_solves = 0
+nonlinear_iterations = 0
+minimum_timestep = 0.0011501829288022847
+runtime_seconds = 0.1336398
+count_relative_allowance = 0.20
+count_absolute_allowance = 2
+minimum_timestep_factor = 20.0
+runtime_factor = 5.0
+runtime_absolute_allowance_seconds = 5.0
+
+[baselines.64_cells_muscl_implicit]
+accepted_steps = 854
+rejected_steps = 163
+rhs_evaluations = 1972
+linear_solves = 1939
+nonlinear_iterations = 1939
+minimum_timestep = 5.592981912155331e-10
+runtime_seconds = 2.9191011
+count_relative_allowance = 0.20
+count_absolute_allowance = 10
+minimum_timestep_factor = 20.0
+runtime_factor = 5.0
+runtime_absolute_allowance_seconds = 5.0
+
+[baselines.64_cells_thornber_explicit]
+accepted_steps = 46
+rejected_steps = 0
+rhs_evaluations = 184
+linear_solves = 0
+nonlinear_iterations = 0
+minimum_timestep = 0.0011501829288022847
+runtime_seconds = 0.1040798
+count_relative_allowance = 0.20
+count_absolute_allowance = 2
+minimum_timestep_factor = 20.0
+runtime_factor = 5.0
+runtime_absolute_allowance_seconds = 5.0
+
+[baselines.64_cells_thornber_implicit]
+accepted_steps = 164
+rejected_steps = 11
+rhs_evaluations = 448
+linear_solves = 426
+nonlinear_iterations = 426
+minimum_timestep = 5.559297653775006e-10
+runtime_seconds = 0.4862353
+count_relative_allowance = 0.20
+count_absolute_allowance = 5
+minimum_timestep_factor = 20.0
+runtime_factor = 5.0
+runtime_absolute_allowance_seconds = 5.0

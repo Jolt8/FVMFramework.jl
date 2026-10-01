@@ -194,5 +194,17 @@ function update_weighted_least_squares_gradients!(u, stencil)
     populate_weighted_least_squares_gradient!(u.grad_vel_v, u.vel_v, stencil)
     populate_weighted_least_squares_gradient!(u.grad_vel_w, u.vel_w, stencil)
     populate_weighted_least_squares_gradient!(u.grad_temperature, u.temperature, stencil)
+    if hasproperty(u, :turbulent_kinetic_energy)
+        populate_weighted_least_squares_gradient!(
+            u.grad_turbulent_kinetic_energy,
+            u.turbulent_kinetic_energy,
+            stencil,
+        )
+        populate_weighted_least_squares_gradient!(
+            u.grad_specific_dissipation_rate,
+            u.specific_dissipation_rate,
+            stencil,
+        )
+    end
     return nothing
 end

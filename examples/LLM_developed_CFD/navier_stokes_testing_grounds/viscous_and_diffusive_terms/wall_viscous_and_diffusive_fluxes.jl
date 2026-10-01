@@ -93,7 +93,16 @@ function _wall_viscous_and_diffusive_flux!(
         normal_x, normal_y, normal_z, face_distance,
     )
 
-    dynamic_viscosity = u.mu[idx_a]
+    if hasproperty(u, :turbulent_viscosity)
+        # The low-Re SST wall condition has k = 0 and therefore mu_t = 0 at
+        # the wall. Use the molecular value for the wall traction rather than
+        # extrapolating the cell-centred eddy viscosity to the boundary.
+        dynamic_viscosity = u.molecular_viscosity[idx_a]
+    elseif hasproperty(u, :effective_dynamic_viscosity)
+        dynamic_viscosity = u.effective_dynamic_viscosity[idx_a]
+    else
+        dynamic_viscosity = u.mu[idx_a]
+    end
     velocity_divergence = grad_vel_u_x + grad_vel_v_y + grad_vel_w_z
     isotropic_stress = (2 / 3) * dynamic_viscosity * velocity_divergence
 
