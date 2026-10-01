@@ -54,7 +54,11 @@ function chamber_pressure_limit_expanded(u, t, integrator, u_axes, p_axes, local
 
     #As soon as this hits zero, the simulation is stopped
     #We stop simulating after the chamber pressure reaches this value
-    100_000 - p_named.chamber_pressure #Pa
+    if t < 2.0 #we make sure that all rockets can burn for at least 2 seconds before applying this
+        return 1.0
+    else
+        return 100_000 - p_named.chamber_pressure #Pa
+    end
 end
 
 chamber_pressure_limit = let
