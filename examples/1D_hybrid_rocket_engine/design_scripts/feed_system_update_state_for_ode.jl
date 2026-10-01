@@ -148,7 +148,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     #p.injector_orifice_area = p.injector_number_of_orifices * (pi / 4) * (p.injector_orifice_diameter^2)
 
     #Fuel Grain
-    p.final_fuel_grain_void_diameter = p.u0_fuel_grain_void_diameter + p.additional_fuel_grain_void_diameter
+    #p.final_fuel_grain_void_diameter = p.u0_fuel_grain_void_diameter + p.additional_fuel_grain_void_diameter
     
     p.fuel_grain_average_cross_sectional_area = pi * (u.port_diameter / 2)^2
     

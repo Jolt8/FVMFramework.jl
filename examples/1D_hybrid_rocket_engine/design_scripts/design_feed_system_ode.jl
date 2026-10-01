@@ -196,7 +196,8 @@ function update_u0!(u, p, t, oxidizer_model, chamber_model)
     u.chamber_gas_internal_energy = Clapeyron.VT0.internal_energy(chamber_model, p.chamber_volume, p.chamber_temperature, [chamber_gas_oxidizer_moles, chamber_gas_fuel_moles])
 
     #Fuel Grain
-    u.port_diameter = p.u0_fuel_grain_void_diameter
+    u.port_diameter = p.final_fuel_grain_void_diameter - p.additional_fuel_grain_void_diameter
+    #p.u0_fuel_grain_void_diameter
 
     return nothing
 end
@@ -320,12 +321,13 @@ properties = ComponentVector(
     chamber_specific_enthalpy = 0.0u"J/kg",
 
     #Fuel grain
-    u0_fuel_grain_void_diameter = 3.0u"cm", #optimized
+    #u0_fuel_grain_void_diameter = 3.0u"cm",
     fuel_mass = 0.0u"kg", #this will be derived by substracting the volume of the cylinder formed by the u0_fuel_grain_void_diameter by the final_fuel_grain_void_diameter and then multiplying by the fuel density
     fuel_density = 950.0u"kg/m^3",
     #fuel_regression_rate = 0.5u"mm/s",
     additional_fuel_grain_void_diameter = 1.0u"cm", #optimized
-    final_fuel_grain_void_diameter = 0.0u"cm",
+    final_fuel_grain_void_diameter = 23.8u"mm", 
+    #not optimized, we're going to be using a COTS phenolic liner, so we're just going to use the ID that the manufactuerer specifies
     fuel_grain_length = 30.0u"cm", #optimized
     fuel_grain_average_cross_sectional_area = 0.0u"m^2",
     fuel_grain_burning_surface_area = 0.0u"m^2",
@@ -372,7 +374,7 @@ optimized_properties = [
     #Chamber
 
     #Fuel grain
-    OptimizedParameter(:u0_fuel_grain_void_diameter, 1.0u"cm", 5.0u"cm"),
+    #OptimizedParameter(:u0_fuel_grain_void_diameter, 1.0u"cm", 5.0u"cm"),
     #OptimizedParameter(:final_fuel_grain_void_diameter, 1.0u"cm", 20.0u"cm"),
     OptimizedParameter(:additional_fuel_grain_void_diameter, 0.5u"cm", 2.0u"cm"),
     OptimizedParameter(:fuel_grain_length, 20.0u"cm", 100.0u"cm"),
@@ -384,8 +386,6 @@ optimized_properties = [
     #Nozzle
     OptimizedParameter(:nozzle_throat_diameter, 10.0u"mm", 20.0u"mm")
 ]
-
-theta_guess, theta_lb, theta_ub, theta_axes, u_axes, p_axes, theta_to_u_map, theta_to_p_map, p_to_u_map = create_theta_guess(optimized_properties, u0, properties)
 
 Revise.includet(joinpath(@__DIR__, "CEA_lookup_table.jl"))
 Revise.includet(joinpath(@__DIR__, "design_feed_sytem_ode_loss.jl"))
@@ -539,7 +539,7 @@ plot_sol_states(sol, u_axes, p_axes, oxidizer_model, chamber_model)
 #plot(sol.t, [ComponentVector(sol.u[i], u_axes).port_diameter for i in eachindex(sol.t)])
 
 optimized_cb_set = CallbackSet(
-    #approximate_time_to_finish_cb,
+    approximate_time_to_finish_cb,
     #port_diameter_termination_cb,
     chamber_pressure_termination_cb,
     #fuel_burnout_cb
@@ -552,8 +552,8 @@ viewable_system_design_loss(
         u0_tank_oxidizer_mass = 1.23,
         valve_flow_capacity_factor = 1.5e-5,
         injector_orifice_area = 2.3e-5,
-        u0_fuel_grain_void_diameter = 0.020,
-        additional_fuel_grain_void_diameter = 0.009,
+        #u0_fuel_grain_void_diameter = 0.020,
+        additional_fuel_grain_void_diameter = 0.01,
         fuel_grain_length = 0.40, 
         #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
         nozzle_throat_diameter = 0.0113
@@ -565,7 +565,7 @@ viewable_system_design_loss(
         u0_tank_oxidizer_mass = 1.33,
         valve_flow_capacity_factor = 1.5e-5,
         injector_orifice_area = 2.3e-5,
-        u0_fuel_grain_void_diameter = 0.016,
+        #u0_fuel_grain_void_diameter = 0.016,
         additional_fuel_grain_void_diameter = 0.0093,
         fuel_grain_length = 0.45, 
         #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
@@ -578,7 +578,7 @@ viewable_system_design_loss(
         u0_tank_oxidizer_mass = 1.3338466690919596,
         valve_flow_capacity_factor = 1.4864625820186499e-5,
         injector_orifice_area = 2.307584272651544e-5,
-        u0_fuel_grain_void_diameter = 0.015622001356552163,
+        #u0_fuel_grain_void_diameter = 0.015622001356552163,
         additional_fuel_grain_void_diameter = 0.009261793472995626,
         fuel_grain_length = 0.4516855289918622, 
         #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
@@ -591,7 +591,7 @@ viewable_system_design_loss(
         u0_tank_oxidizer_mass = 1.3338466690919596,
         valve_flow_capacity_factor = 1.4864625820186499e-5,
         injector_orifice_area = 2.307584272651544e-5,
-        u0_fuel_grain_void_diameter = 0.015622001356552163,
+        #u0_fuel_grain_void_diameter = 0.015622001356552163,
         additional_fuel_grain_void_diameter = 0.009061793472995626,
         fuel_grain_length = 0.6616855289918622, 
         #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
@@ -604,7 +604,7 @@ viewable_system_design_loss(
         u0_tank_oxidizer_mass = 2.034594773122675,
         valve_flow_capacity_factor = 6.6906403746981306e-6,
         injector_orifice_area = 2.0728250081324405e-5,
-        u0_fuel_grain_void_diameter = 0.03403845868495702,
+        #u0_fuel_grain_void_diameter = 0.03403845868495702,
         additional_fuel_grain_void_diameter = 0.009822880727716907,
         fuel_grain_length = 0.6997446134380847, 
         #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
@@ -617,7 +617,7 @@ viewable_system_design_loss(
         u0_tank_oxidizer_mass = 2.034594773122675,
         valve_flow_capacity_factor = 6.6906403746981306e-6,
         injector_orifice_area = 2.0728250081324405e-5,
-        u0_fuel_grain_void_diameter = 0.03403845868495702,
+        #u0_fuel_grain_void_diameter = 0.03403845868495702,
         additional_fuel_grain_void_diameter = 0.009822880727716907,
         fuel_grain_length = 0.6997446134380847, 
         #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
@@ -630,7 +630,7 @@ viewable_system_design_loss(
         u0_tank_oxidizer_mass = 2.06,
         valve_flow_capacity_factor = 1.0e-4,
         injector_orifice_area = 6.0e-4,
-        u0_fuel_grain_void_diameter = 0.01,
+        #u0_fuel_grain_void_diameter = 0.01,
         additional_fuel_grain_void_diameter = 0.0132,
         fuel_grain_length = 0.6, 
         #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
@@ -643,7 +643,7 @@ viewable_system_design_loss(
         u0_tank_oxidizer_mass = 2.06,
         valve_flow_capacity_factor = 3.0e-6,
         injector_orifice_area = 7.0e-6,
-        u0_fuel_grain_void_diameter = 0.01,
+        #u0_fuel_grain_void_diameter = 0.01,
         additional_fuel_grain_void_diameter = 0.013,
         fuel_grain_length = 0.6, 
         #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
@@ -656,14 +656,14 @@ viewable_system_design_loss(
         u0_tank_oxidizer_mass = 5.0,
         valve_flow_capacity_factor = 1.0e-4,
         injector_orifice_area = 1.0e-4,
-        u0_fuel_grain_void_diameter = 0.03,
+        #u0_fuel_grain_void_diameter = 0.03,
         additional_fuel_grain_void_diameter = 0.009,
         fuel_grain_length = 0.30, 
         #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
         nozzle_throat_diameter = 0.0156
     ), properties_unitless
 )
-#=
+
 opt_f = OptimizationFunction(pure_system_design_loss_closure, Optimization.AutoFiniteDiff())
 opt_prob = OptimizationProblem(opt_f, Vector(theta_guess_unitless), Vector(properties_unitless), lb = Vector(theta_lb_unitless), ub = Vector(theta_ub_unitless))
 
@@ -710,12 +710,12 @@ opt_sol = solve(opt_prob,
     callback = cb,
     PoulationSize = 1000,
     #maxiters = 1,
-    #maxtime = 60.0,
+    maxtime = 60.0,
     Method = :RandomSearcher,
     verbose = true
     #Method = :SepReal
 )
-
+#=
 new_opt_f = OptimizationFunction(pure_system_design_loss_closure, Optimization.AutoFiniteDiff())
 new_opt_prob = OptimizationProblem(new_opt_f, Vector(opt_sol.u), Vector(properties_unitless), lb = Vector(theta_lb_unitless), ub = Vector(theta_ub_unitless))
 
