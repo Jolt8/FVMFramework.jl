@@ -14,6 +14,11 @@ and OrdinaryDiffEq paths on intentionally small hexahedral meshes. It provides:
 - general L1, L2, Linf, and observed-convergence-order utilities;
 - empirical confirmation that MUSCL expands the cell stencil from radius 1 to 2;
 - independent Thornber identical/high-Mach/low-Mach/tangential checks;
+- a finite zero-velocity Thornber HLLC Jacobian and full-residual AD/finite-
+  difference comparison;
+- thermodynamic consistency after Thornber velocity reconstruction;
+- a nonuniform, initially stagnant Thornber case through explicit and implicit
+  integration;
 - first-order, MUSCL, Thornber, and MUSCL-plus-Thornber feature combinations;
 - conservative `rho*Y_k` species state, HLLC advection, and mixture-corrected
   Fickian diffusion checks;
@@ -46,6 +51,42 @@ low-Mach, sparsity, derivative, contact, and convergence checks.
 and implicit integrators. `:full` uses 64-cell Sod cases and extends the smooth
 MUSCL convergence study through 192 cells. Reports
 record the mesh, tolerances, algorithms, package versions, and random seed.
+
+## No-species solver diagnostics
+
+The 100-cell no-species driver is intentionally configurable separately from
+the small verification cases:
+
+```powershell
+# Verified default: ordinary HLLC, slip walls, linearly implicit transient
+julia --project=. examples/LLM_developed_CFD/navier_stokes_testing_grounds/new_navier_stokes_solver_no_species.jl --tmax=0.1
+
+# Also run the scaled nonlinear least-squares steady solve
+julia --project=. examples/LLM_developed_CFD/navier_stokes_testing_grounds/new_navier_stokes_solver_no_species.jl --tmax=0.01 --steady
+
+# Diagnostic modes
+julia --project=. examples/LLM_developed_CFD/navier_stokes_testing_grounds/new_navier_stokes_solver_no_species.jl --tmax=0.01 --thornber
+julia --project=. examples/LLM_developed_CFD/navier_stokes_testing_grounds/new_navier_stokes_solver_no_species.jl --no-slip-walls
+```
+
+`--tmax=`, `--abstol=`, and `--reltol=` set the transient controls, while
+`--progress` enables throttled progress output. Ordinary HLLC is the default
+because the prescribed inlet is approximately Mach 1.7. Thornber is retained
+behind `--thornber` for low-Mach and diagnostic work rather than being applied
+silently during the mixed-Mach startup.
+
+The steady-state version works for the verified default configuration. It
+scales the conservative variables, uses nonlinear least squares with
+Levenberg-Marquardt and sparse finite differences, and starts from the known
+uniform inlet state for the slip-wall problem. Ordinary and Thornber-uniform
+runs both returned `Success`, an admissible state, and a scaled Linf residual
+of approximately `2.06e-11`.
+
+This is not evidence of global Newton convergence. The original stagnant guess
+is far from the root, the old zero-speed Thornber norm generated non-finite AD
+Jacobians, and HLLC wave-selection branches remain difficult for direct Newton.
+The optional no-slip case uses a transient warm start and has not yet been
+shown to converge to a steady root.
 
 The shock-limited MUSCL case uses `FBDF(AutoFiniteDiff)` because the limiter
 changes branches at discontinuities. Smooth-state MUSCL still undergoes the

@@ -50,6 +50,68 @@ for unequal species diffusivities. The original oriented mass-fraction helper
 is retained and tested for compatibility, while the coupled solver writes
 equal-and-opposite fluxes directly into conservative species-flow caches.
 
+## Thornber low-Mach reconstruction
+
+The original Thornber implementation evaluated
+`sqrt(u^2 + v^2 + w^2)` at exactly stagnant states. Its value is finite at the
+origin, but its derivative is undefined, and ForwardDiff produced non-finite
+HLLC Jacobian entries. This was the cause of the immediate Newton failure when
+the no-species solver started from a stationary domain.
+
+The production correction now uses a smooth velocity norm with a Mach
+regularization of `1e-3`. The local maximum and the cap at Mach one use compact
+C1 transitions. These changes define finite derivatives at zero velocity,
+equal neighboring Mach numbers, and the Mach-one transition. The verifier now
+checks the complete Thornber HLLC ForwardDiff Jacobian at a nonuniform,
+zero-velocity state and compares the full semi-discrete Jacobian-vector product
+with centered finite differences.
+
+After Thornber changes reconstructed velocity, HLLC rebuilds total energy by
+adding the corrected-minus-original kinetic-energy density. This preserves the
+original internal energy and pressure. Previously, corrected momentum was used
+with the uncorrected total energy while HLLC continued using the original
+pressure, so the reconstructed conservative and primitive states were not
+thermodynamically consistent. A dedicated regression now verifies recovered
+pressure after the correction.
+
+The integration suite includes a nonuniform, initially stagnant Thornber Sod
+case through both SSPRK43 and FBDF. This is intentionally separate from the
+large supersonic-inlet example: passing a low-Mach component or Sod test does
+not establish that applying the correction during a mixed-Mach startup is a
+good modelling choice.
+
+## No-species driver and steady-state scope
+
+`new_navier_stokes_solver_no_species.jl` now makes the important numerical
+choices explicit:
+
+- ordinary HLLC is the default for its Mach-1.7 prescribed inlet;
+- `--thornber` enables the low-Mach correction as a diagnostic mode;
+- slip, adiabatic side walls are the default verified configuration;
+- `--no-slip-walls` restores the viscous wall treatment, which needs adequate
+  transverse resolution and a boundary-condition study;
+- `Rosenbrock23(AutoFiniteDiff, Sparspak)` replaces the unspecified automatic
+  ODE algorithm and avoids nested nonlinear failures during the tested startup;
+- density and internal-energy admissibility are checked before accepting ODE
+  states, saving is bounded, progress output is optional, and final time and
+  tolerances are command-line configurable.
+
+The steady path scales every conservative field, formulates the problem as
+nonlinear least squares, and uses Levenberg-Marquardt with sparse finite
+differences. For the default slip-wall case, the uniform prescribed-inlet state
+is an exact boundary-informed steady guess. Both ordinary HLLC and the
+high-Mach-uniform Thornber mode return `Success`, remain admissible, and have a
+scaled Linf residual of approximately `2.06e-11` in the tested configuration.
+
+That result has a deliberately narrow interpretation. It proves that the
+configured steady residual recognizes and accepts the known uniform root. It
+does not prove global convergence from the original stagnant state. Direct
+Newton from the stagnant or merely transient-warmed state still encounters
+HLLC branch sensitivity; trust-region, pseudo-transient, and least-squares
+experiments reduced the residual but could stall. The optional no-slip case
+uses the transient result as its steady initial guess and has not been shown to
+converge to a steady root.
+
 ## Current limitations
 
 - Species currently behave as passive scalars. Composition does not yet update
@@ -67,6 +129,12 @@ equal-and-opposite fluxes directly into conservative species-flow caches.
 - The sparsity diagnostic intentionally uses tiny meshes and one smooth state;
   it reports inactive declared entries rather than claiming they are wrong.
 - Solver statistics are captured but not yet compared with a versioned baseline.
+- Long-time convergence of the 100-cell supersonic-inlet driver with Thornber
+  is not verified. Its mixed-Mach startup develops a materially different flow
+  from ordinary HLLC, including backflow by 1 s in the tested configuration.
+- The steady solve is verified only for the known uniform slip-wall root. The
+  no-slip configuration and convergence from a generic distant initial guess
+  remain open problems.
 
 ## Solver weaknesses found
 
@@ -88,3 +156,11 @@ equal-and-opposite fluxes directly into conservative species-flow caches.
 - The existing example is monolithic and executes a large solve when included.
   The verifier therefore constructs a small equivalent configuration rather
   than importing the top-level example script.
+- The former Thornber zero-speed norm generated non-finite ForwardDiff
+  Jacobians and caused immediate Newton failure. Smooth Mach regularization
+  fixes that derivative defect, but it does not make Thornber appropriate for
+  the supersonic-inlet startup.
+- Leaving the ODE algorithm unspecified obscured whether the driver was using
+  an explicit or stiff path and led to misleading `MaxIters` failures. The
+  no-species driver now selects a linearly implicit method explicitly and
+  reports accepted/rejected steps and nonlinear failures.
