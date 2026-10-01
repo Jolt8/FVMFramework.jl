@@ -24,7 +24,6 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     prob = remake(problem_template; u0 = Vector(u0), p = Vector(p), tspan = (0.0, p.simulation_time))
 
     sol = 0
-
     
     try
     sol = solve(prob,
@@ -180,16 +179,14 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         end
     end
 
-    #@show length(sol.u)
+    if true == true
+        pressure_plt = plot(sol.t, pressures_over_time, label = "Chamber Pressure", xlabel = "Time [s]", ylabel = "Chamber Pressure [Pa]")
+        display(pressure_plt)
+        thrust_plt = plot(sol.t, [0.0, thrust_over_time...], label = "Thrust", xlabel = "Time [s]", ylabel = "Thrust [N]")
+        display(thrust_plt)
 
-    #@show length(thrust_over_time)
-    #@show length(pressures_over_time)
-    #@show length(sol.t)
-
-    #thrust_plt = plot(sol.t, [0.0, thrust_over_time...], label = "Thrust", xlabel = "Time [s]", ylabel = "Thrust [N]")
-    #display(thrust_plt)
-    #pressure_plt = plot(sol.t, pressures_over_time, label = "Chamber Pressure", xlabel = "Time [s]", ylabel = "Chamber Pressure [Pa]")
-    #display(pressure_plt)
+        @show ComponentVector(sol.u[end], u_axes).tank_oxidizer_mass
+    end
 
     p.cummulative_impulse = cummulative_impulse
     impulse_loss = 0.0001 * abs2(p.desired_impulse - cummulative_impulse)
