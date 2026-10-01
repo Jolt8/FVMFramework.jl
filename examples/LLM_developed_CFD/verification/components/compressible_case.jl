@@ -12,6 +12,14 @@ include(joinpath(
 ))
 include(joinpath(
     @__DIR__, "..", "..", "navier_stokes_testing_grounds",
+    "weighted_least_squares", "weighted_least_squares.jl",
+))
+include(joinpath(
+    @__DIR__, "..", "..", "navier_stokes_testing_grounds",
+    "face_reconstructors", "MUSCL_face_reconstruction.jl",
+))
+include(joinpath(
+    @__DIR__, "..", "..", "navier_stokes_testing_grounds",
     "navier_stokes_fluid_property_update_functions", "fluid_property_update_functions.jl",
 ))
 include(joinpath(
@@ -31,6 +39,9 @@ struct CompressibleCase{S, G, F}
     gamma::Float64
     cv::Float64
     boundary_condition::Symbol
+    spatial_method::Symbol
+    low_mach_method::Symbol
+    species_diffusion::Bool
 end
 
 struct CompressibleFlowVerification
@@ -70,7 +81,17 @@ function _conservative_values(density, vel_u, vel_v, vel_w, pressure, gamma)
     )
 end
 
-function _set_cell_state!(state, cell_id, density, vel_u, vel_v, vel_w, pressure, gamma)
+function _set_cell_state!(
+    state,
+    cell_id,
+    density,
+    vel_u,
+    vel_v,
+    vel_w,
+    pressure,
+    gamma,
+    species_a_mass_fraction,
+)
     (
         state.density[cell_id],
         state.momentum_density_u[cell_id],
@@ -78,6 +99,10 @@ function _set_cell_state!(state, cell_id, density, vel_u, vel_v, vel_w, pressure
         state.momentum_density_w[cell_id],
         state.volumetric_energy[cell_id],
     ) = _conservative_values(density, vel_u, vel_v, vel_w, pressure, gamma)
+    state.species_densities.species_a[cell_id] =
+        density * species_a_mass_fraction
+    state.species_densities.species_b[cell_id] =
+        density * (1.0 - species_a_mass_fraction)
     return nothing
 end
 
@@ -91,18 +116,37 @@ function _populate_profile!(state_vector, state_axes, geo, profile, gamma)
             vel_v = 3.0
             vel_w = -2.0
             pressure = 101325.0
+            species_a_mass_fraction = 0.25
         elseif profile == :stationary_smooth
             density = 1.0 + 0.08 * sinpi(2.0 * x)
             vel_u = 0.0
             vel_v = 0.0
             vel_w = 0.0
             pressure = 101325.0
+            species_a_mass_fraction = 0.35 + 0.1 * sinpi(2.0 * x)
         elseif profile == :jacobian
-            density = 1.0 + 0.04 * sinpi(2.0 * x)
-            vel_u = 35.0 + 2.0 * cospi(2.0 * x)
-            vel_v = 0.4 * sinpi(2.0 * x)
-            vel_w = -0.2 * cospi(2.0 * x)
-            pressure = 100000.0 + 1200.0 * sinpi(2.0 * x + 0.13)
+            density = 1.0 + 0.04 * x + 0.001 * sinpi(3.7 * x + 0.2)
+            vel_u = 35.0 + 2.0 * x + 0.03 * sinpi(2.3 * x + 0.1)
+            vel_v = 0.2 + 0.4 * x + 0.01 * sinpi(2.9 * x + 0.4)
+            vel_w = -0.3 + 0.2 * x + 0.005 * sinpi(3.1 * x + 0.3)
+            pressure = 100000.0 + 1200.0 * x + 20.0 * sinpi(2.7 * x + 0.15)
+            species_a_mass_fraction = 0.3 + 0.08 * x +
+                0.002 * sinpi(2.5 * x + 0.35)
+        elseif profile == :stationary_contact
+            if x < 0.5
+                density = 1.0
+            else
+                density = 0.125
+            end
+            vel_u = 0.0
+            vel_v = 0.0
+            vel_w = 0.0
+            pressure = 1.0
+            if x < 0.5
+                species_a_mass_fraction = 0.2
+            else
+                species_a_mass_fraction = 0.8
+            end
         elseif profile == :sod
             if x < 0.5
                 density = 1.0
@@ -114,10 +158,32 @@ function _populate_profile!(state_vector, state_axes, geo, profile, gamma)
             vel_u = 0.0
             vel_v = 0.0
             vel_w = 0.0
+            species_a_mass_fraction = 0.4
+        elseif profile == :species_advection
+            density = 1.0
+            vel_u = 0.5
+            vel_v = 0.0
+            vel_w = 0.0
+            pressure = 1.0
+            if x < 0.5
+                species_a_mass_fraction = 0.8
+            else
+                species_a_mass_fraction = 0.2
+            end
         else
             throw(ArgumentError("unknown compressible verification profile: $profile"))
         end
-        _set_cell_state!(state, cell_id, density, vel_u, vel_v, vel_w, pressure, gamma)
+        _set_cell_state!(
+            state,
+            cell_id,
+            density,
+            vel_u,
+            vel_v,
+            vel_w,
+            pressure,
+            gamma,
+            species_a_mass_fraction,
+        )
     end
     return state_vector
 end
@@ -131,8 +197,24 @@ function _verification_internal_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a,
         idx_b, face_b,
-        first_order_face_reconstruction!,
+        system.additional_data.face_reconstructor,
+        system.additional_data.low_mach_correction,
     )
+    if system.additional_data.species_diffusion
+        (
+            distance,
+            face_area_a, face_normal_a, face_distance_a, volume_a,
+            face_area_b, face_normal_b, face_distance_b, volume_b,
+        ) = interface_geometry(geo, idx_a, face_a, idx_b, face_b)
+        add_conservative_species_diffusion_flux!(
+            du,
+            u,
+            idx_a,
+            idx_b,
+            face_area_a,
+            distance,
+        )
+    end
     return nothing
 end
 
@@ -170,6 +252,13 @@ function _verification_boundary_flux!(
         du.momentum_density_v_flow[idx_a] -= face_area * momentum_density_v_flux
         du.momentum_density_w_flow[idx_a] -= face_area * momentum_density_w_flux
         du.volumetric_energy_flow[idx_a] -= face_area * volumetric_energy_flux
+        add_boundary_species_advection_flux!(
+            du,
+            u,
+            idx_a,
+            face_area,
+            density_flux,
+        )
     elseif boundary_condition == :slip_wall
         pressure = u.pressure[idx_a]
         du.momentum_density_u_flow[idx_a] -= face_area * pressure * face_normal[1]
@@ -202,12 +291,21 @@ function build_compressible_case(
     n_cells;
     profile = :uniform,
     boundary_condition = :transmissive,
+    spatial_method = :first_order,
+    low_mach_method = :none,
+    species_diffusion = true,
 )
     if n_cells < 2
         throw(ArgumentError("a compressible verification case needs at least two cells"))
     end
     if !(boundary_condition in (:transmissive, :slip_wall))
         throw(ArgumentError("boundary_condition must be :transmissive or :slip_wall"))
+    end
+    if !(spatial_method in (:first_order, :muscl))
+        throw(ArgumentError("spatial_method must be :first_order or :muscl"))
+    end
+    if !(low_mach_method in (:none, :thornber))
+        throw(ArgumentError("low_mach_method must be :none or :thornber"))
     end
 
     gamma = 1.4
@@ -228,6 +326,10 @@ function build_compressible_case(
         momentum_density_v = zeros(n_cells)u"kg/(m^2*s)",
         momentum_density_w = zeros(n_cells)u"kg/(m^2*s)",
         volumetric_energy = zeros(n_cells)u"J/m^3",
+        species_densities = ComponentVector(
+            species_a = zeros(n_cells)u"kg/m^3",
+            species_b = zeros(n_cells)u"kg/m^3",
+        ),
     )
     config = create_fvm_config(grid, state_prototype)
     add_setup_syms!(
@@ -244,8 +346,23 @@ function build_compressible_case(
             momentum_density_v_flow = u"N",
             momentum_density_w_flow = u"N",
             volumetric_energy_flow = u"W",
+            mass_fractions = (
+                species_a = u"kg/kg",
+                species_b = u"kg/kg",
+            ),
+            species_density_flow = (
+                species_a = u"kg/s",
+                species_b = u"kg/s",
+            ),
         ),
-        special_caches = ComponentVector(),
+        special_caches = ComponentVector(
+            grad_density = zeros(n_cells, 3)u"kg/m^4",
+            grad_pressure = zeros(n_cells, 3)u"Pa/m",
+            grad_vel_u = zeros(n_cells, 3)u"1/s",
+            grad_vel_v = zeros(n_cells, 3)u"1/s",
+            grad_vel_w = zeros(n_cells, 3)u"1/s",
+            grad_temperature = zeros(n_cells, 3)u"K/m",
+        ),
         second_order_syms = [],
         optimized_parameters = ComponentVector(),
     )
@@ -263,10 +380,18 @@ function build_compressible_case(
             momentum_density_v = 0.0u"kg/(m^2*s)",
             momentum_density_w = 0.0u"kg/(m^2*s)",
             volumetric_energy = initial_energy,
+            species_densities = ComponentVector(
+                species_a = 0.4 * initial_density,
+                species_b = 0.6 * initial_density,
+            ),
         ),
         properties = ComponentVector(
             cp = cp * u"J/(kg*K)",
             cv = cv * u"J/(kg*K)",
+            diffusion_coefficients = ComponentVector(
+                species_a = 1e-5u"m^2/s",
+                species_b = 1e-5u"m^2/s",
+            ),
         ),
         property_update_function = overall_navier_stokes_property_update!,
         region_function = cap_navier_stokes_flow!,
@@ -281,9 +406,23 @@ function build_compressible_case(
         )
     end
 
+    if spatial_method == :muscl
+        face_reconstructor = MUSCL_face_reconstruction!
+    else
+        face_reconstructor = first_order_face_reconstruction!
+    end
+    if low_mach_method == :thornber
+        low_mach_correction = thornber_low_mach_correction
+    else
+        low_mach_correction = no_low_mach_correction
+    end
     additional_data = (
         boundary_condition = boundary_condition,
-        spatial_method = :HLLC_first_order,
+        spatial_method = spatial_method,
+        low_mach_method = low_mach_method,
+        face_reconstructor = face_reconstructor,
+        low_mach_correction = low_mach_correction,
+        species_diffusion = species_diffusion,
     )
     du0, u0, system, geo = finish_fvm_config(
         config,
@@ -292,9 +431,14 @@ function build_compressible_case(
         check_units = false,
     )
     _populate_profile!(u0, system.state_axes, geo, profile, gamma)
+    weighted_least_squares_stencil = build_weighted_least_squares_stencil(geo)
 
     function solve_groups!(du, u, p, t, system, geo)
         update_region_groups!(du, u, p, t, system, geo)
+        if spatial_method == :muscl
+            update_weighted_least_squares_gradients!(u, weighted_least_squares_stencil)
+            update_MUSCL_gradients!(u, weighted_least_squares_stencil)
+        end
         solve_connection_groups!(du, u, p, t, system, geo)
         solve_patch_groups!(du, u, p, t, system, geo)
         solve_region_groups!(du, u, p, t, system, geo)
@@ -302,7 +446,7 @@ function build_compressible_case(
     end
 
     rhs! = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_groups!)
-    case_name = "$(profile)_$(boundary_condition)_$(n_cells)_cells"
+    case_name = "$(profile)_$(boundary_condition)_$(spatial_method)_$(low_mach_method)_species_$(n_cells)_cells"
     return CompressibleCase(
         case_name,
         system,
@@ -313,6 +457,9 @@ function build_compressible_case(
         gamma,
         cv,
         boundary_condition,
+        spatial_method,
+        low_mach_method,
+        species_diffusion,
     )
 end
 
@@ -322,20 +469,39 @@ function residual(case::CompressibleCase, state = case.u0, time = 0.0)
     return derivative
 end
 
+function _append_state_index_metadata!(metadata, indices, variable, species = nothing)
+    if indices isa ComponentArray
+        for field_name in propertynames(indices)
+            nested_variable = species === nothing ? variable : species
+            _append_state_index_metadata!(
+                metadata,
+                getproperty(indices, field_name),
+                nested_variable,
+                field_name,
+            )
+        end
+        return nothing
+    end
+
+    for (cell_id, state_index) in enumerate(indices)
+        metadata[state_index] = (
+            variable = variable,
+            species = species,
+            cell = cell_id,
+        )
+    end
+    return nothing
+end
+
 function state_index_metadata(case::CompressibleCase)
     index_state = ComponentVector(
         collect(1:length(case.u0)),
         case.system.state_axes,
     )
-    metadata = Vector{NamedTuple{(:variable, :cell), Tuple{Symbol, Int}}}(
-        undef,
-        length(case.u0),
-    )
+    metadata = Vector{NamedTuple}(undef, length(case.u0))
     for variable in propertynames(index_state)
         indices = getproperty(index_state, variable)
-        for (cell_id, state_index) in enumerate(indices)
-            metadata[state_index] = (variable = variable, cell = cell_id)
-        end
+        _append_state_index_metadata!(metadata, indices, variable)
     end
     return metadata
 end

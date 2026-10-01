@@ -90,6 +90,9 @@ end
 
 
 function overall_navier_stokes_property_update!(du, u, p, t, system, geo, cell_id)
+    if hasproperty(u, :species_densities)
+        update_species_mass_fractions!(du, u, p, t, system, geo, cell_id)
+    end
     update_velocities!(du, u, p, t, system, geo, cell_id)
     #update_specific_energy!(du, u, p, t, system, geo, cell_id)
     update_temperature_ideal!(du, u, p, t, system, geo, cell_id)

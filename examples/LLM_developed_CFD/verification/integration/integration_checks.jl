@@ -43,6 +43,8 @@ function _solution_violations(case, solution)
             cv = case.cv,
             time = solution.t[saved_index],
             maximum_violations = max(20 - length(violations), 0),
+            species_sum_absolute_tolerance = 5e-8,
+            species_sum_relative_tolerance = 5e-8,
         ))
         if length(violations) >= 20
             break
@@ -108,19 +110,32 @@ function run_implicit_smoke(case, final_time)
             gamma = case.gamma,
             cv = case.cv,
             time = time,
+            species_sum_absolute_tolerance = 1e-8,
+            species_sum_relative_tolerance = 1e-6,
         )
+    end
+    cell_width = minimum(case.geo.cell_volumes)
+    explicit_stable_timestep = 0.2 * cell_width / _initial_maximum_signal_speed(case)
+    initial_timestep = min(0.05 * explicit_stable_timestep, final_time)
+    if case.spatial_method == :muscl
+        algorithm = FBDF(autodiff = ADTypes.AutoFiniteDiff())
+        algorithm_name = "FBDF(AutoFiniteDiff)"
+    else
+        algorithm = FBDF()
+        algorithm_name = "FBDF(ForwardDiff)"
     end
     timed_result = @timed solve(
         problem,
-        FBDF();
+        algorithm;
         abstol = 1e-8,
         reltol = 1e-6,
+        dt = initial_timestep,
         isoutofdomain = invalid_state,
         save_everystep = true,
         maxiters = 100000,
     )
     solution = timed_result.value
-    statistics = _solver_statistics(solution, timed_result, "FBDF")
+    statistics = _solver_statistics(solution, timed_result, algorithm_name)
     violations = _solution_violations(case, solution)
     successful = OrdinaryDiffEq.SciMLBase.successful_retcode(solution)
     reached_final_time = isapprox(solution.t[end], final_time; atol = 100.0 * eps(final_time), rtol = 1e-12)
@@ -129,10 +144,11 @@ function run_implicit_smoke(case, final_time)
         passed = successful && reached_final_time && isempty(violations),
         statistics = statistics,
         violations = violations,
+        initial_timestep = initial_timestep,
     )
 end
 
-function _integration_classification(explicit_run, implicit_run)
+function _integration_classification(explicit_run, implicit_run, name)
     if explicit_run.passed && implicit_run.passed
         categories = String[]
         interpretation = "both spatial/time-integration paths completed"
@@ -171,7 +187,7 @@ function _integration_classification(explicit_run, implicit_run)
     end
 
     return _verification_result(
-        "explicit_vs_implicit_classification",
+        name,
         "integration",
         passed,
         interpretation;
@@ -190,12 +206,26 @@ function _integration_classification(explicit_run, implicit_run)
     )
 end
 
-function run_integration_checks(case, final_time)
+function _suffixed_check_name(base_name, suffix)
+    if isempty(suffix)
+        return base_name
+    end
+    return "$(base_name)_$(suffix)"
+end
+
+function run_integration_checks(case, final_time; name_suffix = "")
     results = VerificationResult[]
     explicit_run = nothing
     implicit_run = nothing
+    explicit_name = _suffixed_check_name("explicit_smoke", name_suffix)
+    implicit_name = _suffixed_check_name("implicit_smoke", name_suffix)
+    classification_name = _suffixed_check_name(
+        "explicit_vs_implicit_classification",
+        name_suffix,
+    )
+    benchmark_name = _suffixed_check_name("sod_shock_tube", name_suffix)
 
-    explicit_wrapper = _run_check("explicit_smoke", "integration") do
+    explicit_wrapper = _run_check(explicit_name, "integration") do
         explicit_run = run_explicit_smoke(case, final_time)
         return (
             passed = explicit_run.passed,
@@ -216,13 +246,14 @@ function run_integration_checks(case, final_time)
     end
     push!(results, explicit_wrapper)
 
-    implicit_wrapper = _run_check("implicit_smoke", "integration") do
+    implicit_wrapper = _run_check(implicit_name, "integration") do
         implicit_run = run_implicit_smoke(case, final_time)
         return (
             passed = implicit_run.passed,
             summary = "FBDF completed the diagnostic Sod solve with admissible states",
             metrics = Dict{String, Any}(
                 "solver_statistics" => implicit_run.statistics,
+                "initial_timestep" => implicit_run.initial_timestep,
             ),
             expected = Dict{String, Any}(
                 "successful_return_code" => true,
@@ -236,10 +267,14 @@ function run_integration_checks(case, final_time)
     push!(results, implicit_wrapper)
 
     if explicit_run !== nothing && implicit_run !== nothing
-        push!(results, _integration_classification(explicit_run, implicit_run))
+        push!(results, _integration_classification(
+            explicit_run,
+            implicit_run,
+            classification_name,
+        ))
     else
         push!(results, VerificationResult(
-            "explicit_vs_implicit_classification",
+            classification_name,
             "integration",
             :error,
             "one or both diagnostic integrations raised an exception",
@@ -254,12 +289,12 @@ function run_integration_checks(case, final_time)
     end
 
     if explicit_run !== nothing && explicit_run.passed
-        push!(results, _run_check("sod_shock_tube", "benchmark") do
+        push!(results, _run_check(benchmark_name, "benchmark") do
             check_sod_benchmark(case, explicit_run.solution, final_time)
         end)
     else
         push!(results, VerificationResult(
-            "sod_shock_tube",
+            benchmark_name,
             "benchmark",
             :error,
             "canonical comparison requires a successful explicit solution",

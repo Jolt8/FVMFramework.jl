@@ -1,5 +1,5 @@
 FVMFramework Verification Report
-Target: CompressibleFlow(HLLC, first_order)    Level: unit
+Target: CompressibleFlow(HLLC, first_order + MUSCL + Thornber + species)    Level: unit
 
 COMPONENT
 PASS  uniform_hllc_flux                  identical-state HLLC equals the analytical Euler flux
@@ -15,5 +15,36 @@ PASS  state_admissibility                state checker accepts valid flow and lo
 JACOBIAN
 PASS  empirical_dependency               finite-difference dependencies are contained in tracer-declared sparsity
 PASS  ad_vs_finite_difference_jvp        ForwardDiff Jacobian-vector products agree with central finite differences
+PASS  muscl_stencil_expansion            MUSCL expands the empirical stencil and tracer sparsity contains it
+PASS  muscl_empirical_dependency         finite-difference dependencies are contained in tracer-declared sparsity
+PASS  muscl_ad_vs_finite_difference_jvp  ForwardDiff Jacobian-vector products agree with central finite differences
 
-RESULT: PASS (7/7 checks passed)
+MUSCL
+PASS  muscl_constant_reconstruction      MUSCL exactly preserves a constant scalar field
+PASS  muscl_linear_reconstruction        MUSCL reconstructs a linear field to its regularized finite-grid accuracy
+PASS  muscl_smooth_convergence           smooth MUSCL face reconstruction approaches second order
+PASS  muscl_discontinuity                limited MUSCL remains finite, positive, and bounded near a jump
+PASS  muscl_free_stream                  uniform three-dimensional flow has a zero semi-discrete residual
+
+LOW_MACH
+PASS  thornber_identical_states          Thornber leaves identical velocities unchanged
+PASS  thornber_high_mach_recovery        Thornber exactly recovers ordinary reconstruction above Mach one
+PASS  thornber_low_mach_jump             Thornber scales the low-Mach normal jump by the independent Mach coefficient
+PASS  thornber_tangential_preservation   Thornber changes only the face-normal velocity components
+PASS  thornber_free_stream               uniform three-dimensional flow has a zero semi-discrete residual
+PASS  muscl_thornber_free_stream         uniform three-dimensional flow has a zero semi-discrete residual
+
+SPECIES
+PASS  species_zero_diffusion             uniform composition and an impermeable side give zero species diffusion
+PASS  species_linear_diffusion           linear composition gradient has the independent Fickian magnitude and direction
+PASS  species_diffusive_conservation     oriented Fickian face updates conserve each species and the equal-D fraction sum
+PASS  species_advection_sum_constraint   upwind species advection conserves species and preserves sum(Y)=1 after capping
+PASS  conservative_species_state         rho*Y is evolved in the ODE state and its summed residual equals the density residual
+PASS  conservative_species_face_advection HLLC mass flux advects conservative species densities with exact face conservation
+PASS  mixture_corrected_species_diffusion mixture-corrected unequal-D diffusion conserves every species and total density
+
+BENCHMARK
+PASS  stationary_contact                 HLLC exactly preserves a stationary ideal-gas contact discontinuity
+PASS  stationary_contact_muscl           HLLC exactly preserves a stationary ideal-gas contact discontinuity
+
+RESULT: PASS (30/30 checks passed)

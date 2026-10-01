@@ -43,7 +43,11 @@ u_proto = ComponentVector(
     momentum_density_u = zeros(n_cells)u"kg/(m^2*s)",
     momentum_density_v = zeros(n_cells)u"kg/(m^2*s)",
     momentum_density_w = zeros(n_cells)u"kg/(m^2*s)",
-    volumetric_energy = zeros(n_cells)u"J/m^3"
+    volumetric_energy = zeros(n_cells)u"J/m^3",
+    species_densities = ComponentVector(
+        species_a = zeros(n_cells)u"kg/m^3",
+        species_b = zeros(n_cells)u"kg/m^3",
+    ),
 )
 
 config = create_fvm_config(grid, u_proto);
@@ -64,12 +68,21 @@ add_setup_syms!(
         momentum_density_v_flow = u"N",
         momentum_density_w_flow = u"N",
         volumetric_energy_flow = u"W",
+        mass_fractions = (
+            species_a = u"kg/kg",
+            species_b = u"kg/kg",
+        ),
+        species_density_flow = (
+            species_a = u"kg/s",
+            species_b = u"kg/s",
+        ),
         k = u"W/(m*K)",
         
         #specific_internal_energy = u"J/kg", #not cached right now, just a property
     ),
     special_caches = ComponentVector(
         grad_density = zeros(n_cells, 3)u"kg/m^4",
+        grad_pressure = zeros(n_cells, 3)u"Pa/m",
         grad_vel_u = zeros(n_cells, 3)u"m/(s*m)",
         grad_vel_v = zeros(n_cells, 3)u"m/(s*m)",
         grad_vel_w = zeros(n_cells, 3)u"m/(s*m)",
@@ -118,13 +131,27 @@ function fluid_fluid_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a, 
         idx_b, face_b,
-        #MUSCL_face_reconstruction!,
-        first_order_face_reconstruction!,
-        #thornber_low_mach_correction,
+        MUSCL_face_reconstruction!,
+        #first_order_face_reconstruction!,
+        thornber_low_mach_correction,
     )
     #HLLC!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b, first_order_face_reconstruction!)
 
     fluid_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+    (
+        distance,
+        face_area_a, face_normal_a, face_distance_a, volume_a,
+        face_area_b, face_normal_b, face_distance_b, volume_b,
+    ) = interface_geometry(geo, idx_a, face_a, idx_b, face_b)
+    
+    add_conservative_species_diffusion_flux!(
+        du,
+        u,
+        idx_a,
+        idx_b,
+        face_area_a,
+        distance,
+    )
 end
 
 # Mapping connection functions
@@ -147,6 +174,10 @@ function construct_initial_conditions_from_intuitive_inputs(u)
     kinetic_energy = 0.5 * (u.vel_u^2 + u.vel_v^2 + u.vel_w^2)
     
     volumetric_energy = u.density * (internal_energy + kinetic_energy)
+    species_densities = ComponentVector(
+        species_a = u.density * u.mass_fractions.species_a,
+        species_b = u.density * u.mass_fractions.species_b,
+    )
 
     R_specific = u.cp - u.cv
     pressure = u.density * R_specific * u.temperature
@@ -158,7 +189,8 @@ function construct_initial_conditions_from_intuitive_inputs(u)
         momentum_density_u = momentum_density_u,
         momentum_density_v = momentum_density_v,
         momentum_density_w = momentum_density_w,
-        volumetric_energy = volumetric_energy
+        volumetric_energy = volumetric_energy,
+        species_densities = species_densities,
     ), ComponentVector(
         cp = u.cp,
         cv = u.cv,
@@ -166,6 +198,7 @@ function construct_initial_conditions_from_intuitive_inputs(u)
         mw = u.mw,
         mu = u.mu, 
         prandtl_number = u.prandtl_number,
+        diffusion_coefficients = u.diffusion_coefficients,
     )
 end
 
@@ -183,6 +216,14 @@ fluid_initial_conditions, fluid_properties = construct_initial_conditions_from_i
         mu = 1e-5u"Pa*s",
         #k = 0.026u"W/(m*K)",
         prandtl_number = 0.705,
+        mass_fractions = ComponentVector(
+            species_a = 0.25u"kg/kg",
+            species_b = 0.75u"kg/kg",
+        ),
+        diffusion_coefficients = ComponentVector(
+            species_a = 1e-5u"m^2/s",
+            species_b = 1e-5u"m^2/s",
+        ),
     )
 )
 
@@ -217,10 +258,30 @@ supersonic_inlet_initial_conditions, supersonic_inlet_properties = construct_ini
         mu = 1e-5u"Pa*s",
         #k = 0.026u"W/(m*K)",
         prandtl_number = 0.705,
+        mass_fractions = ComponentVector(
+            species_a = 0.8u"kg/kg",
+            species_b = 0.2u"kg/kg",
+        ),
+        diffusion_coefficients = ComponentVector(
+            species_a = 1e-5u"m^2/s",
+            species_b = 1e-5u"m^2/s",
+        ),
     )
 )
 
 supersonic_inlet_initial_conditions_stripped = ustrip.(upreferred.(supersonic_inlet_initial_conditions))
+supersonic_inlet_mass_fractions_stripped = ComponentVector(
+    species_a = fill(
+        supersonic_inlet_initial_conditions_stripped.species_densities.species_a /
+            supersonic_inlet_initial_conditions_stripped.density,
+        n_cells,
+    ),
+    species_b = fill(
+        supersonic_inlet_initial_conditions_stripped.species_densities.species_b /
+            supersonic_inlet_initial_conditions_stripped.density,
+        n_cells,
+    ),
+)
 
 add_patch!(
     config, "supersonic_inlet";
@@ -276,6 +337,13 @@ add_patch!(
         du.momentum_density_w_flow[idx_a] -= face_area * F_momentum_density_w
 
         du.volumetric_energy_flow[idx_a] -= face_area * F_volumetric_energy
+        add_prescribed_boundary_species_advection_flux!(
+            du,
+            idx_a,
+            face_area,
+            F_density,
+            supersonic_inlet_mass_fractions_stripped,
+        )
     end
 )
 
@@ -327,6 +395,13 @@ add_patch!(
         du.momentum_density_w_flow[idx_a] -= face_area * F_momentum_density_w
 
         du.volumetric_energy_flow[idx_a] -= face_area * F_volumetric_energy
+        add_boundary_species_advection_flux!(
+            du,
+            u,
+            idx_a,
+            face_area,
+            F_density,
+        )
     end
 )
 
@@ -426,6 +501,21 @@ function state_is_invalid(u, p, t, system)
             )) || u_named.density[i] <= 0.0 || internal_energy_density <= 0.0
             return true
         end
+
+        species_density_sum = 0.0
+        for species_name in propertynames(u_named.species_densities)
+            species_density = getproperty(
+                u_named.species_densities,
+                species_name,
+            )[i]
+            if !isfinite(species_density) || species_density < 0.0
+                return true
+            end
+            species_density_sum += species_density
+        end
+        if !isapprox(species_density_sum, u_named.density[i]; atol = 1e-10, rtol = 1e-10)
+            return true
+        end
     end
 
     return false
@@ -495,3 +585,4 @@ du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_gues
 root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
 
 sol_to_vtk(sol, du_named, u_named, grid, geo, @__FILE__, root_dir, track_progress = false)
+=#

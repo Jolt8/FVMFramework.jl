@@ -1,3 +1,7 @@
+include(joinpath(
+    @__DIR__, "..", "species_transport", "conservative_species_transport.jl",
+))
+
 function physical_flux(
     density,
     momentum_density_u,
@@ -61,6 +65,25 @@ function primitive_from_conservative(
     return vel_u, vel_v, vel_w, pressure, speed_of_sound
 end
 
+
+function energy_with_corrected_velocity(
+    volumetric_energy,
+    density,
+    original_vel_u,
+    original_vel_v,
+    original_vel_w,
+    corrected_vel_u,
+    corrected_vel_v,
+    corrected_vel_w,
+)
+    original_squared_speed =
+        original_vel_u^2 + original_vel_v^2 + original_vel_w^2
+    corrected_squared_speed =
+        corrected_vel_u^2 + corrected_vel_v^2 + corrected_vel_w^2
+    return volumetric_energy +
+           0.5 * density * (corrected_squared_speed - original_squared_speed)
+end
+
 function hllc_flux(
     density_a,
     momentum_density_u_a,
@@ -97,6 +120,13 @@ function hllc_flux(
         gamma_b
     )
 
+    original_vel_u_a = vel_u_a
+    original_vel_v_a = vel_v_a
+    original_vel_w_a = vel_w_a
+    original_vel_u_b = vel_u_b
+    original_vel_v_b = vel_v_b
+    original_vel_w_b = vel_w_b
+
     (
         vel_u_a,
         vel_v_a,
@@ -114,6 +144,27 @@ function hllc_flux(
         vel_w_b,
         speed_of_sound_b,
         cell_face_normal,
+    )
+
+    volumetric_energy_a = energy_with_corrected_velocity(
+        volumetric_energy_a,
+        density_a,
+        original_vel_u_a,
+        original_vel_v_a,
+        original_vel_w_a,
+        vel_u_a,
+        vel_v_a,
+        vel_w_a,
+    )
+    volumetric_energy_b = energy_with_corrected_velocity(
+        volumetric_energy_b,
+        density_b,
+        original_vel_u_b,
+        original_vel_v_b,
+        original_vel_w_b,
+        vel_u_b,
+        vel_v_b,
+        vel_w_b,
     )
 
     momentum_density_u_a = density_a * vel_u_a
@@ -365,4 +416,15 @@ function HLLC!(
     du.momentum_density_v_flow[idx_b] += face_area_a * F_momentum_density_v
     du.momentum_density_w_flow[idx_b] += face_area_a * F_momentum_density_w
     du.volumetric_energy_flow[idx_b] += face_area_a * F_volumetric_energy
+
+    if hasproperty(u, :species_densities)
+        add_hllc_species_advection_flux!(
+            du,
+            u,
+            idx_a,
+            idx_b,
+            face_area_a,
+            F_density,
+        )
+    end
 end

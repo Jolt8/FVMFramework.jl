@@ -12,6 +12,14 @@ function _state_snapshot(state, cell_id)
             snapshot[string(variable)] = values[cell_id]
         end
     end
+    if hasproperty(state, :species_densities)
+        species_snapshot = Dict{String, Any}()
+        for species_name in propertynames(state.species_densities)
+            species_snapshot[string(species_name)] =
+                getproperty(state.species_densities, species_name)[cell_id]
+        end
+        snapshot["species_densities"] = species_snapshot
+    end
     return snapshot
 end
 
@@ -22,6 +30,8 @@ function state_violations(
     cv,
     time = 0.0,
     maximum_violations = 20,
+    species_sum_absolute_tolerance = 1e-12,
+    species_sum_relative_tolerance = 1e-12,
 )
     state = ComponentVector(state_vector, state_axes)
     violations = Dict{String, Any}[]
@@ -84,6 +94,38 @@ function state_violations(
         if !isfinite(temperature) || temperature <= 0.0
             record_violation(:temperature, cell_id, temperature, "temperature derived from the conservative state must be finite and positive")
         end
+
+        if hasproperty(state, :species_densities)
+            species_density_sum = 0.0
+            for species_name in propertynames(state.species_densities)
+                species_density = getproperty(
+                    state.species_densities,
+                    species_name,
+                )[cell_id]
+                species_density_sum += species_density
+                if !isfinite(species_density) || species_density < 0.0
+                    record_violation(
+                        species_name,
+                        cell_id,
+                        species_density,
+                        "conservative species density must be finite and non-negative",
+                    )
+                end
+            end
+            if !isapprox(
+                species_density_sum,
+                density;
+                atol = species_sum_absolute_tolerance,
+                rtol = species_sum_relative_tolerance,
+            )
+                record_violation(
+                    :species_density_sum,
+                    cell_id,
+                    species_density_sum,
+                    "conservative species densities must sum to mixture density",
+                )
+            end
+        end
     end
 
     if hasproperty(state, :mass_fractions)
@@ -106,7 +148,15 @@ function state_violations(
     return violations
 end
 
-function state_is_valid(state_vector, state_axes; gamma, cv, time = 0.0)
+function state_is_valid(
+    state_vector,
+    state_axes;
+    gamma,
+    cv,
+    time = 0.0,
+    species_sum_absolute_tolerance = 1e-12,
+    species_sum_relative_tolerance = 1e-12,
+)
     return isempty(state_violations(
         state_vector,
         state_axes;
@@ -114,5 +164,7 @@ function state_is_valid(state_vector, state_axes; gamma, cv, time = 0.0)
         cv = cv,
         time = time,
         maximum_violations = 1,
+        species_sum_absolute_tolerance = species_sum_absolute_tolerance,
+        species_sum_relative_tolerance = species_sum_relative_tolerance,
     ))
 end

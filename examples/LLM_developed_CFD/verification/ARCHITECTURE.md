@@ -1,4 +1,4 @@
-# Stage 1 architecture and findings
+# Stage 1–2 architecture and findings
 
 ## Architecture
 
@@ -23,19 +23,47 @@ do not fail because a single physical state cannot activate every HLLC branch.
 The derivative oracle compares ForwardDiff with independently evaluated,
 scaled centered differences in three deterministic random directions.
 
-The canonical case is the ideal-gas Sod shock tube. SSPRK43 uses a fixed
-acoustic CFL of 0.2; FBDF uses tracer sparsity and its normal AD path. The
-benchmark values come from a separately implemented exact Riemann solution.
+The canonical cases are a stationary contact discontinuity and the ideal-gas
+Sod shock tube. SSPRK43 uses a fixed acoustic CFL of 0.2. First-order FBDF uses
+ForwardDiff; shock-limited MUSCL uses `AutoFiniteDiff` because limiter branch
+changes at the discontinuity prevent useful Newton derivatives from ForwardDiff.
+The benchmark values come from a separately implemented exact Riemann solution.
+
+MUSCL reconstructs density, pressure, and velocity. Reconstructing pressure
+rather than density and temperature independently preserves constant pressure
+across a material contact. A smooth algebraic intersection combines the
+Venkatakrishnan and strict local-bound limiters, retaining the tighter limit
+without a hard `min` between them. The general convergence utility supplies
+weighted L1/L2/Linf norms and nonuniform-refinement order calculations.
+
+The compressible state contains one conservative density `rho*Y_k` per species.
+Region property updates recover `Y_k` into nested caches, HLLC uses its density
+flux to advect the upwind composition, and the region cap converts integrated
+species flow to `d(rho*Y_k)/dt`. Transmissive and prescribed-inlet boundaries
+use the same density-flux coupling. The verifier checks the pointwise identities
+`sum(rho*Y_k) = rho` and `sum(d(rho*Y_k)/dt) = d(rho)/dt` through the complete
+semi-discrete operator.
+
+Diffusion uses the production Fickian flux followed by the mixture correction
+`J_k <- J_k - Y_k*sum(J)`. This makes the total diffusive mass flux zero even
+for unequal species diffusivities. The original oriented mass-fraction helper
+is retained and tested for compatibility, while the coupled solver writes
+equal-and-opposite fluxes directly into conservative species-flow caches.
 
 ## Current limitations
 
-- Stage 1 covers the inviscid first-order HLLC path. MUSCL, Thornber, species,
-  manufactured solutions, viscous analytical cases, turbulence, mutations,
-  convergence studies, and persistent performance baselines remain later-stage
-  work.
-- State validation covers conservative ideal-gas density, pressure, and
-  temperature plus optional mass fractions. Turbulence-specific admissibility
-  rules will be needed when those state fields are introduced.
+- Species currently behave as passive scalars. Composition does not yet update
+  mixture thermodynamics or transport properties, species enthalpy diffusion
+  is absent, and chemistry source terms are not connected to `rho*Y_k`.
+- Species advection is first-order upwind even when density, pressure, and
+  velocity use MUSCL reconstruction. A bounded second-order species
+  reconstruction needs dedicated gradient caches and convergence tests.
+- Manufactured solutions, viscous analytical cases, turbulence, mutations,
+  and persistent performance baselines remain Stage 3 work.
+- State validation covers conservative ideal-gas density, pressure,
+  temperature, non-negative species densities, and the species-density sum.
+  Turbulence-specific admissibility rules will be needed when those state
+  fields are introduced.
 - The sparsity diagnostic intentionally uses tiny meshes and one smooth state;
   it reports inactive declared entries rather than claiming they are wrong.
 - Solver statistics are captured but not yet compared with a versioned baseline.
@@ -52,10 +80,11 @@ benchmark values come from a separately implemented exact Riemann solution.
   The scalar-component form used inside `corrected_face_gradient` also deserves
   a dedicated analytical test. This routine is outside the inviscid Stage 1
   benchmark and was not modified here.
-- On the 32-cell Sod run used during development, FBDF needed substantially
-  more steps and allocations than fixed-CFL SSPRK43 and began with a very small
-  accepted timestep. Both methods were correct, but these metrics are useful
-  candidates for the future baseline mechanism.
+- On the MUSCL Sod runs, FBDF with ForwardDiff could not accept its first step
+  because the shock limiter changes branches. `AutoFiniteDiff` completes the
+  solve, but on the latest 64-cell case it required 906 accepted and 167 rejected
+  steps versus SSPRK43's 46 accepted fixed-CFL steps. This is a strong candidate
+  for a future performance baseline and nonlinear-solver investigation.
 - The existing example is monolithic and executes a large solve when included.
   The verifier therefore constructs a small equivalent configuration rather
   than importing the top-level example script.

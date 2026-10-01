@@ -7,4 +7,8 @@ function cap_navier_stokes_flow!(du, u, p, t, system, geo, cell_id)
     du.momentum_density_w[cell_id] += du.momentum_density_w_flow[cell_id] / cell_volume
     
     du.volumetric_energy[cell_id] += du.volumetric_energy_flow[cell_id] / cell_volume
+
+    if hasproperty(du, :species_densities)
+        cap_species_density_flow!(du, u, p, t, system, geo, cell_id)
+    end
 end

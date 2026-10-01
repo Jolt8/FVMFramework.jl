@@ -91,6 +91,14 @@ function check_face_conservation(case)
         imbalances[string(variable)] = imbalance
         push!(normalized_imbalances, normalized_imbalance)
     end
+    for species_name in keys(du.species_density_flow)
+        flow = getproperty(du.species_density_flow, species_name)
+        imbalance = flow[idx_a] + flow[idx_b]
+        scale = max(abs(flow[idx_a]), abs(flow[idx_b]), 1.0)
+        normalized_imbalance = abs(imbalance) / scale
+        imbalances["species_densities.$species_name"] = imbalance
+        push!(normalized_imbalances, normalized_imbalance)
+    end
 
     maximum_normalized_imbalance = maximum(normalized_imbalances)
     tolerance = 20.0 * eps(Float64)
@@ -124,6 +132,24 @@ function _field_residual_norms(case, derivative, state)
         characteristic_rate = max(norm(state_values, Inf) * speed_scale / minimum_spacing, 1.0)
         norms[string(variable)] = absolute_norm
         normalized_norms[string(variable)] = absolute_norm / characteristic_rate
+    end
+    for species_name in propertynames(conservative_state.species_densities)
+        derivative_values = getproperty(
+            derivative_state.species_densities,
+            species_name,
+        )
+        state_values = getproperty(
+            conservative_state.species_densities,
+            species_name,
+        )
+        absolute_norm = norm(derivative_values, Inf)
+        characteristic_rate = max(
+            norm(state_values, Inf) * speed_scale / minimum_spacing,
+            1.0,
+        )
+        key = "species_densities.$species_name"
+        norms[key] = absolute_norm
+        normalized_norms[key] = absolute_norm / characteristic_rate
     end
     return norms, normalized_norms
 end
@@ -213,6 +239,29 @@ function check_global_conservation(case)
         normalized_rates[string(variable)] = normalized_rate
         normalization_scales[string(variable)] = normalization_scale
     end
+    for species_name in propertynames(conservative_state.species_densities)
+        contributions = volumes .* getproperty(
+            derivative_state.species_densities,
+            species_name,
+        )
+        species_density = getproperty(
+            conservative_state.species_densities,
+            species_name,
+        )
+        net_rate = sum(contributions)
+        total_activity = sum(abs, contributions)
+        characteristic_scale = norm(species_density, Inf) * signal_speed
+        normalization_scale = max(
+            total_activity,
+            characteristic_scale,
+            1.0,
+        )
+        normalized_rate = abs(net_rate) / normalization_scale
+        key = "species_densities.$species_name"
+        net_rates[key] = net_rate
+        normalized_rates[key] = normalized_rate
+        normalization_scales[key] = normalization_scale
+    end
 
     maximum_normalized_rate = maximum(values(normalized_rates))
     tolerance = 1e-12
@@ -258,6 +307,7 @@ function check_state_validation(case)
     nonphysical_named = ComponentVector(nonphysical_state, case.system.state_axes)
     nonphysical_named.density[1] = -1.0
     nonphysical_named.volumetric_energy[3] = 0.0
+    nonphysical_named.species_densities.species_a[4] = -0.1
     nonphysical_violations = state_violations(
         nonphysical_state,
         case.system.state_axes;
@@ -278,7 +328,12 @@ function check_state_validation(case)
         violation -> violation["variable"] in ("pressure", "temperature") && violation["cell_index"] == 3,
         nonphysical_violations,
     )
-    passed = isempty(valid_violations) && detected_nonfinite && detected_density && detected_thermodynamics
+    detected_species = any(
+        violation -> violation["variable"] == "species_a" && violation["cell_index"] == 4,
+        nonphysical_violations,
+    )
+    passed = isempty(valid_violations) && detected_nonfinite && detected_density &&
+        detected_thermodynamics && detected_species
 
     return (
         passed = passed,
@@ -290,7 +345,12 @@ function check_state_validation(case)
         ),
         expected = Dict{String, Any}(
             "valid_state_violation_count" => 0,
-            "required_detections" => ["NaN", "negative density", "nonpositive pressure/temperature"],
+            "required_detections" => [
+                "NaN",
+                "negative density",
+                "nonpositive pressure/temperature",
+                "negative conservative species density",
+            ],
         ),
         diagnostics = Dict{String, Any}(
             "valid_state_violations" => valid_violations,

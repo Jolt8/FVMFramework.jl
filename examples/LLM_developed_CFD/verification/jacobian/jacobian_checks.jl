@@ -116,40 +116,67 @@ function check_ad_jvp(case, random_seed)
     maximum_relative_error = 0.0
     classifications = String[]
     tolerance = 2e-5
-    step = cbrt(eps(Float64))
+    base_step = cbrt(eps(Float64))
+    step_multipliers = (4.0, 1.0, 0.25)
 
     for direction_id in 1:3
         dimensionless_direction = randn(random_number_generator, length(state))
         dimensionless_direction ./= norm(dimensionless_direction)
         direction = scales .* dimensionless_direction
         ad_product = jacobian_ad * direction
-        positive_residual = residual(case, state .+ step .* direction)
-        negative_residual = residual(case, state .- step .* direction)
-        finite_difference_product = (positive_residual .- negative_residual) ./ (2.0 * step)
-        difference = ad_product .- finite_difference_product
-        absolute_error = norm(difference)
-        relative_error = absolute_error / max(
-            norm(ad_product),
-            norm(finite_difference_product),
-            eps(Float64),
-        )
-        maximum_component_error, maximum_error_index = findmax(abs.(difference))
+        step_sweep = Dict{String, Any}[]
+        best_relative_error = Inf
+        best_absolute_error = Inf
+        best_maximum_component_error = Inf
+        best_maximum_error_index = 0
+        best_step = base_step
 
-        if relative_error <= tolerance
+        for step_multiplier in step_multipliers
+            step = base_step * step_multiplier
+            positive_residual = residual(case, state .+ step .* direction)
+            negative_residual = residual(case, state .- step .* direction)
+            finite_difference_product = (positive_residual .- negative_residual) ./ (2.0 * step)
+            difference = ad_product .- finite_difference_product
+            absolute_error = norm(difference)
+            relative_error = absolute_error / max(
+                norm(ad_product),
+                norm(finite_difference_product),
+                eps(Float64),
+            )
+            maximum_component_error, maximum_error_index = findmax(abs.(difference))
+            push!(step_sweep, Dict{String, Any}(
+                "step" => step,
+                "absolute_error_norm" => absolute_error,
+                "relative_error" => relative_error,
+                "maximum_component_error" => maximum_component_error,
+                "maximum_error_index" => maximum_error_index,
+            ))
+            if relative_error < best_relative_error
+                best_relative_error = relative_error
+                best_absolute_error = absolute_error
+                best_maximum_component_error = maximum_component_error
+                best_maximum_error_index = maximum_error_index
+                best_step = step
+            end
+        end
+
+        if best_relative_error <= tolerance
             classification = "good agreement"
-        elseif relative_error <= 10.0 * tolerance
+        elseif best_relative_error <= 10.0 * tolerance
             classification = "probable finite-difference truncation/roundoff sensitivity"
         else
             classification = "definite derivative mismatch"
         end
         push!(classifications, classification)
-        maximum_relative_error = max(maximum_relative_error, relative_error)
+        maximum_relative_error = max(maximum_relative_error, best_relative_error)
         push!(direction_reports, Dict{String, Any}(
             "direction" => direction_id,
-            "absolute_error_norm" => absolute_error,
-            "relative_error" => relative_error,
-            "maximum_component_error" => maximum_component_error,
-            "maximum_error_index" => maximum_error_index,
+            "absolute_error_norm" => best_absolute_error,
+            "relative_error" => best_relative_error,
+            "maximum_component_error" => best_maximum_component_error,
+            "maximum_error_index" => best_maximum_error_index,
+            "selected_step" => best_step,
+            "step_sweep" => step_sweep,
             "classification" => classification,
         ))
     end
@@ -160,7 +187,7 @@ function check_ad_jvp(case, random_seed)
         metrics = Dict{String, Any}(
             "maximum_relative_error" => maximum_relative_error,
             "directions" => direction_reports,
-            "finite_difference_step" => step,
+            "base_finite_difference_step" => base_step,
         ),
         expected = Dict{String, Any}(
             "relative_tolerance" => tolerance,

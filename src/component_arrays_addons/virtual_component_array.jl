@@ -93,6 +93,8 @@ end
 @inline Base.setindex!(A::VirtualFVMArray, v, vidx::VirtualIndex{Src}) where {Src} = (getfield(A, :data)[Src][vidx.idx] = v)
 
 @inline Base.keys(A::VirtualFVMArray) = keys(getfield(A, :axes))
+@inline Base.propertynames(A::VirtualFVMArray, private::Bool = false) =
+    keys(getfield(A, :axes))
 
 @inline Base.view(A::VirtualFVMArray, s::Symbol) = getproperty(A, s)
 @inline Base.dotview(A::VirtualFVMArray, s::Symbol) = getproperty(A, s)
