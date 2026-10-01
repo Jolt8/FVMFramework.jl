@@ -277,7 +277,7 @@ properties = ComponentVector(
     burn_out_time = 0.0, #this gets set to the t in which 
     
     #Tank
-    u0_tank_oxidizer_mass = 1.33u"kg", #optimized, should actually be 2.05kg to get the impulse we need, but I want to see if the optimizer will produce 2.05kg for debugging reasons
+    u0_tank_oxidizer_mass = 1.134u"kg", #optimized, should actually be 2.05kg to get the impulse we need, but I want to see if the optimizer will produce 2.05kg for debugging reasons
     tank_pressure = 71.0u"bar", #no longer optimized, commercial tanks determine this
     tank_temperature = 21.0u"°C",
     tank_vapor_fraction = 0.0u"m^3",
@@ -295,7 +295,7 @@ properties = ComponentVector(
     valve_opening = 1.0,
 
     #Mid section
-    mid_section_pressure = 20.0u"bar", #this determines the initial kg of nitrous oxide in the mid_section
+    mid_section_pressure = 1.0u"atm", #this determines the initial kg of nitrous oxide in the mid_section
     mid_section_temperature = 21.0u"°C",
     mid_section_volume = 100.0u"cm^3", #Changed from 10u"cm" to 100u"cm" because I wanted to decrease solver stiffness for debugging purposes
     mid_section_density = 0.0u"kg/m^3",
@@ -312,7 +312,7 @@ properties = ComponentVector(
     #Chamber
     u0_chamber_nitrous_oxide_mass_fraction = 1.0,
     u0_chamber_hdpe_mass_fraction = 0.0,
-    chamber_pressure = 10.0u"bar", #this determines the initial kg of nitrous oxide in the chamber
+    chamber_pressure = 1.0u"atm", #this determines the initial kg of nitrous oxide in the chamber
     chamber_temperature = 21.0u"°C",
     chamber_volume = 212.0u"cm^3",
     chamber_density = 0.0u"kg/m^3",
@@ -360,7 +360,8 @@ optimized_properties = [
     #Overall rocket properties
 
     #Tank
-    OptimizedParameter(:u0_tank_oxidizer_mass, 1.0u"kg", 1.5u"kg",),
+    #OptimizedParameter(:u0_tank_oxidizer_mass, 1.0u"kg", 1.5u"kg",),
+    #since we're going to be using a 2.5lbs/1.134kg tank COTS tank, we're no longer going to optimize it and treat it as fixed
     #OptimizedParameter(:tank_pressure, 50.0u"bar", 71.0u"bar",),
 
     #adjustable valve
@@ -547,6 +548,39 @@ optimized_cb_set = CallbackSet(
 
 Revise.includet(joinpath(@__DIR__, "internals/loss_closures.jl"))
 
+viewable_system_design_loss(
+    ComponentVector(
+        #u0_tank_oxidizer_mass = 1.1306761278408962,
+        valve_flow_capacity_factor = 8.088661048535489e-6,
+        injector_orifice_area = 0.9e-5,
+        additional_fuel_grain_void_diameter = 0.01,
+        fuel_grain_length = 0.48,
+        nozzle_throat_diameter = 0.021
+    ), properties_unitless
+)
+
+viewable_system_design_loss(
+    ComponentVector(
+        #u0_tank_oxidizer_mass = 1.1306761278408962,
+        valve_flow_capacity_factor = 8.088661048535489e-6,
+        injector_orifice_area = 8.135451620577921e-6,
+        additional_fuel_grain_void_diameter = 0.01,
+        fuel_grain_length = 0.48,
+        nozzle_throat_diameter = 0.021
+    ), properties_unitless
+)
+#=
+viewable_system_design_loss(
+    ComponentVector(
+        u0_tank_oxidizer_mass = 1.0106761278408962,
+        valve_flow_capacity_factor = 8.088661048535489e-6,
+        injector_orifice_area = 8.135451620577921e-6,
+        additional_fuel_grain_void_diameter = 0.009824607761510886,
+        fuel_grain_length = 0.5669914705724927, 
+        nozzle_throat_diameter = 0.015820023622496553
+    ), properties_unitless
+)
+#=
 viewable_system_design_loss(
     ComponentVector(
         u0_tank_oxidizer_mass = 1.23,
