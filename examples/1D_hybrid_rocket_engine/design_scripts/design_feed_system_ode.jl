@@ -208,6 +208,10 @@ function system_ode!(du_vec, u_vec, p_vec, t, oxidizer_model, chamber_model, p_a
     u = ComponentVector(u_vec, u_axes)
     p = ComponentVector(eltype(u).(p_vec), p_axes)
 
+    if t <= 0.1 #reset the p.burned_out tracker at the start of every simulation or else it stays at 1.0 for the next solve
+        p.burned_out = 0.0
+    end
+
     update_state!(du, u, p, t, oxidizer_model, chamber_model)
 
     if true == false
@@ -216,10 +220,6 @@ function system_ode!(du_vec, u_vec, p_vec, t, oxidizer_model, chamber_model, p_a
         @show u
         @show p
         println("")
-    end
-
-    if t <= 1e-6
-        p.burned_out = 0.0
     end
 
     adjustable_valve_pressure_drop = adjustable_valve_flow!(du, u, p, t)
@@ -273,6 +273,7 @@ properties = ComponentVector(
     target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio = 2.0, #not an optimized parameter, but the ideal choice is hard to know
     fuel_grain_max_diameter = (12.0u"inch" |> u"cm"),
     burned_out = 0.0, #this switches to 1 with a callback whenever the fuel has burned out
+    burn_out_time = 0.0, #this gets set to the t in which 
     
     #Tank
     u0_tank_oxidizer_mass = 2.05u"kg", #optimized, should actually be 2.05kg to get the impulse we need, but I want to see if the optimizer will produce 2.05kg for debugging reasons
@@ -357,7 +358,7 @@ optimized_properties = [
     #Overall rocket properties
 
     #Tank
-    OptimizedParameter(:u0_tank_oxidizer_mass, 1.8u"kg", 2.2u"kg",),
+    OptimizedParameter(:u0_tank_oxidizer_mass, 1.0u"kg", 1.5u"kg",),
     #OptimizedParameter(:tank_pressure, 50.0u"bar", 71.0u"bar",),
 
     #adjustable valve
@@ -450,7 +451,7 @@ sol = solve(
     isoutofdomain = isoutofdomain_feedsystem
 )
 
-function plot_sol_states(sol)
+function plot_sol_states(sol, u_axes, p_axes, oxidizer_model, chamber_model)
     u_named_vec = []
     p_named_vec = []
     thrust_vec = []
@@ -533,17 +534,70 @@ function plot_sol_states(sol)
     @show p_named_vec[end].chamber_temperature
 end
 
-plot_sol_states(sol)
+plot_sol_states(sol, u_axes, p_axes, oxidizer_model, chamber_model)
 
 #plot(sol.t, [ComponentVector(sol.u[i], u_axes).port_diameter for i in eachindex(sol.t)])
 
 optimized_cb_set = CallbackSet(
     #approximate_time_to_finish_cb,
     #port_diameter_termination_cb,
-    chamber_pressure_termination_cb
+    chamber_pressure_termination_cb,
+    #fuel_burnout_cb
 );
 
 Revise.includet(joinpath(@__DIR__, "internals/loss_closures.jl"))
+
+viewable_system_design_loss(
+    ComponentVector(
+        u0_tank_oxidizer_mass = 1.23,
+        valve_flow_capacity_factor = 1.5e-5,
+        injector_orifice_area = 2.3e-5,
+        u0_fuel_grain_void_diameter = 0.020,
+        additional_fuel_grain_void_diameter = 0.009,
+        fuel_grain_length = 0.40, 
+        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
+        nozzle_throat_diameter = 0.0113
+    ), properties_unitless
+)
+
+viewable_system_design_loss(
+    ComponentVector(
+        u0_tank_oxidizer_mass = 1.33,
+        valve_flow_capacity_factor = 1.5e-5,
+        injector_orifice_area = 2.3e-5,
+        u0_fuel_grain_void_diameter = 0.016,
+        additional_fuel_grain_void_diameter = 0.0093,
+        fuel_grain_length = 0.45, 
+        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
+        nozzle_throat_diameter = 0.0113
+    ), properties_unitless
+)
+
+viewable_system_design_loss(
+    ComponentVector(
+        u0_tank_oxidizer_mass = 1.3338466690919596,
+        valve_flow_capacity_factor = 1.4864625820186499e-5,
+        injector_orifice_area = 2.307584272651544e-5,
+        u0_fuel_grain_void_diameter = 0.015622001356552163,
+        additional_fuel_grain_void_diameter = 0.009261793472995626,
+        fuel_grain_length = 0.4516855289918622, 
+        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
+        nozzle_throat_diameter = 0.011327930260216029
+    ), properties_unitless
+)
+
+viewable_system_design_loss(
+    ComponentVector(
+        u0_tank_oxidizer_mass = 1.3338466690919596,
+        valve_flow_capacity_factor = 1.4864625820186499e-5,
+        injector_orifice_area = 2.307584272651544e-5,
+        u0_fuel_grain_void_diameter = 0.015622001356552163,
+        additional_fuel_grain_void_diameter = 0.009061793472995626,
+        fuel_grain_length = 0.6616855289918622, 
+        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
+        nozzle_throat_diameter = 0.011127930260216029
+    ), properties_unitless
+)
 
 viewable_system_design_loss(
     ComponentVector(
@@ -609,7 +663,7 @@ viewable_system_design_loss(
         nozzle_throat_diameter = 0.0156
     ), properties_unitless
 )
-
+#=
 opt_f = OptimizationFunction(pure_system_design_loss_closure, Optimization.AutoFiniteDiff())
 opt_prob = OptimizationProblem(opt_f, Vector(theta_guess_unitless), Vector(properties_unitless), lb = Vector(theta_lb_unitless), ub = Vector(theta_ub_unitless))
 
@@ -649,9 +703,9 @@ end
 
 pure_system_design_loss_closure(theta_guess_unitless, properties_unitless)
 
-#sol = solve(opt_prob, LBFGS(), callback = cb, reltol = 1e-4)
+#opt_sol = solve(opt_prob, LBFGS(), callback = cb, reltol = 1e-4)
 
-sol = solve(opt_prob, 
+opt_sol = solve(opt_prob, 
     BBO_adaptive_de_rand_1_bin_radiuslimited(),
     callback = cb,
     PoulationSize = 1000,
@@ -663,9 +717,9 @@ sol = solve(opt_prob,
 )
 
 new_opt_f = OptimizationFunction(pure_system_design_loss_closure, Optimization.AutoFiniteDiff())
-new_opt_prob = OptimizationProblem(new_opt_f, Vector(sol.u), Vector(properties_unitless), lb = Vector(theta_lb_unitless), ub = Vector(theta_ub_unitless))
+new_opt_prob = OptimizationProblem(new_opt_f, Vector(opt_sol.u), Vector(properties_unitless), lb = Vector(theta_lb_unitless), ub = Vector(theta_ub_unitless))
 
-sol = solve(new_opt_prob, LBFGS(), callback = cb)
+opt_sol = solve(new_opt_prob, LBFGS(), callback = cb)
 
 losses = Float64[]
 successful_parameters = []

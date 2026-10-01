@@ -8,6 +8,7 @@ function isoutofdomain_feedsystem_expanded(u, p, t, u_axes)
     =#
 
     return (
+        #any(x -> !isfinite(x), u) ||
         u_named.tank_oxidizer_mass < 0.0 ||
         u_named.mid_section_mass < 0.0 ||
         u_named.chamber_gas_mass < 0.0
