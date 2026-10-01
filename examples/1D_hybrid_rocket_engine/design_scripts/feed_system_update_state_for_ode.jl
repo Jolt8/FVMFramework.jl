@@ -157,7 +157,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     p.fuel_mass = p.fuel_density * (pi * (p.final_fuel_grain_void_diameter / 2)^2 - pi * (u.port_diameter / 2)^2) * p.fuel_grain_length
     
     #Adjustable Valve
-    #if p.burned_out == 0.0
+    #if p.burned_out != 1.0
     if u.port_diameter < p.final_fuel_grain_void_diameter
         #If we haven't burned all our fuel yet, keep the valve open
         p.valve_opening = valve_opening_at_t(t)
@@ -167,6 +167,14 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
         #TODO: This assumption might change if the oxidizer runs out before the fuel, but that seems unlikely given our design
         p.valve_opening = 0.0
     end
+
+    
+    #if t < 0.1
+        #@show p.burned_out
+        #@show p.valve_opening
+        #@show u.port_diameter - p.final_fuel_grain_void_diameter
+    #end
+    
 
     p.adjusted_valve_flow_capacity_factor = valve_flow_capacity_factor(p.valve_opening, p)
 
