@@ -1,3 +1,16 @@
+# Reset mutable, per-solve parameter state before callback conditions are
+# initialized. This writes to integrator.p directly, unlike the temporary
+# ComponentVector constructed inside system_ode!.
+burned_out_initialization = let
+    p_axes_local = p_axes
+
+    function (callback, u, t, integrator)
+        p_named = ComponentVector(integrator.p, p_axes_local)
+        p_named.burned_out = 0.0
+        return nothing
+    end
+end
+
 # Stop the burn when the fuel port reaches the outside diameter of the grain.
 # Only the positive crossing is active because regression increases port_diameter.
 function port_diameter_limit_expanded(u, t, integrator, u_axes, p_axes, local_update_state!, local_oxidizer_model, local_chamber_model)
@@ -96,5 +109,6 @@ fuel_burnout_cb = ContinuousCallback(
     fuel_burnout_condition,
     fuel_burnout_affect!,
     nothing;
-    save_positions = (true, true),
+    initialize = burned_out_initialization,
+    save_positions = (true, false),
 )
