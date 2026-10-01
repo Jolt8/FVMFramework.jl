@@ -499,13 +499,20 @@ transient_algorithm = Rosenbrock23(
 )
 save_times = range(t0, tMax; length = 101)
 transient_solve_kwargs = (
-    abstol = transient_abstol,
-    reltol = transient_reltol,
-    dt = min(1e-5, tMax - t0),
+    #abstol = transient_abstol,
+    #reltol = transient_reltol,
+    #dt = min(1e-5, tMax - t0),
     isoutofdomain = state_is_invalid_closure,
-    saveat = save_times,
+    #saveat = save_times,
     save_everystep = false,
     maxiters = 1_000_000,
+)
+
+@time sol = solve(
+    implicit_prob,
+    #transient_algorithm;
+    #transient_solve_kwargs...,
+    callback = approximate_time_to_finish_cb,
 )
 
 sol = if "--progress" in ARGS
@@ -513,7 +520,7 @@ sol = if "--progress" in ARGS
         implicit_prob,
         transient_algorithm;
         transient_solve_kwargs...,
-        callback = progress_callback,
+        callback = approximate_time_to_finish_cb,
     )
 else
     @time solve(implicit_prob, transient_algorithm; transient_solve_kwargs...)
