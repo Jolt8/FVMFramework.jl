@@ -70,6 +70,9 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
     thrust_over_time = []
     pressures_over_time = []
+    isp_over_time = []
+    injector_velocity_over_time = []
+    pressure_drop_ratio_over_time = []
 
     for i in eachindex(sol.u)
         curr_t = sol.t[i]
@@ -104,7 +107,9 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
             @show p.target_injector_velocity
             @show oxidizer_mass_flow / (p.mid_section_density * p.injector_orifice_area)
         end
-        injector_velocity_loss += 0.00001 * (1 / length(sol.u)) * abs2(p.target_injector_velocity - oxidizer_mass_flow / (p.mid_section_density * p.injector_orifice_area))
+        injector_velocity = oxidizer_mass_flow / (p.mid_section_density * p.injector_orifice_area)
+        push!(injector_velocity_over_time, injector_velocity)
+        injector_velocity_loss += 0.00001 * (1 / length(sol.u)) * abs2(p.target_injector_velocity - injector_velocity)
         
         if show_loss_function_compositions
             @show "pressure_drop_ratio_loss"
@@ -113,7 +118,11 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         end
 
         if adjustable_valve_pressure_drop > 1e-9 #sometimes the very last step of the solve can result in the adjustable valve pressure drop being zero
-            pressure_drop_ratio_loss += 0.00001 * (1 / length(sol.u)) * abs2(p.target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio - (injector_valve_pressure_drop / adjustable_valve_pressure_drop))
+            pressure_drop_ratio = injector_valve_pressure_drop / adjustable_valve_pressure_drop
+            push!(pressure_drop_ratio_over_time, pressure_drop_ratio)
+            pressure_drop_ratio_loss += 0.00001 * (1 / length(sol.u)) * abs2(p.target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio - pressure_drop_ratio)
+        else
+            push!(pressure_drop_ratio_over_time, 0)
         end
 
         #OBSERVATION: it seems like we're going to have to weigh the importance of injector velocity against adjustable valve authority
@@ -147,6 +156,8 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
             p.propellant_isp = isp_interpolator_Pa(p.chamber_pressure, oxidizer_to_fuel_ratio)
 
+            push!(isp_over_time, p.propellant_isp)
+
             p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, oxidizer_to_fuel_ratio)
 
             chamber_gas_mass_flow_out = p.nozzle_discharge_coefficient * ((p.chamber_pressure * p.nozzle_throat_area) / p.propellant_characteristic_velocity)
@@ -179,9 +190,21 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         end
     end
 
-    if true == false
+    if true == true
         pressure_plt = plot(sol.t, pressures_over_time, label = "Chamber Pressure", xlabel = "Time [s]", ylabel = "Chamber Pressure [Pa]")
         display(pressure_plt)
+
+        injector_velocity_plt = plot(sol.t, injector_velocity_over_time, label = "Injector Velocity", xlabel = "Time [s]", ylabel = "Injector Velocity [m/s]")
+        display(injector_velocity_plt)
+
+        pressure_drop_ratio_plt = plot(sol.t, pressure_drop_ratio_over_time, label = "Injector to Adjustable Valve Pressure Drop Ratio", xlabel = "Time [s]", ylabel = "Pressure Drop Ratio")
+        display(pressure_drop_ratio_plt)
+
+        isp_plt = plot(sol.t, [0.0, isp_over_time...], label = "ISP", xlabel = "Time [s]", ylabel = "ISP [s]")
+        display(isp_plt)
+
+        @show maximum(isp_over_time)
+
         thrust_plt = plot(sol.t, [0.0, thrust_over_time...], label = "Thrust", xlabel = "Time [s]", ylabel = "Thrust [N]")
         display(thrust_plt)
 
@@ -189,7 +212,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     end
 
     p.cummulative_impulse = cummulative_impulse
-    impulse_loss = 0.0001 * abs2(p.desired_impulse - cummulative_impulse)
+    impulse_loss = 0.0000001 * abs2(p.desired_impulse - cummulative_impulse)
     if show_loss_function_compositions
         @show "impulse_loss"
         @show p.desired_impulse
@@ -214,7 +237,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     #@show total_oxidizer_used
     
     p.oxidizer_to_fuel_ratio = total_oxidizer_used / max(total_fuel_burned, 1e-9)
-    oxidizer_to_fuel_ratio_loss = 0.001 * abs2(p.desired_oxidizer_to_fuel_ratio - p.oxidizer_to_fuel_ratio)
+    oxidizer_to_fuel_ratio_loss = 0.1 * abs2(p.desired_oxidizer_to_fuel_ratio - p.oxidizer_to_fuel_ratio)
 
     #above_max_fuel_grain_diameter_loss = 0.01 * abs2(p.u0_fuel_grain_void_diameter + p.additional_fuel_grain_void_diameter - p.fuel_grain_max_diameter)
     #we'll just enforce a bound on final_fuel_grain_void_diameter
