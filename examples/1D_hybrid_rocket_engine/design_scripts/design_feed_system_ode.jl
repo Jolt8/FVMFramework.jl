@@ -307,7 +307,7 @@ properties = ComponentVector(
     #injector_number_of_orifices = 20, #optimized
     #injector_orifice_diameter = 1.5u"mm", #optimized
     injector_orifice_area = 12.0u"mm^2", #optimized
-    target_injector_velocity = 50.0u"m/s",
+    target_injector_velocity = 30.0u"m/s",
 
     #Chamber
     u0_chamber_nitrous_oxide_mass_fraction = 1.0,
@@ -326,7 +326,7 @@ properties = ComponentVector(
     fuel_density = 950.0u"kg/m^3",
     #fuel_regression_rate = 0.5u"mm/s",
     additional_fuel_grain_void_diameter = 1.0u"cm", #optimized
-    final_fuel_grain_void_diameter = 23.8u"mm", 
+    final_fuel_grain_void_diameter = 30.5u"mm", #the actual OD of the fuel grain should be about 33.32 mm
     #not optimized, we're going to be using a COTS phenolic liner, so we're just going to use the ID that the manufactuerer specifies
     fuel_grain_length = 30.0u"cm", #optimized
     fuel_grain_average_cross_sectional_area = 0.0u"m^2",
@@ -365,12 +365,12 @@ optimized_properties = [
     #OptimizedParameter(:tank_pressure, 50.0u"bar", 71.0u"bar",),
 
     #adjustable valve
-    OptimizedParameter(:valve_flow_capacity_factor, 5.0u"mm^2", 20.0u"mm^2"),
+    OptimizedParameter(:valve_flow_capacity_factor, 3.0u"mm^2", 12.0u"mm^2"),
 
     #Mid section
 
     #Injector properties
-    OptimizedParameter(:injector_orifice_area, 7.0u"mm^2", 25.0u"mm^2"),
+    OptimizedParameter(:injector_orifice_area, 4.0u"mm^2", 15.0u"mm^2"),
 
     #Chamber
 
@@ -551,11 +551,22 @@ Revise.includet(joinpath(@__DIR__, "internals/loss_closures.jl"))
 viewable_system_design_loss(
     ComponentVector(
         #u0_tank_oxidizer_mass = 1.1306761278408962,
-        valve_flow_capacity_factor = 8.088661048535489e-6,
-        injector_orifice_area = 0.9e-5,
-        additional_fuel_grain_void_diameter = 0.01,
-        fuel_grain_length = 0.48,
-        nozzle_throat_diameter = 0.021
+        valve_flow_capacity_factor = 1.752365677650574e-6,
+        injector_orifice_area = 3.14e-6,
+        additional_fuel_grain_void_diameter = 0.008,
+        fuel_grain_length = 0.27,
+        nozzle_throat_diameter = 0.0152
+    ), properties_unitless
+)
+
+viewable_system_design_loss(
+    ComponentVector(
+        #u0_tank_oxidizer_mass = 1.1306761278408962,
+        valve_flow_capacity_factor = 7.752365677650574e-6,
+        injector_orifice_area = 1.2879126375776063e-5,
+        additional_fuel_grain_void_diameter = 0.0077,
+        fuel_grain_length = 0.4229823461249482,
+        nozzle_throat_diameter = 0.012759132636893657
     ), properties_unitless
 )
 
@@ -563,140 +574,26 @@ viewable_system_design_loss(
     ComponentVector(
         #u0_tank_oxidizer_mass = 1.1306761278408962,
         valve_flow_capacity_factor = 8.088661048535489e-6,
+        injector_orifice_area = 0.9e-5,
+        additional_fuel_grain_void_diameter = 0.01,
+        fuel_grain_length = 0.48,
+        nozzle_throat_diameter = 0.016
+    ), properties_unitless
+)
+
+viewable_system_design_loss(
+    ComponentVector(
+        #u0_tank_oxidizer_mass = 1.1306761278408962, #no longer optimized, we're going to be using a COTS tank with 2.5lbs/1.134kg of nitrous oxide
+        valve_flow_capacity_factor = 8.088661048535489e-6,
         injector_orifice_area = 8.135451620577921e-6,
         additional_fuel_grain_void_diameter = 0.01,
+        #final_fuel_grain_void_diameter = 0.0238, #no longer optimized, we're using a COTS casing
         fuel_grain_length = 0.48,
         nozzle_throat_diameter = 0.021
     ), properties_unitless
 )
 #=
-viewable_system_design_loss(
-    ComponentVector(
-        u0_tank_oxidizer_mass = 1.0106761278408962,
-        valve_flow_capacity_factor = 8.088661048535489e-6,
-        injector_orifice_area = 8.135451620577921e-6,
-        additional_fuel_grain_void_diameter = 0.009824607761510886,
-        fuel_grain_length = 0.5669914705724927, 
-        nozzle_throat_diameter = 0.015820023622496553
-    ), properties_unitless
-)
-#=
-viewable_system_design_loss(
-    ComponentVector(
-        u0_tank_oxidizer_mass = 1.23,
-        valve_flow_capacity_factor = 1.5e-5,
-        injector_orifice_area = 2.3e-5,
-        #u0_fuel_grain_void_diameter = 0.020,
-        additional_fuel_grain_void_diameter = 0.01,
-        fuel_grain_length = 0.40, 
-        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
-        nozzle_throat_diameter = 0.0113
-    ), properties_unitless
-)
-
-viewable_system_design_loss(
-    ComponentVector(
-        u0_tank_oxidizer_mass = 1.33,
-        valve_flow_capacity_factor = 1.5e-5,
-        injector_orifice_area = 2.3e-5,
-        #u0_fuel_grain_void_diameter = 0.016,
-        additional_fuel_grain_void_diameter = 0.0093,
-        fuel_grain_length = 0.45, 
-        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
-        nozzle_throat_diameter = 0.0113
-    ), properties_unitless
-)
-
-viewable_system_design_loss(
-    ComponentVector(
-        u0_tank_oxidizer_mass = 1.3338466690919596,
-        valve_flow_capacity_factor = 1.4864625820186499e-5,
-        injector_orifice_area = 2.307584272651544e-5,
-        #u0_fuel_grain_void_diameter = 0.015622001356552163,
-        additional_fuel_grain_void_diameter = 0.009261793472995626,
-        fuel_grain_length = 0.4516855289918622, 
-        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
-        nozzle_throat_diameter = 0.011327930260216029
-    ), properties_unitless
-)
-
-viewable_system_design_loss(
-    ComponentVector(
-        u0_tank_oxidizer_mass = 1.3338466690919596,
-        valve_flow_capacity_factor = 1.4864625820186499e-5,
-        injector_orifice_area = 2.307584272651544e-5,
-        #u0_fuel_grain_void_diameter = 0.015622001356552163,
-        additional_fuel_grain_void_diameter = 0.009061793472995626,
-        fuel_grain_length = 0.6616855289918622, 
-        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
-        nozzle_throat_diameter = 0.011127930260216029
-    ), properties_unitless
-)
-
-viewable_system_design_loss(
-    ComponentVector(
-        u0_tank_oxidizer_mass = 2.034594773122675,
-        valve_flow_capacity_factor = 6.6906403746981306e-6,
-        injector_orifice_area = 2.0728250081324405e-5,
-        #u0_fuel_grain_void_diameter = 0.03403845868495702,
-        additional_fuel_grain_void_diameter = 0.009822880727716907,
-        fuel_grain_length = 0.6997446134380847, 
-        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
-        nozzle_throat_diameter = 0.014563969006102736
-    ), properties_unitless
-)
-
-viewable_system_design_loss(
-    ComponentVector(
-        u0_tank_oxidizer_mass = 2.034594773122675,
-        valve_flow_capacity_factor = 6.6906403746981306e-6,
-        injector_orifice_area = 2.0728250081324405e-5,
-        #u0_fuel_grain_void_diameter = 0.03403845868495702,
-        additional_fuel_grain_void_diameter = 0.009822880727716907,
-        fuel_grain_length = 0.6997446134380847, 
-        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
-        nozzle_throat_diameter = 0.014563969006102736
-    ), properties_unitless
-)
-
-viewable_system_design_loss(
-    ComponentVector(
-        u0_tank_oxidizer_mass = 2.06,
-        valve_flow_capacity_factor = 1.0e-4,
-        injector_orifice_area = 6.0e-4,
-        #u0_fuel_grain_void_diameter = 0.01,
-        additional_fuel_grain_void_diameter = 0.0132,
-        fuel_grain_length = 0.6, 
-        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
-        nozzle_throat_diameter = 0.0233
-    ), properties_unitless
-)
-
-viewable_system_design_loss(
-    ComponentVector(
-        u0_tank_oxidizer_mass = 2.06,
-        valve_flow_capacity_factor = 3.0e-6,
-        injector_orifice_area = 7.0e-6,
-        #u0_fuel_grain_void_diameter = 0.01,
-        additional_fuel_grain_void_diameter = 0.013,
-        fuel_grain_length = 0.6, 
-        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
-        nozzle_throat_diameter = 0.015
-    ), properties_unitless
-)
-
-viewable_system_design_loss(
-    ComponentVector(
-        u0_tank_oxidizer_mass = 5.0,
-        valve_flow_capacity_factor = 1.0e-4,
-        injector_orifice_area = 1.0e-4,
-        #u0_fuel_grain_void_diameter = 0.03,
-        additional_fuel_grain_void_diameter = 0.009,
-        fuel_grain_length = 0.30, 
-        #hmm, increasing the fuel grain length doesn't seem to change the burn time or impulse at all which shouldn't happen
-        nozzle_throat_diameter = 0.0156
-    ), properties_unitless
-)
+isp_interpolator_Pa(ustrip(upreferred(12u"bar")), 7.9)
 
 opt_f = OptimizationFunction(pure_system_design_loss_closure, Optimization.AutoFiniteDiff())
 opt_prob = OptimizationProblem(opt_f, Vector(theta_guess_unitless), Vector(properties_unitless), lb = Vector(theta_lb_unitless), ub = Vector(theta_ub_unitless))
