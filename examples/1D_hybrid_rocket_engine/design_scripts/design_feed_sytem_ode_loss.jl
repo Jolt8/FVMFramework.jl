@@ -71,6 +71,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     thrust_over_time = []
     pressures_over_time = []
     tank_pressure_over_time = []
+    tank_oxidizer_mass_over_time = []
     mid_section_pressure_over_time = []
     isp_over_time = []
     injector_velocity_over_time = []
@@ -85,6 +86,8 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         push!(pressures_over_time, p.chamber_pressure)
         push!(tank_pressure_over_time, p.tank_pressure)
         push!(mid_section_pressure_over_time, p.mid_section_pressure)
+        
+        push!(tank_oxidizer_mass_over_time, u_named.tank_oxidizer_mass)
 
         if (u_named.port_diameter >= p.final_fuel_grain_void_diameter) && found_depletion_time == false
             depletion_time = curr_t
@@ -206,14 +209,13 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
         @show maximum(isp_over_time)
 
-        tank_pressure_plot = plot(sol.t, tank_pressure_over_time, label = "Tank Pressure", xlabel = "Time [s]", ylabel = "Tank Pressure [Pa]")
-        display(tank_pressure_plot)
+        tank_mass_plt = plot(sol.t, tank_oxidizer_mass_over_time, label = "Tank Oxidizer Mass", xlabel = "Time [s]", ylabel = "Oxidizer Mass [kg]")
+        display(tank_mass_plt)
 
-        mid_section_pressure_plot = plot(sol.t, mid_section_pressure_over_time, label = "Mid Section Pressure", xlabel = "Time [s]", ylabel = "Mid Section Pressure [Pa]")
-        display(mid_section_pressure_plot)
-
-        pressure_plt = plot(sol.t, pressures_over_time, label = "Chamber Pressure", xlabel = "Time [s]", ylabel = "Chamber Pressure [Pa]")
-        display(pressure_plt)
+        pressure_plot = plot(sol.t, tank_pressure_over_time, label = "Tank Pressure", xlabel = "Time [s]", ylabel = "Pressure [Pa]")
+        plot!(pressure_plot, sol.t, mid_section_pressure_over_time, label = "Mid Section Pressure")
+        plot!(pressure_plot, sol.t, pressures_over_time, label = "Chamber Pressure")
+        display(pressure_plot)
 
         thrust_plt = plot(sol.t, [0.0, thrust_over_time...], label = "Thrust", xlabel = "Time [s]", ylabel = "Thrust [N]")
         display(thrust_plt)
