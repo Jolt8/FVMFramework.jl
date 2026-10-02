@@ -329,6 +329,13 @@ properties = ComponentVector(
     final_fuel_grain_void_diameter = 30.5u"mm", #the actual OD of the fuel grain should be about 33.32 mm
     #not optimized, we're going to be using a COTS phenolic liner, so we're just going to use the ID that the manufactuerer specifies
     fuel_grain_length = 30.0u"cm", #optimized
+    desired_residual_fuel_web_thickness = 1.7u"mm", 
+    #most hybrids have some residual fuel grain to protect the phenolic liner beneath it
+    #I wonder if it would be a good idea to shut off the valve as soon as the port_diameter reaches the final_fuel_grain_void_diameter
+    #This should probably be subtracted from the ID of a COTS phenolic liner which will then determine the final_fuel_grain_void_diameter
+    #Then we just optimize for unburnt fuel outside of the intentionally unburnt fuel web
+    #The other option is to shut off the oxidizer valve when the ratio of the mid_section_pressure to the chamber_pressure falls below a certain threshold (this is usually 15-25%)
+    #we could also do both
     fuel_grain_average_cross_sectional_area = 0.0u"m^2",
     fuel_grain_burning_surface_area = 0.0u"m^2",
 
@@ -564,7 +571,7 @@ viewable_system_design_loss(
         #u0_tank_oxidizer_mass = 1.1306761278408962,
         valve_flow_capacity_factor = 7.752365677650574e-6,
         injector_orifice_area = 1.2879126375776063e-5,
-        additional_fuel_grain_void_diameter = 0.0077,
+        additional_fuel_grain_void_diameter = 0.0277,
         fuel_grain_length = 0.4229823461249482,
         nozzle_throat_diameter = 0.012759132636893657
     ), properties_unitless
