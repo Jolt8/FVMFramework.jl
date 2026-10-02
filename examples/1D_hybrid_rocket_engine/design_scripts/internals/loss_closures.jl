@@ -1,5 +1,7 @@
 
 viewable_system_design_loss_closure = let 
+    #after doing some testing, concretely defining all these variables here is absolutely required to prevent compilation from never finishing, 
+    #this is pretty strange because I've never encountered this behavior before
     u_local = u0_unitless
     theta_axes_local = theta_axes
     u_axes_local = u_axes

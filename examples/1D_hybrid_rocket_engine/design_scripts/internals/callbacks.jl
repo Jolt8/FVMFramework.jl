@@ -26,6 +26,8 @@ function port_diameter_limit_expanded(u, t, integrator, u_axes, p_axes, local_up
 end
 
 port_diameter_limit = let
+    #after doing some testing, concretely defining all these variables here is absolutely required to prevent compilation from never finishing, 
+    #this is pretty strange because I've never encountered this behavior before
     u_axes_local = u_axes
     p_axes_local = p_axes
     update_state_local! = update_state!
