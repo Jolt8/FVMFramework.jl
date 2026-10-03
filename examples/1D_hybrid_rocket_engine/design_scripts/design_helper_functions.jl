@@ -130,6 +130,7 @@ function uv_flash_via_vt(
             @show energy_residual(lower_temperature)
             @show energy_residual(upper_temperature)
         end
+        error("bad uv flash")
         return vt_flash(model, volume, 300.0, abs.(moles))
         #error("Temperature bounds do not bracket the requested internal energy")
     end
@@ -153,7 +154,7 @@ function uv_flash_via_vt(
             @show energy_residual(lower_temperature)
             @show energy_residual(upper_temperature)
         end
-
+        error("bad uv flash)")
         return vt_flash(model, volume, 300.0, abs.(moles))
         #error("Temperature bounds do not bracket the requested internal energy")
     end

@@ -147,9 +147,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     #Injector
     #p.injector_orifice_area = p.injector_number_of_orifices * (pi / 4) * (p.injector_orifice_diameter^2)
 
-    #Fuel Grain
-    #p.final_fuel_grain_void_diameter = p.u0_fuel_grain_void_diameter + p.additional_fuel_grain_void_diameter
-    
+    #Fuel Grain    
     p.fuel_grain_average_cross_sectional_area = pi * (u.port_diameter / 2)^2
     
     p.fuel_grain_burning_surface_area = pi * u.port_diameter * p.fuel_grain_length
@@ -158,7 +156,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     
     #Adjustable Valve
     #if p.burned_out != 1.0
-    if u.port_diameter < p.final_fuel_grain_void_diameter
+    if valve_is_closed(u, p, t) == false
         #If we haven't burned all our fuel yet, keep the valve open
         p.valve_opening = valve_opening_at_t(t)
     else
@@ -167,20 +165,8 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
         #TODO: This assumption might change if the oxidizer runs out before the fuel, but that seems unlikely given our design
         p.valve_opening = 0.0
     end
-
     
-    #if t < 0.1
-        #@show p.burned_out
-        #@show p.valve_opening
-        #@show u.port_diameter - p.final_fuel_grain_void_diameter
-    #end
-    
-
     p.adjusted_valve_flow_capacity_factor = valve_flow_capacity_factor(p.valve_opening, p)
-
-    #@show u.port_diameter
-    #@show p.final_fuel_grain_void_diameter
-    #@show p.valve_opening
 
     #Nozzle
     p.nozzle_throat_area = (pi / 4) * (p.nozzle_throat_diameter^2)

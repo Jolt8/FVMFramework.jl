@@ -176,7 +176,8 @@ function update_u0!(u, p, t, oxidizer_model, chamber_model)
 
     tank_oxidizer_moles = p.u0_tank_oxidizer_mass / p.nitrous_oxide_molecular_weight
 
-    p.tank_volume = volume(oxidizer_model, p.tank_pressure, p.tank_temperature, [tank_oxidizer_moles])
+    #p.tank_volume = volume(oxidizer_model, p.tank_pressure, p.tank_temperature, [tank_oxidizer_moles])
+    p.tank_pressure = pressure(oxidizer_model, p.tank_volume, p.tank_temperature, [tank_oxidizer_moles])
 
     u.tank_oxidizer_internal_energy = Clapeyron.VT0.internal_energy(oxidizer_model, p.tank_volume, p.tank_temperature, [tank_oxidizer_moles])
 
@@ -196,10 +197,45 @@ function update_u0!(u, p, t, oxidizer_model, chamber_model)
     u.chamber_gas_internal_energy = Clapeyron.VT0.internal_energy(chamber_model, p.chamber_volume, p.chamber_temperature, [chamber_gas_oxidizer_moles, chamber_gas_fuel_moles])
 
     #Fuel Grain
+    p.final_fuel_grain_void_diameter = p.phenolic_liner_inner_diameter - 2 * p.desired_residual_fuel_web_thickness
     u.port_diameter = p.final_fuel_grain_void_diameter - p.additional_fuel_grain_void_diameter
-    #p.u0_fuel_grain_void_diameter
+
+    p.valve_already_closed = 0.0 #we're going to use this to make sure the valve doesn't get opened and closed multiple times
 
     return nothing
+end
+
+function valve_is_closed(u, p, t) 
+    @show p.valve_already_closed
+    @show p.mid_section_pressure
+    @show p.chamber_pressure
+    @show (p.mid_section_pressure - p.chamber_pressure) / p.chamber_pressure
+    @show u.port_diameter
+    @show p.final_fuel_grain_void_diameter
+
+    if t < 0.5
+        p.valve_already_closed = 0.0 #this is just to make sure that this variable is always reset to 0 
+    end
+
+    if (p.mid_section_pressure - p.chamber_pressure) / p.chamber_pressure <= 0.20 && t > 1.0
+        @show "pressure dropped below 20 percent of tank pressure"
+        p.valve_already_closed = 1.0
+        if t < 0.5
+            pressure_difference = (p.mid_section_pressure - p.chamber_pressure) / p.chamber_pressure
+            error("Even after startup, the current injector results in a $(pressure_difference*100)% pressure difference between the mid section and chamber, which will likely cause combustion instabilities")
+        end
+        return true
+    elseif u.port_diameter >= p.final_fuel_grain_void_diameter 
+        @show "fuel burned out"
+        p.valve_already_closed = 1.0
+        return true
+    elseif p.valve_already_closed == 1.0
+        p.valve_already_closed = 1.0
+        @show "valve already closed"
+        return true
+    else 
+        return false
+    end
 end
 
 Revise.includet(joinpath(@__DIR__, "feed_system_update_state_for_ode.jl"))
@@ -232,7 +268,8 @@ function system_ode!(du_vec, u_vec, p_vec, t, oxidizer_model, chamber_model, p_a
     #if the fuel hasn't completely burned up yet, still allow it to combust
     #otherwise the port_diameter could go lower than the final_fuel_grain_void_diameter
     #if p.burned_out != 1.0
-    if u.port_diameter < p.final_fuel_grain_void_diameter
+    #we should always let this burn out even if it goes past the desired final_fuel_grain_void_diameter because we want to see if it's actually protected
+    if u.port_diameter <= p.phenolic_liner_inner_diameter 
         fuel_mass_flow = regression_rate!(du, u, p, t, oxidizer_mass_flow)
     end
     
@@ -277,12 +314,12 @@ properties = ComponentVector(
     burn_out_time = 0.0, #this gets set to the t in which 
     
     #Tank
-    u0_tank_oxidizer_mass = 1.134u"kg", #optimized, should actually be 2.05kg to get the impulse we need, but I want to see if the optimizer will produce 2.05kg for debugging reasons
-    tank_pressure = 71.0u"bar", #no longer optimized, commercial tanks determine this
+    u0_tank_oxidizer_mass = 1.134u"kg", #No longer optimized because we're using a COTS N2O Tank
+    tank_pressure = 0.0u"bar", #this is determined based on EOS
     tank_temperature = 21.0u"°C",
     tank_vapor_fraction = 0.0u"m^3",
     tank_density = 0.0u"kg/m^3",
-    tank_volume = 50.0u"cm^3",
+    tank_volume = 1.6u"L",
     tank_specific_enthalpy = 0.0u"J/kg",
     
     #Nitrous oxide parameters
@@ -293,6 +330,7 @@ properties = ComponentVector(
     valve_flow_capacity_factor = 10.0u"mm^2", #a result of the final valve we choose #we should optimize this to get a good ideal of what we want
     adjusted_valve_flow_capacity_factor = 0.0u"mm^2",
     valve_opening = 1.0,
+    valve_already_closed = 0.0, #we're going to use this to make sure the valve doesn't get opened and closed multiple times
 
     #Mid section
     mid_section_pressure = 1.0u"atm", #this determines the initial kg of nitrous oxide in the mid_section
@@ -325,16 +363,17 @@ properties = ComponentVector(
     fuel_mass = 0.0u"kg", #this will be derived by substracting the volume of the cylinder formed by the u0_fuel_grain_void_diameter by the final_fuel_grain_void_diameter and then multiplying by the fuel density
     fuel_density = 950.0u"kg/m^3",
     #fuel_regression_rate = 0.5u"mm/s",
-    additional_fuel_grain_void_diameter = 1.0u"cm", #optimized
-    final_fuel_grain_void_diameter = 30.5u"mm", #the actual OD of the fuel grain should be about 33.32 mm
+    additional_fuel_grain_void_diameter = 0.7u"cm", #optimized
+    phenolic_liner_inner_diameter = 33.32u"mm",
+    final_fuel_grain_void_diameter = 0.0u"mm", #the actual OD of the fuel grain should be about 33.32 mm #Update: this is not going to be defined by the phenolic_liner_inner_diameter - 2 * desired_residual_fuel_web_thickness
     #not optimized, we're going to be using a COTS phenolic liner, so we're just going to use the ID that the manufactuerer specifies
     fuel_grain_length = 30.0u"cm", #optimized
-    desired_residual_fuel_web_thickness = 1.7u"mm", 
+    desired_residual_fuel_web_thickness = 1.7u"mm", #This could be optimized, but I think we'll just choose something that's a good safety factor (1.00mm is safe, but let's just do a little more than necessary)
     #most hybrids have some residual fuel grain to protect the phenolic liner beneath it
     #I wonder if it would be a good idea to shut off the valve as soon as the port_diameter reaches the final_fuel_grain_void_diameter
     #This should probably be subtracted from the ID of a COTS phenolic liner which will then determine the final_fuel_grain_void_diameter
     #Then we just optimize for unburnt fuel outside of the intentionally unburnt fuel web
-    #The other option is to shut off the oxidizer valve when the ratio of the mid_section_pressure to the chamber_pressure falls below a certain threshold (this is usually 15-25%)
+    #The other option is to shut off the oxidizer valve when the (mid_section_pressure - chamber_pressure) / chamber_pressure falls below a certain threshold (usually 0.15 - 0.25)
     #we could also do both
     fuel_grain_average_cross_sectional_area = 0.0u"m^2",
     fuel_grain_burning_surface_area = 0.0u"m^2",
@@ -458,93 +497,10 @@ sol = solve(
     callback = cb_set,
     isoutofdomain = isoutofdomain_feedsystem
 )
-#=
-function plot_sol_states(sol, u_axes, p_axes, oxidizer_model, chamber_model)
-    u_named_vec = []
-    p_named_vec = []
-    thrust_vec = []
 
-    for i in eachindex(sol.t)
-        du_named = ComponentVector(similar(sol.u[i]), u_axes)
-        u_named = ComponentVector(deepcopy(sol.u[i]), u_axes)
-        p_named = ComponentVector(deepcopy(sol.prob.p), p_axes)
-        
-        update_state!(du_named, u_named, p_named, 0.0, oxidizer_model, chamber_model)
-
-        @show p_named.chamber_pressure
-
-        push!(u_named_vec, u_named)
-        push!(p_named_vec, p_named)
-
-        if i > 1
-            u_named_prev = ComponentVector(sol.u[i-1], u_axes)
-            dt = sol.t[i] - sol.t[i-1]
-
-            #Cummulative impulse loss calcs
-            oxidizer_used = u_named_prev.tank_oxidizer_mass - u_named.tank_oxidizer_mass
-            fuel_used = p_named.fuel_density * (π / 4) * (u_named_prev.port_diameter^2 - u_named.port_diameter^2) * p_named.fuel_grain_length
-            
-            oxidizer_mass_flow = oxidizer_used / dt
-            fuel_mass_flow = fuel_used / dt
-
-            propellant_used = oxidizer_used + fuel_used
-            propellant_mass_flow = oxidizer_mass_flow + fuel_mass_flow
-
-            oxidizer_to_fuel_ratio = oxidizer_mass_flow / max(fuel_mass_flow, 1e-9)
-
-            p_named.propellant_isp = isp_interpolator_Pa(p_named.chamber_pressure, oxidizer_to_fuel_ratio)
-
-            p_named.propellant_characteristic_velocity = cstar_interpolator_Pa(p_named.chamber_pressure, oxidizer_to_fuel_ratio)
-
-            chamber_gas_mass_flow_out = p_named.nozzle_discharge_coefficient * ((p_named.chamber_pressure * p_named.nozzle_throat_area) / p_named.propellant_characteristic_velocity)
-
-            thrust_produced = p_named.propellant_isp * p_named.gravity * chamber_gas_mass_flow_out
-        else
-            chamber_gas_mass_flow_out = 0.0
-            thrust_produced = 0.0
-        end
-
-        push!(thrust_vec, thrust_produced)
-    end
-
-    port_diameter_plot = plot(sol.t, [u_named_vec[i].port_diameter for i in eachindex(sol.t)], title = "port diameter")
-    plot!(port_diameter_plot, sol.t, fill(p_named_vec[1].final_fuel_grain_void_diameter, length(sol.t)))
-    display(port_diameter_plot)
-
-    tank_oxidizer_mass_plot = plot(sol.t, [u_named_vec[i].tank_oxidizer_mass for i in eachindex(sol.t)], title = "tank oxidizer mass")
-    display(tank_oxidizer_mass_plot)
-
-    tank_pressure_plot = plot(sol.t, [p_named_vec[i].tank_pressure for i in eachindex(sol.t)], title = "tank pressure")
-    display(tank_pressure_plot)
-
-    mid_section_mass_plot = plot(sol.t, [u_named_vec[i].mid_section_mass for i in eachindex(sol.t)], title = "mid section mass")
-    display(mid_section_mass_plot)
-
-    mid_section_pressure_plot = plot(sol.t, [p_named_vec[i].mid_section_pressure for i in eachindex(sol.t)], title = "mid section pressure")
-    display(mid_section_pressure_plot)
-
-    chamber_mass_plot = plot(sol.t, [u_named_vec[i].chamber_gas_mass for i in eachindex(sol.t)], title = "chamber mass")
-    display(chamber_mass_plot)
-
-    chamber_pressure_plot = plot(sol.t, [p_named_vec[i].chamber_pressure for i in eachindex(sol.t)], title = "chamber pressure")
-    display(chamber_pressure_plot)
-
-    chamber_temperature_plot = plot(sol.t, [p_named_vec[i].chamber_temperature for i in eachindex(sol.t)], title = "chamber temperature")
-    display(chamber_temperature_plot)
-
-    thrust_plot = plot(sol.t, [thrust_vec[i] for i in eachindex(sol.t)], title = "thrust")
-    display(thrust_plot)
-
-    @show u_named_vec[end-2].chamber_gas_mass
-    @show u_named_vec[end-1].chamber_gas_mass
-    @show u_named_vec[end].chamber_gas_mass
-
-    @show p_named_vec[end].chamber_temperature
-end
+Revise.includet(joinpath(@__DIR__, "plot_sol_states.jl"))
 
 plot_sol_states(sol, u_axes, p_axes, oxidizer_model, chamber_model)
-
-#plot(sol.t, [ComponentVector(sol.u[i], u_axes).port_diameter for i in eachindex(sol.t)])
 
 optimized_cb_set = CallbackSet(
     approximate_time_to_finish_cb,
@@ -560,7 +516,7 @@ viewable_system_design_loss(
         #u0_tank_oxidizer_mass = 1.1306761278408962,
         valve_flow_capacity_factor = 1.752365677650574e-6,
         injector_orifice_area = 3.14e-6,
-        additional_fuel_grain_void_diameter = 0.008,
+        additional_fuel_grain_void_diameter = 0.004,
         fuel_grain_length = 0.27,
         nozzle_throat_diameter = 0.0152
     ), properties_unitless
@@ -571,7 +527,7 @@ viewable_system_design_loss(
         #u0_tank_oxidizer_mass = 1.1306761278408962,
         valve_flow_capacity_factor = 7.752365677650574e-6,
         injector_orifice_area = 1.2879126375776063e-5,
-        additional_fuel_grain_void_diameter = 0.0277,
+        additional_fuel_grain_void_diameter = 0.004,
         fuel_grain_length = 0.4229823461249482,
         nozzle_throat_diameter = 0.012759132636893657
     ), properties_unitless
