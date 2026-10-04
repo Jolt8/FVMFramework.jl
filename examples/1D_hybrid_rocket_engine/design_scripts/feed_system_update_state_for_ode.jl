@@ -16,7 +16,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     
     tank_n_moles = u.tank_oxidizer_mass / p.nitrous_oxide_molecular_weight
 
-    show_debug = true
+    show_debug = false
 
     if show_debug
         @show "tank"
@@ -31,6 +31,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
         u.tank_oxidizer_internal_energy,
         p.tank_volume,
         [tank_n_moles],
+        "tank"
     )
 
     p.tank_temperature = result.data.T
@@ -59,12 +60,16 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
         @show mid_section_n_moles
         @show u.mid_section_internal_energy
         @show p.mid_section_volume
+        @show p.mid_section_temperature
+        @show u.mid_section_internal_energy / u.mid_section_mass
     end
+    
     result = uv_flash_via_vt(
         oxidizer_model,
         u.mid_section_internal_energy,
         p.mid_section_volume,
         [mid_section_n_moles],
+        "midsection"
     )
 
     p.mid_section_temperature = result.data.T

@@ -57,6 +57,10 @@ function adjustable_valve_flow!(du, u, p, t)
     return (p.tank_pressure - p.mid_section_pressure)
 end
 
+function mid_section_heat_transfer!(du, u, p, t)
+    du.mid_section_internal_energy += 0.2 * (293.13 - p.mid_section_temperature)
+end
+
 function injector_valve_flow!(du, u, p, t)
     if p.mid_section_pressure - p.chamber_pressure <= 0
         return 0.0, 0.0
@@ -206,12 +210,14 @@ function update_u0!(u, p, t, oxidizer_model, chamber_model)
 end
 
 function valve_is_closed(u, p, t) 
-    @show p.valve_already_closed
-    @show p.mid_section_pressure
-    @show p.chamber_pressure
-    @show (p.mid_section_pressure - p.chamber_pressure) / p.chamber_pressure
-    @show u.port_diameter
-    @show p.final_fuel_grain_void_diameter
+    if true == false
+        @show p.valve_already_closed
+        @show p.mid_section_pressure
+        @show p.chamber_pressure
+        @show (p.mid_section_pressure - p.chamber_pressure) / p.chamber_pressure
+        @show u.port_diameter
+        @show p.final_fuel_grain_void_diameter
+    end
 
     if t < 0.5
         p.valve_already_closed = 0.0 #this is just to make sure that this variable is always reset to 0 
@@ -260,6 +266,8 @@ function system_ode!(du_vec, u_vec, p_vec, t, oxidizer_model, chamber_model, p_a
     end
 
     adjustable_valve_pressure_drop = adjustable_valve_flow!(du, u, p, t)
+
+    mid_section_heat_transfer!(du, u, p, t)
 
     injector_valve_pressure_drop, oxidizer_mass_flow = injector_valve_flow!(du, u, p, t)
     
@@ -443,7 +451,7 @@ theta_to_u_map
 theta_to_p_map
 p_to_u_map
 
-#convert    all to base SI and then strip away units
+#convert all to base SI and then strip away units
 theta_guess_unitless = ustrip.(upreferred.(theta_guess))
 theta_lb_unitless = ustrip.(upreferred.(theta_lb))
 theta_ub_unitless = ustrip.(upreferred.(theta_ub))
