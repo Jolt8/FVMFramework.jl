@@ -16,7 +16,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     
     tank_n_moles = u.tank_oxidizer_mass / p.nitrous_oxide_molecular_weight
 
-    show_debug = false
+    show_debug = true
 
     if show_debug
         @show "tank"
@@ -91,7 +91,6 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     # temperature directly from U(V, T, n) instead of performing a phase flash.
     
     chamber_energy_residual = (temperature, _) -> Clapeyron.VT0.internal_energy(chamber_model, p.chamber_volume, temperature, chamber_moles) - u.chamber_gas_internal_energy
-
     
     temperature_problem = NonlinearProblem(chamber_energy_residual, p.chamber_temperature)
     temperature_solution = solve(temperature_problem, NewtonRaphson(); abstol = 1e-8, reltol = 1e-8)
