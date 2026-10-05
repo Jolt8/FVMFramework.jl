@@ -158,7 +158,8 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     
     #Adjustable Valve
     #if p.burned_out != 1.0
-    if u.port_diameter < p.final_fuel_grain_void_diameter
+    if t <= 6.0
+        #u.port_diameter < p.final_fuel_grain_void_diameter
         #If we haven't burned all our fuel yet, keep the valve open
         p.valve_opening = valve_opening_at_t(t)
     else

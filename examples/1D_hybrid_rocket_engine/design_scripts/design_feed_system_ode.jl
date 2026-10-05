@@ -458,7 +458,7 @@ sol = solve(
     callback = cb_set,
     isoutofdomain = isoutofdomain_feedsystem
 )
-#=
+
 function plot_sol_states(sol, u_axes, p_axes, oxidizer_model, chamber_model)
     u_named_vec = []
     p_named_vec = []
@@ -570,7 +570,7 @@ viewable_system_design_loss(
     ComponentVector(
         #u0_tank_oxidizer_mass = 1.1306761278408962,
         valve_flow_capacity_factor = 7.752365677650574e-6,
-        injector_orifice_area = 1.2879126375776063e-5,
+        injector_orifice_area = 1.0079126375776063e-5,
         additional_fuel_grain_void_diameter = 0.0277,
         fuel_grain_length = 0.4229823461249482,
         nozzle_throat_diameter = 0.012759132636893657

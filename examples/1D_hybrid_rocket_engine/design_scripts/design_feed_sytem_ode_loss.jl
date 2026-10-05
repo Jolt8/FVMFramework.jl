@@ -193,6 +193,8 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
                 @show u_named.port_diameter
                 @show p.final_fuel_grain_void_diameter
+                depletion_time = 6.0
+                p.burn_time = 6.0
             end
         end
     end
@@ -218,7 +220,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         display(pressure_plot)
 
         thrust_plt = plot(sol.t, [0.0, thrust_over_time...], label = "Thrust", xlabel = "Time [s]", ylabel = "Thrust [N]")
-        display(thrust_plt)
+        #display(thrust_plt)
 
         @show ComponentVector(sol.u[end], u_axes).tank_oxidizer_mass
     end
