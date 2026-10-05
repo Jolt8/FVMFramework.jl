@@ -103,7 +103,8 @@ function uv_flash_via_vt(
     model,
     target_internal_energy,
     volume,
-    moles;
+    moles,
+    section_name;
     temperature_bounds = (180.0, 450.0),
 )
 
@@ -117,19 +118,24 @@ function uv_flash_via_vt(
     lower_residual = energy_residual(lower_temperature)
     upper_residual = energy_residual(upper_temperature)
 
-    show_debug = false
+    show_debug = true
 
     if lower_residual * upper_residual >= 0.0
         if show_debug
+            #=
             @show lower_residual
             @show upper_residual
             @show lower_residual * upper_residual
             @show target_internal_energy
             @show lower_temperature
             @show upper_temperature
+            =#
             @show energy_residual(lower_temperature)
             @show energy_residual(upper_temperature)
         end
+        #error("bad uv flash")
+        #@error "bad uv flash"
+        @warn "bad uv flash in $section_name"
         return vt_flash(model, volume, 300.0, abs.(moles))
         #error("Temperature bounds do not bracket the requested internal energy")
     end
@@ -144,16 +150,20 @@ function uv_flash_via_vt(
         )
     catch e
         if show_debug
+            #=
             @show lower_residual
             @show upper_residual
             @show lower_residual * upper_residual
             @show target_internal_energy
             @show lower_temperature
             @show upper_temperature
+            =#
             @show energy_residual(lower_temperature)
             @show energy_residual(upper_temperature)
         end
-
+        #error("bad uv flash)")
+        #@error "bad uv flash"
+        @warn "bad uv flash in $section_name"
         return vt_flash(model, volume, 300.0, abs.(moles))
         #error("Temperature bounds do not bracket the requested internal energy")
     end

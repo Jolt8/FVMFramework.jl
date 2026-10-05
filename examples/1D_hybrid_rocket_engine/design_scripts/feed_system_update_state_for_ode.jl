@@ -1,5 +1,6 @@
 include(joinpath(@__DIR__, "CEA_lookup_table.jl"))
-#includes isp_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio) and cstar_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio)
+#includes isp_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio, expansion_ratio)
+#and cstar_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio, expansion_ratio)
 
 function valve_opening_at_t(t)
     return 1.0
@@ -31,6 +32,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
         u.tank_oxidizer_internal_energy,
         p.tank_volume,
         [tank_n_moles],
+        "tank"
     )
 
     p.tank_temperature = result.data.T
@@ -59,12 +61,16 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
         @show mid_section_n_moles
         @show u.mid_section_internal_energy
         @show p.mid_section_volume
+        @show p.mid_section_temperature
+        @show u.mid_section_internal_energy / u.mid_section_mass
     end
+    
     result = uv_flash_via_vt(
         oxidizer_model,
         u.mid_section_internal_energy,
         p.mid_section_volume,
         [mid_section_n_moles],
+        "midsection"
     )
 
     p.mid_section_temperature = result.data.T
@@ -91,7 +97,6 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     # temperature directly from U(V, T, n) instead of performing a phase flash.
     
     chamber_energy_residual = (temperature, _) -> Clapeyron.VT0.internal_energy(chamber_model, p.chamber_volume, temperature, chamber_moles) - u.chamber_gas_internal_energy
-
     
     temperature_problem = NonlinearProblem(chamber_energy_residual, p.chamber_temperature)
     temperature_solution = solve(temperature_problem, NewtonRaphson(); abstol = 1e-8, reltol = 1e-8)
@@ -142,14 +147,12 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
 
     #Propellant properties
     #we don't need ISP yet, we only need that for the objective function, we do need propellant_characteristic_velocity for the mass flow out of the nozzle however
-    #p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, p.oxidizer_to_fuel_ratio)
+    #p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, p.oxidizer_to_fuel_ratio, p.expansion_ratio)
 
     #Injector
     #p.injector_orifice_area = p.injector_number_of_orifices * (pi / 4) * (p.injector_orifice_diameter^2)
 
-    #Fuel Grain
-    #p.final_fuel_grain_void_diameter = p.u0_fuel_grain_void_diameter + p.additional_fuel_grain_void_diameter
-    
+    #Fuel Grain    
     p.fuel_grain_average_cross_sectional_area = pi * (u.port_diameter / 2)^2
     
     p.fuel_grain_burning_surface_area = pi * u.port_diameter * p.fuel_grain_length
@@ -158,8 +161,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     
     #Adjustable Valve
     #if p.burned_out != 1.0
-    if t <= 6.0
-        #u.port_diameter < p.final_fuel_grain_void_diameter
+    if valve_is_closed(u, p, t) == false
         #If we haven't burned all our fuel yet, keep the valve open
         p.valve_opening = valve_opening_at_t(t)
     else
@@ -168,22 +170,10 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
         #TODO: This assumption might change if the oxidizer runs out before the fuel, but that seems unlikely given our design
         p.valve_opening = 0.0
     end
-
     
-    #if t < 0.1
-        #@show p.burned_out
-        #@show p.valve_opening
-        #@show u.port_diameter - p.final_fuel_grain_void_diameter
-    #end
-    
-
     p.adjusted_valve_flow_capacity_factor = valve_flow_capacity_factor(p.valve_opening, p)
 
-    #@show u.port_diameter
-    #@show p.final_fuel_grain_void_diameter
-    #@show p.valve_opening
-
     #Nozzle
-    p.nozzle_throat_area = (pi / 4) * (p.nozzle_throat_diameter^2)
+    update_nozzle_geometry!(p)
     #again, we need something here that determines propellant_isp based on oxidizer_to_fuel_ratio, chamber_pressure, and exit pressure (which we don't really know yet)
 end

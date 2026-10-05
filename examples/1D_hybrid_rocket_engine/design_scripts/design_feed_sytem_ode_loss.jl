@@ -76,6 +76,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     isp_over_time = []
     injector_velocity_over_time = []
     pressure_drop_ratio_over_time = []
+    port_diameter_over_time = []
 
     for i in eachindex(sol.u)
         curr_t = sol.t[i]
@@ -86,21 +87,15 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         push!(pressures_over_time, p.chamber_pressure)
         push!(tank_pressure_over_time, p.tank_pressure)
         push!(mid_section_pressure_over_time, p.mid_section_pressure)
-        
+        push!(port_diameter_over_time, u_named.port_diameter)
         push!(tank_oxidizer_mass_over_time, u_named.tank_oxidizer_mass)
 
-        if (u_named.port_diameter >= p.final_fuel_grain_void_diameter) && found_depletion_time == false
+        if valve_is_closed(u_named, p, curr_t) == true && found_depletion_time == false
             depletion_time = curr_t
             found_depletion_time = true
-            unutilized_oxidizer_loss = 0.001 * abs2(u_named.tank_oxidizer_mass)
+            #unutilized_oxidizer_loss = 0.001 * abs2(u_named.tank_oxidizer_mass)
+            #unburned_fuel_loss = 0.001 * abs2(p.fuel_mass)
             #break #stop evaluating loss if the fuel has burned out
-        end
-
-        if (u_named.tank_oxidizer_mass <= 1e-6) && found_depletion_time == false
-            depletion_time = curr_t
-            found_depletion_time = true
-            unburned_fuel_loss = 0.001 * abs2(p.fuel_mass)
-            #break #stop evaluating loss if the oxidizer has burned out
         end
 
         adjustable_valve_pressure_drop = adjustable_valve_flow!(du_temporary, u_named, p, curr_t)
@@ -151,7 +146,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
             #Cummulative impulse loss calcs
             oxidizer_used = u_named_prev.tank_oxidizer_mass - u_named.tank_oxidizer_mass
-            fuel_used = p.fuel_density * (π / 4) * (u_named_prev.port_diameter^2 - u_named.port_diameter^2) * p.fuel_grain_length
+            fuel_used = p.fuel_density * (π / 4) * (u_named.port_diameter^2 - u_named_prev.port_diameter^2) * p.fuel_grain_length
             
             oxidizer_mass_flow = oxidizer_used / dt
             fuel_mass_flow = fuel_used / dt
@@ -161,11 +156,11 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
             oxidizer_to_fuel_ratio = oxidizer_mass_flow / max(fuel_mass_flow, 1e-9)
 
-            p.propellant_isp = isp_interpolator_Pa(p.chamber_pressure, oxidizer_to_fuel_ratio)
+            p.propellant_isp = isp_interpolator_Pa(p.chamber_pressure, oxidizer_to_fuel_ratio, p.expansion_ratio)
 
             push!(isp_over_time, p.propellant_isp)
 
-            p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, oxidizer_to_fuel_ratio)
+            p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, oxidizer_to_fuel_ratio, p.expansion_ratio)
 
             chamber_gas_mass_flow_out = p.nozzle_discharge_coefficient * ((p.chamber_pressure * p.nozzle_throat_area) / p.propellant_characteristic_velocity)
 
@@ -213,6 +208,9 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
         tank_mass_plt = plot(sol.t, tank_oxidizer_mass_over_time, label = "Tank Oxidizer Mass", xlabel = "Time [s]", ylabel = "Oxidizer Mass [kg]")
         display(tank_mass_plt)
+
+        port_diameter_plot = plot(sol.t, port_diameter_over_time, label = "Port Diameter", xlabel = "Time [s]", ylabel = "Port Diameter [m]")
+        display(port_diameter_plot)
 
         pressure_plot = plot(sol.t, tank_pressure_over_time, label = "Tank Pressure", xlabel = "Time [s]", ylabel = "Pressure [Pa]")
         plot!(pressure_plot, sol.t, mid_section_pressure_over_time, label = "Mid Section Pressure")
