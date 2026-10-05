@@ -1,5 +1,6 @@
 include(joinpath(@__DIR__, "CEA_lookup_table.jl"))
-#includes isp_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio) and cstar_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio)
+#includes isp_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio, expansion_ratio)
+#and cstar_interpolator_Pa(pressure_Pa, oxidizer_to_fuel_ratio, expansion_ratio)
 
 function valve_opening_at_t(t)
     return 1.0
@@ -146,7 +147,7 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
 
     #Propellant properties
     #we don't need ISP yet, we only need that for the objective function, we do need propellant_characteristic_velocity for the mass flow out of the nozzle however
-    #p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, p.oxidizer_to_fuel_ratio)
+    #p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, p.oxidizer_to_fuel_ratio, p.expansion_ratio)
 
     #Injector
     #p.injector_orifice_area = p.injector_number_of_orifices * (pi / 4) * (p.injector_orifice_diameter^2)
@@ -173,6 +174,6 @@ function update_state!(du, u, p, t, oxidizer_model, chamber_model)
     p.adjusted_valve_flow_capacity_factor = valve_flow_capacity_factor(p.valve_opening, p)
 
     #Nozzle
-    p.nozzle_throat_area = (pi / 4) * (p.nozzle_throat_diameter^2)
+    update_nozzle_geometry!(p)
     #again, we need something here that determines propellant_isp based on oxidizer_to_fuel_ratio, chamber_pressure, and exit pressure (which we don't really know yet)
 end

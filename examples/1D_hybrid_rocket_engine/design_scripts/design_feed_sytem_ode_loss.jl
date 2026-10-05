@@ -156,11 +156,11 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
             oxidizer_to_fuel_ratio = oxidizer_mass_flow / max(fuel_mass_flow, 1e-9)
 
-            p.propellant_isp = isp_interpolator_Pa(p.chamber_pressure, oxidizer_to_fuel_ratio)
+            p.propellant_isp = isp_interpolator_Pa(p.chamber_pressure, oxidizer_to_fuel_ratio, p.expansion_ratio)
 
             push!(isp_over_time, p.propellant_isp)
 
-            p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, oxidizer_to_fuel_ratio)
+            p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, oxidizer_to_fuel_ratio, p.expansion_ratio)
 
             chamber_gas_mass_flow_out = p.nozzle_discharge_coefficient * ((p.chamber_pressure * p.nozzle_throat_area) / p.propellant_characteristic_velocity)
 

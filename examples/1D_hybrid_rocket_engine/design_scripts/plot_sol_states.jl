@@ -32,9 +32,9 @@ function plot_sol_states(sol, u_axes, p_axes, oxidizer_model, chamber_model)
 
             oxidizer_to_fuel_ratio = oxidizer_mass_flow / max(fuel_mass_flow, 1e-9)
 
-            p_named.propellant_isp = isp_interpolator_Pa(p_named.chamber_pressure, oxidizer_to_fuel_ratio)
+            p_named.propellant_isp = isp_interpolator_Pa(p_named.chamber_pressure, oxidizer_to_fuel_ratio, p_named.expansion_ratio)
 
-            p_named.propellant_characteristic_velocity = cstar_interpolator_Pa(p_named.chamber_pressure, oxidizer_to_fuel_ratio)
+            p_named.propellant_characteristic_velocity = cstar_interpolator_Pa(p_named.chamber_pressure, oxidizer_to_fuel_ratio, p_named.expansion_ratio)
 
             chamber_gas_mass_flow_out = p_named.nozzle_discharge_coefficient * ((p_named.chamber_pressure * p_named.nozzle_throat_area) / p_named.propellant_characteristic_velocity)
 

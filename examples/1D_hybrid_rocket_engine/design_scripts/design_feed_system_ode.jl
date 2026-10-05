@@ -174,6 +174,13 @@ u0 = ComponentVector(
     port_diameter = 2.0u"cm"
 )
 
+function update_nozzle_geometry!(p)
+    p.nozzle_throat_area = (pi / 4) * p.nozzle_throat_diameter^2
+    p.nozzle_exit_area = p.expansion_ratio * p.nozzle_throat_area
+    p.nozzle_exit_diameter = sqrt(4 * p.nozzle_exit_area / pi)
+    return nothing
+end
+
 function update_u0!(u, p, t, oxidizer_model, chamber_model)
     #Tank
     u.tank_oxidizer_mass = p.u0_tank_oxidizer_mass
@@ -205,6 +212,8 @@ function update_u0!(u, p, t, oxidizer_model, chamber_model)
     u.port_diameter = p.final_fuel_grain_void_diameter - p.additional_fuel_grain_void_diameter
 
     p.valve_already_closed = 0.0 #we're going to use this to make sure the valve doesn't get opened and closed multiple times
+
+    update_nozzle_geometry!(p)
 
     return nothing
 end
@@ -282,7 +291,7 @@ function system_ode!(du_vec, u_vec, p_vec, t, oxidizer_model, chamber_model, p_a
     end
     
     p.oxidizer_to_fuel_ratio = oxidizer_mass_flow / max(fuel_mass_flow, 1e-9)
-    p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, p.oxidizer_to_fuel_ratio)
+    p.propellant_characteristic_velocity = cstar_interpolator_Pa(p.chamber_pressure, p.oxidizer_to_fuel_ratio, p.expansion_ratio)
 
     chamber_gas_mass_flow_out = nozzle_outlet!(du, u, p, t)
 
@@ -401,7 +410,10 @@ properties = ComponentVector(
     #Nozzle
     nozzle_throat_diameter = 1.6u"cm", #optimized
     nozzle_throat_area = 0.0u"m^2",
+    nozzle_exit_diameter = 0.0u"m",
+    nozzle_exit_area = 0.0u"m^2",
     nozzle_discharge_coefficient = 0.9,
+    expansion_ratio = 4.0
 )
 
 struct OptimizedParameter
@@ -439,7 +451,8 @@ optimized_properties = [
     #Propellant properties
 
     #Nozzle
-    OptimizedParameter(:nozzle_throat_diameter, 10.0u"mm", 20.0u"mm")
+    OptimizedParameter(:nozzle_throat_diameter, 10.0u"mm", 20.0u"mm"),
+    OptimizedParameter(:expansion_ratio, 3.0, 10.0)
 ]
 
 Revise.includet(joinpath(@__DIR__, "CEA_lookup_table.jl"))
@@ -524,20 +537,22 @@ viewable_system_design_loss(
         #u0_tank_oxidizer_mass = 1.1306761278408962,
         valve_flow_capacity_factor = 1.752365677650574e-6,
         injector_orifice_area = 3.14e-6,
-        additional_fuel_grain_void_diameter = 0.004,
+        additional_fuel_grain_void_diameter = 0.008,
         fuel_grain_length = 0.27,
-        nozzle_throat_diameter = 0.0152
+        nozzle_throat_diameter = 0.0152,
+        expansion_ratio = 4.0,
     ), properties_unitless
-)
+) 
 
 viewable_system_design_loss(
     ComponentVector(
         #u0_tank_oxidizer_mass = 1.1306761278408962,
         valve_flow_capacity_factor = 7.752365677650574e-6,
         injector_orifice_area = 1.2879126375776063e-5,
-        additional_fuel_grain_void_diameter = 0.004,
+        additional_fuel_grain_void_diameter = 0.008,
         fuel_grain_length = 0.4229823461249482,
-        nozzle_throat_diameter = 0.012759132636893657
+        nozzle_throat_diameter = 0.012759132636893657,
+        expansion_ratio = 4.0,
     ), properties_unitless
 )
 
@@ -548,7 +563,8 @@ viewable_system_design_loss(
         injector_orifice_area = 0.9e-5,
         additional_fuel_grain_void_diameter = 0.01,
         fuel_grain_length = 0.48,
-        nozzle_throat_diameter = 0.016
+        nozzle_throat_diameter = 0.016,
+        expansion_ratio = 4.0,
     ), properties_unitless
 )
 
@@ -560,11 +576,12 @@ viewable_system_design_loss(
         additional_fuel_grain_void_diameter = 0.01,
         #final_fuel_grain_void_diameter = 0.0238, #no longer optimized, we're using a COTS casing
         fuel_grain_length = 0.48,
-        nozzle_throat_diameter = 0.021
+        nozzle_throat_diameter = 0.021,
+        expansion_ratio = 4.0,
     ), properties_unitless
 )
-#=
-isp_interpolator_Pa(ustrip(upreferred(12u"bar")), 7.9)
+
+isp_interpolator_Pa(ustrip(upreferred(12u"bar")), 7.9, 4.0)
 
 opt_f = OptimizationFunction(pure_system_design_loss_closure, Optimization.AutoFiniteDiff())
 opt_prob = OptimizationProblem(opt_f, Vector(theta_guess_unitless), Vector(properties_unitless), lb = Vector(theta_lb_unitless), ub = Vector(theta_ub_unitless))
