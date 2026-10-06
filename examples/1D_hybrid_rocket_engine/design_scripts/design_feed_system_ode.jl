@@ -380,11 +380,11 @@ properties = ComponentVector(
     fuel_mass = 0.0u"kg", #this will be derived by substracting the volume of the cylinder formed by the u0_fuel_grain_void_diameter by the final_fuel_grain_void_diameter and then multiplying by the fuel density
     fuel_density = 950.0u"kg/m^3",
     #fuel_regression_rate = 0.5u"mm/s",
-    additional_fuel_grain_void_diameter = 0.82u"cm", #optimized
+    additional_fuel_grain_void_diameter = 0.8u"cm", #optimized
     phenolic_liner_inner_diameter = 33.32u"mm",
     final_fuel_grain_void_diameter = 0.0u"mm", #the actual OD of the fuel grain should be about 33.32 mm #Update: this is not going to be defined by the phenolic_liner_inner_diameter - 2 * desired_residual_fuel_web_thickness
     #not optimized, we're going to be using a COTS phenolic liner, so we're just going to use the ID that the manufactuerer specifies
-    fuel_grain_length = 28.0u"cm", #optimized
+    fuel_grain_length = 27.0u"cm", #optimized
     desired_residual_fuel_web_thickness = 2.0u"mm", 
     #This could be optimized, but I think we'll just choose something that's a good safety factor (1.00mm is safe, but let's just do a little more than necessary)
     #Also, I'm just going to set this to 5.0 mm because we're just going for a static fire test for the prototype, so more safety doesn't hurt us
@@ -412,7 +412,7 @@ properties = ComponentVector(
     combustion_efficiency = 0.9,
 
     #Nozzle
-    nozzle_throat_diameter = 14.5u"mm", #optimized
+    nozzle_throat_diameter = 15.0u"mm", #optimized
     nozzle_throat_area = 0.0u"m^2",
     nozzle_exit_diameter = 0.0u"m",
     nozzle_exit_area = 0.0u"m^2",
@@ -435,13 +435,13 @@ optimized_properties = [
     #OptimizedParameter(:tank_pressure, 50.0u"bar", 71.0u"bar",),
 
     #adjustable valve
-    OptimizedParameter(:valve_flow_capacity_factor, 3.0u"mm^2", 15.0u"mm^2"),
+    OptimizedParameter(:valve_flow_capacity_factor, 3.0u"mm^2", 15.0u"mm^2"), #Still not sure
     #OptimizedParameter(:valve_flow_capacity_factor, 1.0u"mm^2", 30.0u"mm^2"),
 
     #Mid section
 
     #Injector properties
-    OptimizedParameter(:injector_orifice_area, 2.0u"mm^2", 15.0u"mm^2"),
+    OptimizedParameter(:injector_orifice_area, 2.0u"mm^2", 15.0u"mm^2"), #Still not sure 
     #OptimizedParameter(:injector_orifice_area, 1.0u"mm^2", 30.0u"mm^2"),
 
     #Chamber
@@ -449,15 +449,15 @@ optimized_properties = [
     #Fuel grain
     #OptimizedParameter(:u0_fuel_grain_void_diameter, 1.0u"cm", 5.0u"cm"),
     #OptimizedParameter(:final_fuel_grain_void_diameter, 1.0u"cm", 20.0u"cm"),
-    OptimizedParameter(:additional_fuel_grain_void_diameter, 0.6u"cm", 0.9u"cm"),
-    OptimizedParameter(:fuel_grain_length, 24.0u"cm", 50.0u"cm"),
+    OptimizedParameter(:additional_fuel_grain_void_diameter, 0.7u"cm", 1.1u"cm"), #I'm thinking 0.8 cm
+    OptimizedParameter(:fuel_grain_length, 24.0u"cm", 32.0u"cm"), #I'm thinking 260-280 mm
 
     #Fuel Grain Empirical Parameters
 
     #Propellant properties
 
     #Nozzle
-    OptimizedParameter(:nozzle_throat_diameter, 10.0u"mm", 20.0u"mm"),
+    OptimizedParameter(:nozzle_throat_diameter, 14.0u"mm", 16.0u"mm"), #I'm thinking 14.5-15.0 mm
     #OptimizedParameter(:expansion_ratio, 3.0, 10.0)
 ]
 
@@ -528,6 +528,8 @@ sol = solve(
 Revise.includet(joinpath(@__DIR__, "plot_sol_states.jl"))
 
 plot_sol_states(sol, u_axes, p_axes, oxidizer_model, chamber_model)
+#oh my, the values that I put in for this worked perfectly
+#eh, the burn time is only 4 seconds when it should be 5.0
 
 optimized_cb_set = CallbackSet(
     approximate_time_to_finish_cb,
@@ -538,6 +540,112 @@ optimized_cb_set = CallbackSet(
 
 Revise.includet(joinpath(@__DIR__, "internals/loss_closures.jl"))
 
+1.0789410680917226e-5,3.7483588289457124e-6,0.007133524660686161,0.2982634856055583,0.014012183888159849
+viewable_system_design_loss(
+    ComponentVector(
+        valve_flow_capacity_factor = 1.0789410680917226e-5,
+        injector_orifice_area = 3.7483588289457124e-6,
+        additional_fuel_grain_void_diameter = 0.007133524660686161,
+        fuel_grain_length = 0.2982634856055583,
+        nozzle_throat_diameter = 0.014012183888159849,
+    ), properties_unitless
+)
+#Fine, but the ratio between the adjustable valve and injector pressure drop should be smaller
+
+4.963325928956815e-6,4.368030507167714e-6,0.008284737710978216,0.2837561187287971,0.014938194127290211
+viewable_system_design_loss(
+    ComponentVector(
+        valve_flow_capacity_factor = 4.963325928956815e-6,
+        injector_orifice_area = 4.368030507167714e-6,
+        additional_fuel_grain_void_diameter = 0.008284737710978216,
+        fuel_grain_length = 0.2837561187287971,
+        nozzle_throat_diameter = 0.014938194127290211,
+    ), properties_unitless
+)
+#Chamber pressure is way too low, likely caused by high injector pressure drop
+#It has the right burn time 
+
+
+1.0789410680917226e-5,3.7483588289457124e-6,0.00790608322078246,0.2982634856055583,0.014012183888159849
+viewable_system_design_loss(
+    ComponentVector(
+        valve_flow_capacity_factor = 1.0789410680917226e-5,
+        injector_orifice_area = 3.7483588289457124e-6,
+        additional_fuel_grain_void_diameter = 0.00790608322078246,
+        fuel_grain_length = 0.2982634856055583,
+        nozzle_throat_diameter = 0.014012183888159849,
+    ), properties_unitless
+)
+#Chamber pressure is just right, but the injector velocity is too high (ranges from 70-50 m/s)
+#Better impulse than the previous two
+
+1.0789410680917226e-5,3.7483588289457124e-6,0.00790608322078246,0.2982634856055583,0.014012183888159849
+viewable_system_design_loss(
+    ComponentVector(
+        valve_flow_capacity_factor = 1.0789410680917226e-5,
+        injector_orifice_area = 3.9483588289457124e-6,
+        additional_fuel_grain_void_diameter = 0.0085,
+        fuel_grain_length = 0.2982634856055583,
+        nozzle_throat_diameter = 0.014,
+    ), properties_unitless
+)
+#This gets the closest to the desired burn time, but the additional fuel grain void diameter seems too high compared 
+#to most real world hybrids
+#This one seems to be the best and most realistic
+
+1.0789410680917226e-5,3.7483588289457124e-6,0.00790608322078246,0.2982634856055583,0.014012183888159849
+viewable_system_design_loss(
+    ComponentVector(
+        valve_flow_capacity_factor = 1.2089410680917226e-5,
+        injector_orifice_area = 5.00483588289457124e-6,
+        additional_fuel_grain_void_diameter = 0.0085,
+        fuel_grain_length = 0.2982634856055583,
+        nozzle_throat_diameter = 0.0143012183888159849,
+    ), properties_unitless
+)
+#...and this one are our likely winners
+
+8.274079021844914e-6,3.25607608646873e-6,0.00889717232381188,0.2813567269467613,0.015523059107283906
+viewable_system_design_loss(
+    ComponentVector(
+        valve_flow_capacity_factor = 8.274079021844914e-6,
+        injector_orifice_area = 3.25607608646873e-6,
+        additional_fuel_grain_void_diameter = 0.00889717232381188,
+        fuel_grain_length = 0.2813567269467613,
+        nozzle_throat_diameter = 0.015523059107283906,
+    ), properties_unitless
+)
+#Chamber pressure is way too low, likely caused by the injector being too restrictive
+#I'm slightly leaning towards an injector orifice area of 4.0mm^2
+
+viewable_system_design_loss(
+    ComponentVector(
+        valve_flow_capacity_factor = 1.2e-5,
+        injector_orifice_area = 1.0e-5,
+        additional_fuel_grain_void_diameter = 0.008,
+        fuel_grain_length = 0.27,
+        nozzle_throat_diameter = 0.015,
+    ), properties_unitless
+)
+
+1.3826907038095124e-5,3.25607608646873e-6,0.00889717232381188,0.2933444297026247,0.015523059107283906
+viewable_system_design_loss(
+    ComponentVector(
+        valve_flow_capacity_factor = 1.3826907038095124e-5,
+        injector_orifice_area = 3.25607608646873e-6,
+        additional_fuel_grain_void_diameter = 0.00889717232381188,
+        fuel_grain_length = 0.2933444297026247,
+        nozzle_throat_diameter = 0.015523059107283906,
+    ), properties_unitless
+)
+#Chamber pressure is way too low, burn time is just about right
+
+
+#=
+1.0789410680917226e-5,3.7483588289457124e-6,0.007133524660686161,0.2982634856055583,0.014012183888159849
+4.963325928956815e-6,4.368030507167714e-6,0.008284737710978216,0.2837561187287971,0.014938194127290211
+1.0789410680917226e-5,3.7483588289457124e-6,0.00790608322078246,0.2982634856055583,0.014012183888159849
+8.274079021844914e-6,3.25607608646873e-6,0.00889717232381188,0.2813567269467613,0.015523059107283906
 #=
 viewable_system_design_loss(
     ComponentVector(

@@ -100,8 +100,6 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
             #break #stop evaluating loss if the fuel has burned out
         end
 
-        chamber_pressure_loss += (1 / length(sol.u)) * abs2(p.target_chamber_pressure - p.chamber_pressure) * 1e-14
-
         adjustable_valve_pressure_drop = adjustable_valve_flow!(du_temporary, u_named, p, curr_t)
 
         injector_valve_pressure_drop, oxidizer_mass_flow = injector_valve_flow!(du_temporary, u_named, p, curr_t)
@@ -142,6 +140,10 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
         combustion_zone_energy_conservation!(du_temporary, u_named, p, curr_t, chamber_model, oxidizer_mass_flow, fuel_mass_flow, chamber_gas_mass_flow_out)
         =#
+
+        if found_depletion_time == false
+            chamber_pressure_loss += (1 / length(sol.u)) * abs2(p.target_chamber_pressure - p.chamber_pressure) * 1e-13
+        end
 
         #if we want, we can get the derivative of the cummulative_impulse over time to plot the thrust profile of the engine!
         if i > 1
@@ -198,7 +200,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         end
     end
 
-    if true == false
+    if true == true
         injector_velocity_plt = plot(sol.t, injector_velocity_over_time, label = "Injector Velocity", xlabel = "Time [s]", ylabel = "Injector Velocity [m/s]")
         display(injector_velocity_plt)
 
@@ -218,13 +220,13 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         plot!(port_diameter_plot, sol.t, [p.phenolic_liner_inner_diameter for _ in sol.t], label = "phenolic liner inner diameter")
         display(port_diameter_plot)
 
+        thrust_plt = plot(sol.t, [0.0, thrust_over_time...], label = "Thrust", xlabel = "Time [s]", ylabel = "Thrust [N]")
+        display(thrust_plt)
+
         pressure_plot = plot(sol.t, tank_pressure_over_time, label = "Tank Pressure", xlabel = "Time [s]", ylabel = "Pressure [Pa]")
         plot!(pressure_plot, sol.t, mid_section_pressure_over_time, label = "Mid Section Pressure")
         plot!(pressure_plot, sol.t, pressures_over_time, label = "Chamber Pressure")
         display(pressure_plot)
-
-        thrust_plt = plot(sol.t, [0.0, thrust_over_time...], label = "Thrust", xlabel = "Time [s]", ylabel = "Thrust [N]")
-        display(thrust_plt)
 
         @show ComponentVector(sol.u[end], u_axes).tank_oxidizer_mass
     end
