@@ -198,7 +198,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         end
     end
 
-    if true == true
+    if true == false
         injector_velocity_plt = plot(sol.t, injector_velocity_over_time, label = "Injector Velocity", xlabel = "Time [s]", ylabel = "Injector Velocity [m/s]")
         display(injector_velocity_plt)
 
