@@ -119,10 +119,13 @@ Revise.includet(joinpath(@__DIR__, "face_reconstructors/first_order_face_reconst
 Revise.includet(joinpath(@__DIR__, "turbulence/sst_k_omega.jl"))
 Revise.includet(joinpath(@__DIR__, "riemann_solvers/HLLC_low_mach_correction.jl"))
 Revise.includet(joinpath(@__DIR__, "riemann_solvers/HLLC.jl"))
+Revise.includet(joinpath(@__DIR__, "riemann_solvers/SLAU2.jl"))
 Revise.includet(joinpath(@__DIR__, "weighted_least_squares/weighted_least_squares.jl"))
 Revise.includet(joinpath(@__DIR__, "face_reconstructors/MUSCL_face_reconstruction.jl"))
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/fluid_viscous_and_diffusive_fluxes.jl"))
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/wall_viscous_and_diffusive_fluxes.jl"))
+
+const USE_SLAU2 = "--slau2" in ARGS
 
 function fluid_fluid_flux!(
     du, u, p, t, system, geo,
@@ -143,14 +146,26 @@ function fluid_fluid_flux!(
     #I think the difficulties with MUSCL_face_reconsturction! have something to do with the inlet cell, it always seems to be the 
     #one with non-physical values
 
-    HLLC!(
-        du, u, p, t, system, geo,
-        idx_a, face_a, 
-        idx_b, face_b,
-        MUSCL_face_reconstruction!,
-        #first_order_face_reconstruction!,
-        thornber_low_mach_correction,
-    )
+    #if USE_SLAU2
+        SLAU2!(
+            du, u, p, t, system, geo,
+            idx_a, face_a,
+            idx_b, face_b,
+            first_order_face_reconstruction!,
+            #MUSCL_face_reconstruction!,
+        )
+    #else
+    #=
+        HLLC!(
+            du, u, p, t, system, geo,
+            idx_a, face_a,
+            idx_b, face_b,
+            MUSCL_face_reconstruction!,
+            #first_order_face_reconstruction!,
+            thornber_low_mach_correction,
+        )
+            =#
+    #end
     #HLLC!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b, first_order_face_reconstruction!)
 
     fluid_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
@@ -208,11 +223,6 @@ function construct_initial_conditions_from_intuitive_inputs(u)
         species_b = u.density * u.mass_fractions.species_b,
     )
 
-    R_specific = u.cp - u.cv
-    pressure = u.density * R_specific * u.temperature
-
-    @show speed_of_sound = sqrt((u.cp / u.cv) * pressure / u.density) |> u"m/s"
-
     return ComponentVector(
         density = u.density,
         momentum_density_u = momentum_density_u,
@@ -236,7 +246,7 @@ end
 
 fluid_initial_conditions, fluid_properties = construct_initial_conditions_from_intuitive_inputs(
     ComponentVector(
-        vel_u = 0.0u"m/s",
+        vel_u = 1e-4u"m/s",
         vel_v = 0.0u"m/s",
         vel_w = 0.0u"m/s",
         density = 1.18u"kg/m^3",
@@ -511,7 +521,7 @@ function solve_system!(du, u, p, t, system, geo)
     update_region_groups!(du, u, p, t, system, geo)
     update_weighted_least_squares_gradients!(u, WLS_STENCIL)
     update_sst_closure!(u, SST_WALL_DISTANCES)
-    update_MUSCL_gradients!(u, WLS_STENCIL)
+    #update_MUSCL_gradients!(u, WLS_STENCIL) #REMEMBER TO REACTIVATE THIS!!!
     solve_connection_groups!(du, u, p, t, system, geo)
     solve_patch_groups!(du, u, p, t, system, geo)
     solve_region_groups!(du, u, p, t, system, geo)
@@ -524,6 +534,11 @@ if "--setup-only" in ARGS
     f_closure_implicit(setup_derivative, u0_vec, 0.0, 0.0)
     if !all(isfinite, setup_derivative)
         error("SST setup smoke check produced a non-finite residual")
+    end
+    if USE_SLAU2
+        println("Inviscid flux: SLAU2 with conservative species and SST advection")
+    else
+        println("Inviscid flux: HLLC with conservative species and SST advection")
     end
     println("SST setup smoke check passed with $(length(u0_vec)) conservative degrees of freedom")
     exit()
@@ -606,58 +621,46 @@ tspan = (t0, tMax)
 ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
 implicit_prob = ODEProblem(ode_func, u0_vec, tspan, p_guess)
 
-early_dtmax = 100.0
-late_dtmax  = 1000.0
-switch_time = 400.0
-
-function increase_dtmax!(integrator)
-    integrator.opts.dtmax = late_dtmax
-
-    # We changed solver settings, not the state vector.
-    u_modified!(integrator, false)
-
-    println("Raised dtmax to $late_dtmax at t = $(integrator.t)")
-end
-
-increase_dtmax_cb = DiscreteCallback(
-    (u, t, integrator) -> t >= switch_time && integrator.opts.dtmax < late_dtmax,
-    increase_dtmax!;
-    save_positions = (false, false),
-)
-
 callbacks = CallbackSet(
     approximate_time_to_finish_cb,
     #increase_dtmax_cb,
 )
 
-VSCodeServer.@profview @time sol = solve(
+@time sol = solve(
     implicit_prob,
     #Tsit5(),
     #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
-    #FBDF(linsolve = SparspakFactorization()),
+    FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()),
+    #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoFiniteDiff()),
     #FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
     #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
     callback = callbacks,
-    isoutofdomain = state_is_invalid_closure,
-    #saveat = (tMax / 300),
-    #dtmax = 100
-    #dtmax = early_dtmax
-    #dt = 1e-5
+    #isoutofdomain = state_is_invalid_closure,
 )
+
+sol.destats
 #=
 sol.alg
 
-f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)
+#f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)
 
-nl_func = NonlinearFunction(f_closure_steady, jac_prototype = float.(jac_sparsity))
+#nl_func = NonlinearFunction(f_closure_steady, jac_prototype = float.(jac_sparsity))
 
-prob = NonlinearProblem(nl_func, u0_vec, p_guess)
+#prob = NonlinearProblem(nl_func, u0_vec, p_guess)
 
-@time sol_steady = solve(prob, NonlinearSolve.NewtonRaphson(concrete_jac = true))
+#@time sol_steady = solve(prob, NonlinearSolve.NewtonRaphson(concrete_jac = true))
 
-du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_guess, track_progress = false);
+#we do this instead of changing the saveat because saveat is pretty linear and doesn't automatically capture fast and slow transient behaviour well
+reduced_sol = (
+    u = [[sol.u[i] for i in 1:10:length(sol.u)]..., sol.u[end]],
+    t = [sol.t[1:10:length(sol.t)]..., sol.t[end]]
+)
+
+du_named, u_named = regenerate_fvm_state(reduced_sol, system, solve_system!, geo, p_guess, track_progress = true);
+
+add_xyz_vec_to_u_named!(u_named, :velocity, :vel_u, :vel_v, :vel_w) 
+#we previously didn't need this when vel used to be a single vector of u, v, and w components, since they're separate named fields, we must now do this explicitly, oh well...
 
 root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
 
-sol_to_vtk(sol, du_named, u_named, grid, geo, @__FILE__, root_dir, track_progress = false)
-=#
+sol_to_vtk(reduced_sol, du_named, u_named, grid, geo, @__FILE__, root_dir, include_zeros_fields = true, track_progress = true)

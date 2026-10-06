@@ -1,0 +1,433 @@
+{
+  "environment": {
+    "FVMFramework_version": "0.1.0",
+    "OrdinaryDiffEq_version": "6.108.0",
+    "auxiliary_advection": "signed SLAU2 mass flux with upwind primitive ratios",
+    "benchmark_mesh_cells": 48,
+    "conservative_state": "Euler variables, rho*Y_k, rho*k, and rho*omega",
+    "cross_check": "SU2 official SLAU2 implementation, ausm_slau.cpp",
+    "integration_algorithm": "SSPRK43 with fixed acoustic CFL=0.2",
+    "inviscid_flux": "SLAU2 (not SLAU)",
+    "julia_version": "1.12.5",
+    "reference": "Kitamura and Shima, Journal of Computational Physics 245 (2013), 62-83",
+    "reference_doi": "10.1016/j.jcp.2013.02.046",
+    "unit_mesh_cells": 5
+  },
+  "finished_at": "2026-10-05T20:48:53.160",
+  "level": "integration",
+  "results": [
+    {
+      "component": "component",
+      "diagnostics": {
+        "expected_flux": [
+          95.344,
+          72236.28,
+          82108.784,
+          -667.408,
+          2.9349291040000003e7
+        ],
+        "measured_flux": [
+          95.344,
+          72236.28,
+          82108.784,
+          -667.4079999999999,
+          2.9349291040000003e7
+        ]
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "oracle": "independently evaluated physical Euler flux",
+        "relative_tolerance": 1.1102230246251565e-13
+      },
+      "metrics": {
+        "absolute_error": 1.1368683772161603e-13,
+        "relative_error": 3.87358037257775e-21
+      },
+      "name": "slau2_identical_state_flux",
+      "status": "pass",
+      "summary": "identical-state SLAU2 equals the analytical Euler flux"
+    },
+    {
+      "component": "component",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "mass_flux": 18.7265549202487,
+        "original_SLAU_pressure_flux": 103600.574778044,
+        "pressure_flux": 102383.988620211,
+        "source": "Kitamura and Shima, JCP 245 (2013), SLAU2 mass and pressure flux equations"
+      },
+      "metrics": {
+        "distance_from_original_SLAU_pressure": 1216.5861578329495,
+        "mass_error": 3.552713678800501e-14,
+        "mass_flux": 18.726554920248663,
+        "pressure_error": 4.3655745685100555e-11,
+        "pressure_flux": 102383.98862021105
+      },
+      "name": "slau2_published_pressure_form",
+      "status": "pass",
+      "summary": "mass split and velocity-scaled pressure dissipation match SLAU2, not SLAU"
+    },
+    {
+      "component": "component",
+      "diagnostics": {},
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "absolute_tolerance": 2.220446049250313e-14,
+        "mass_flux": 0.4015138891952795,
+        "pressure_flux": 0.55
+      },
+      "metrics": {
+        "mass_flux": 0.4015138891952796,
+        "maximum_absolute_error": 5.551115123125783e-17,
+        "pressure_flux": 0.55
+      },
+      "name": "slau2_zero_velocity_pressure_jump",
+      "status": "pass",
+      "summary": "zero-speed SLAU2 limit retains pressure diffusion and centered pressure"
+    },
+    {
+      "component": "component",
+      "diagnostics": {
+        "measured_flux": [
+          0.0,
+          2.5,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "flux": [
+          0.0,
+          2.5,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "relative_tolerance": 1.1102230246251565e-13
+      },
+      "metrics": {
+        "absolute_error": 0.0,
+        "relative_error": 0.0
+      },
+      "name": "slau2_stationary_contact_flux",
+      "status": "pass",
+      "summary": "SLAU2 preserves a stationary contact and tangential-velocity jump"
+    },
+    {
+      "component": "component",
+      "diagnostics": {
+        "component_imbalances": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "elapsed_seconds": 0.0,
+      "expected": {
+        "identity": "F(Ua, Ub, n) = -F(Ub, Ua, -n)",
+        "normalized_tolerance": 1.1102230246251565e-13
+      },
+      "metrics": {
+        "normalized_error": 0.0
+      },
+      "name": "slau2_orientation_symmetry",
+      "status": "pass",
+      "summary": "swapping states and reversing the normal negates the SLAU2 flux"
+    },
+    {
+      "component": "component",
+      "diagnostics": {
+        "imbalances": {
+          "density": 0.0,
+          "momentum_density_u": 0.0,
+          "momentum_density_v": 0.0,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 0.0,
+          "species_densities.species_b": 0.0,
+          "specific_dissipation_rate_density": 0.0,
+          "turbulent_kinetic_energy_density": 0.0,
+          "volumetric_energy": 0.0
+        }
+      },
+      "elapsed_seconds": 0.48200011253356934,
+      "expected": {
+        "identity": "flow_into_cell_a + flow_into_cell_b = 0",
+        "normalized_tolerance": 4.440892098500626e-15
+      },
+      "metrics": {
+        "face_cells": [
+          1,
+          2
+        ],
+        "maximum_normalized_coupling_error": 1.3623733480374376e-16,
+        "maximum_normalized_imbalance": 0.0
+      },
+      "name": "slau2_internal_face_conservation",
+      "status": "pass",
+      "summary": "one SLAU2 face conserves and mass-flux-couples Euler, species, and SST states"
+    },
+    {
+      "component": "component",
+      "diagnostics": {},
+      "elapsed_seconds": 0.5,
+      "expected": {
+        "absolute_tolerance": 2.220446049250313e-14,
+        "transport_rule": "F_auxiliary = F_density * primitive_upwind"
+      },
+      "metrics": {
+        "maximum_conservation_error": 0.0,
+        "maximum_upwind_error": 0.0
+      },
+      "name": "slau2_auxiliary_upwinding",
+      "status": "pass",
+      "summary": "positive and negative SLAU2 mass fluxes upwind rho*Y, rho*k, and rho*omega"
+    },
+    {
+      "component": "residual",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.6959998607635498,
+      "expected": {
+        "maximum_normalized_norm": 5.0e-12
+      },
+      "metrics": {
+        "maximum_normalized_norm": 5.138388145609764e-13,
+        "normalized_field_norms": {
+          "density": 5.362941729121517e-14,
+          "momentum_density_u": 5.138388145609764e-13,
+          "momentum_density_v": 2.665789748393738e-14,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 1.9012569296705796e-14,
+          "species_densities.species_b": 4.4131365228849954e-14,
+          "specific_dissipation_rate_density": 5.362941729121517e-14,
+          "turbulent_kinetic_energy_density": 1.5820678100908474e-14,
+          "volumetric_energy": 7.392227628159062e-14
+        }
+      },
+      "name": "slau2_free_stream_residual",
+      "status": "pass",
+      "summary": "uniform flow with species and SST variables has zero SLAU2 FVM residual"
+    },
+    {
+      "component": "residual",
+      "diagnostics": {
+        "state_violations": []
+      },
+      "elapsed_seconds": 0.7820000648498535,
+      "expected": {
+        "maximum_normalized_norm": 5.0e-12
+      },
+      "metrics": {
+        "maximum_normalized_norm": 1.3322676295501878e-15,
+        "normalized_field_norms": {
+          "density": 0.0,
+          "momentum_density_u": 1.3322676295501878e-15,
+          "momentum_density_v": 0.0,
+          "momentum_density_w": 0.0,
+          "species_densities.species_a": 0.0,
+          "species_densities.species_b": 0.0,
+          "specific_dissipation_rate_density": 0.0,
+          "turbulent_kinetic_energy_density": 0.0,
+          "volumetric_energy": 0.0
+        }
+      },
+      "name": "slau2_stationary_auxiliary_contact",
+      "status": "pass",
+      "summary": "stationary density, composition, k, and omega contacts have zero SLAU2 residual"
+    },
+    {
+      "component": "integration",
+      "diagnostics": {
+        "exact_density": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.9385577936365322,
+          0.8708645237799091,
+          0.8071347347190729,
+          0.7471917733649722,
+          0.690864315367549,
+          0.637986283504726,
+          0.5883967660714053,
+          0.5419399352684576,
+          0.4984649655917132,
+          0.45782595222096,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.4263194281784952,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.2655737117053071,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125,
+          0.125
+        ],
+        "exact_pressure": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.9150512708239222,
+          0.8240068818622545,
+          0.7408400499689378,
+          0.664974381645242,
+          0.5958677288330526,
+          0.5330106396965568,
+          0.4759248568497648,
+          0.4241618622918884,
+          0.3773014683126494,
+          0.3349504536295731,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.30313017805064685,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "numerical_density": [
+          0.9999710300746582,
+          0.9999297430063342,
+          0.9998290755068958,
+          0.9995953539420293,
+          0.9990859313452821,
+          0.9980375967865895,
+          0.9960066478037753,
+          0.9923149584064945,
+          0.9860379889196272,
+          0.9760768116472798,
+          0.961335690870508,
+          0.9409754556920156,
+          0.9146552500711113,
+          0.88266060320999,
+          0.845857427566042,
+          0.8054981368358575,
+          0.7629621925948025,
+          0.7195339745858091,
+          0.6762756968024798,
+          0.6340123447775414,
+          0.5933950530356752,
+          0.5550262847257894,
+          0.5196005729506303,
+          0.4880662304827074,
+          0.46152793218937704,
+          0.44077846743580446,
+          0.4254752227443698,
+          0.4136358801328481,
+          0.4022377668663596,
+          0.3886421453826384,
+          0.3717300932981346,
+          0.3521141577604292,
+          0.33158411607539173,
+          0.31223580025369707,
+          0.295683866230668,
+          0.2825865256736238,
+          0.2725016858469537,
+          0.2639496121784666,
+          0.2545680345020259,
+          0.24144697064555842,
+          0.2220396774610211,
+          0.19609598535590358,
+          0.1680139339396363,
+          0.14551235523821632,
+          0.13265455137687357,
+          0.12735903220977104,
+          0.12566469750428252,
+          0.12518785643724079
+        ]
+      },
+      "elapsed_seconds": 2.759000062942505,
+      "expected": {
+        "auxiliary_transport_tolerance": 2.0e-10,
+        "density_L1_maximum": 0.08,
+        "oracle": "independent exact ideal-gas Riemann solution sampled at cell centers",
+        "pressure_L1_maximum": 0.08
+      },
+      "metrics": {
+        "CFL_timestep": 0.0035214760613688067,
+        "cells": 48,
+        "density_L1_error": 0.028198925716155447,
+        "final_time": 0.2,
+        "pressure_L1_error": 0.026241829319650356,
+        "return_code": "Success",
+        "runtime_seconds": 2.0560194,
+        "species_density_sum_error_Linf": 1.5543122344752192e-15,
+        "species_fraction_error_Linf": 7.771561172376096e-16,
+        "specific_dissipation_rate_error_Linf": 4.884981308350689e-15,
+        "turbulent_kinetic_energy_error_Linf": 3.885780586188048e-16
+      },
+      "name": "slau2_sod_shock_tube",
+      "status": "pass",
+      "summary": "SLAU2 Sod preserves conservative species/SST ratios and matches the exact flow solution"
+    }
+  ],
+  "schema_version": "1.0",
+  "started_at": "2026-10-05T20:48:32.056",
+  "status": "pass",
+  "summary": {
+    "errors": 0,
+    "failed": 0,
+    "passed": 10,
+    "total": 10
+  },
+  "target": "SLAU2 compressible flux with conservative species and SST advection"
+}

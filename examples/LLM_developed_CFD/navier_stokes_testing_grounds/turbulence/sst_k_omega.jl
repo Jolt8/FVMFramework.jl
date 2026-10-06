@@ -180,7 +180,7 @@ function update_sst_closure!(u, wall_distances; constants = DEFAULT_SST_CONSTANT
     return nothing
 end
 
-function add_hllc_sst_advection_flux!(du, u, idx_a, idx_b, area, density_flux)
+function add_sst_advection_flux!(du, u, idx_a, idx_b, area, density_flux)
     if density_flux >= 0.0
         face_k = u.turbulent_kinetic_energy[idx_a]
         face_omega = u.specific_dissipation_rate[idx_a]
@@ -194,6 +194,11 @@ function add_hllc_sst_advection_flux!(du, u, idx_a, idx_b, area, density_flux)
     du.turbulent_kinetic_energy_density_flow[idx_b] += integrated_k_flux
     du.specific_dissipation_rate_density_flow[idx_a] -= integrated_omega_flux
     du.specific_dissipation_rate_density_flow[idx_b] += integrated_omega_flux
+    return nothing
+end
+
+function add_hllc_sst_advection_flux!(du, u, idx_a, idx_b, area, density_flux)
+    add_sst_advection_flux!(du, u, idx_a, idx_b, area, density_flux)
     return nothing
 end
 

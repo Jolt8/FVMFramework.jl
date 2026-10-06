@@ -136,6 +136,9 @@ export sol_to_vtk
 include("recording/state_regenerator.jl")
 export regenerate_fvm_state
 
+include("recording/add_xyz_vec_to_u_named.jl")
+export add_xyz_vec_to_u_named!
+
 # ----- Solvers -----
 #   ---- Preconditioners ----
 include("solvers/preconditioners.jl")

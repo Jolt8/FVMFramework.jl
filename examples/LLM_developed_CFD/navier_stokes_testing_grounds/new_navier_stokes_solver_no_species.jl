@@ -90,12 +90,17 @@ struct Fluid <: AbstractPhysics end
 Revise.includet(joinpath(@__DIR__, "face_reconstructors/first_order_face_reconstruction.jl"))
 Revise.includet(joinpath(@__DIR__, "riemann_solvers/HLLC_low_mach_correction.jl"))
 Revise.includet(joinpath(@__DIR__, "riemann_solvers/HLLC.jl"))
+Revise.includet(joinpath(@__DIR__, "riemann_solvers/SLAU2.jl"))
 Revise.includet(joinpath(@__DIR__, "weighted_least_squares/weighted_least_squares.jl"))
 Revise.includet(joinpath(@__DIR__, "face_reconstructors/MUSCL_face_reconstruction.jl"))
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/fluid_viscous_and_diffusive_fluxes.jl"))
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/wall_viscous_and_diffusive_fluxes.jl"))
 
 const USE_THORNBER = "--thornber" in ARGS
+const USE_SLAU2 = "--slau2" in ARGS
+if USE_SLAU2 && USE_THORNBER
+    throw(ArgumentError("--thornber is an HLLC reconstruction option and cannot be combined with --slau2"))
+end
 const LOW_MACH_CORRECTION = if USE_THORNBER
     thornber_low_mach_correction
 else
@@ -122,14 +127,28 @@ function fluid_fluid_flux!(
     #I think the difficulties with MUSCL_face_reconsturction! have something to do with the inlet cell, it always seems to be the 
     #one with non-physical values
 
-    HLLC!(
-        du, u, p, t, system, geo,
-        idx_a, face_a, 
-        idx_b, face_b,
-        MUSCL_face_reconstruction!,
-        #first_order_face_reconstruction!,
-        no_low_mach_correction,
-    )
+    #if USE_SLAU2
+
+        SLAU2!(
+            du, u, p, t, system, geo,
+            idx_a, face_a,
+            idx_b, face_b,
+            first_order_face_reconstruction!,
+            #MUSCL_face_reconstruction!,
+        )
+
+    #else
+    #=
+        HLLC!(
+            du, u, p, t, system, geo,
+            idx_a, face_a,
+            idx_b, face_b,
+            #MUSCL_face_reconstruction!,
+            first_order_face_reconstruction!,
+            no_low_mach_correction,
+        )
+    =#
+    #end
     #HLLC!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b, first_order_face_reconstruction!)
 
     fluid_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
@@ -179,7 +198,7 @@ end
 
 fluid_initial_conditions, fluid_properties = construct_initial_conditions_from_intuitive_inputs(
     ComponentVector(
-        vel_u = 1.0u"m/s",
+        vel_u = 1e-9u"m/s",
         vel_v = 0.0u"m/s",
         vel_w = 0.0u"m/s",
         density = 1.18u"kg/m^3",
@@ -367,7 +386,7 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
             du.momentum_density_v_flow[idx_a] -= face_area * pressure * face_normal[2]
             du.momentum_density_w_flow[idx_a] -= face_area * pressure * face_normal[3]
 
-            if USE_NO_SLIP_WALLS
+            #if USE_NO_SLIP_WALLS
                 non_moving_wall_viscous_and_diffusive_flux!(
                     du,
                     u,
@@ -380,7 +399,7 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
                     idx_b,
                     face_b,
                 )
-            end
+            #end
         end
     ) 
 end
@@ -475,7 +494,7 @@ function command_line_float(prefix, default)
 end
 
 tMax = command_line_float("--tmax=", 1000.0)
-tMax = 3.0
+tMax = 10000000.0
 transient_abstol = command_line_float("--abstol=", 1.0e-6)
 transient_reltol = command_line_float("--reltol=", 1.0e-4)
 tspan = (t0, tMax)
@@ -511,12 +530,28 @@ transient_solve_kwargs = (
 
 @time sol = solve(
     implicit_prob,
-    FBDF(linsolve = KrylovJL_GMRES(), autodiff = ADTypes.AutoFiniteDiff()),
+    #FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true, autodiff = ADTypes.AutoForwardDiff()),
+    #FBDF(linsolve = SparspakFactorization(), autodiff = ADTypes.AutoForwardDiff()),
+    #AutoTsit5(FBDF(linsolve = SparspakFactorization(), autodiff = ADTypes.AutoForwardDiff())),
+    Tsit5(),
     #transient_algorithm;
     #transient_solve_kwargs...,
     callback = approximate_time_to_finish_cb,
 )
 
+sol.destats
+
+#=
+f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)
+
+nl_func = NonlinearFunction(f_closure_steady, jac_prototype = float.(jac_sparsity))
+
+prob = NonlinearProblem(nl_func, u0_vec, p_guess)
+
+@time sol_steady = solve(prob, LevenbergMarquardt(autodiff = ADTypes.AutoFiniteDiff(), linsolve = SparspakFactorization()))
+=#
+
+#=
 sol.alg
 
 sol = if "--progress" in ARGS
@@ -531,7 +566,16 @@ else
 end
 
 println("Transient algorithm: Rosenbrock23(AutoFiniteDiff, Sparspak)")
-println("HLLC reconstruction: $(USE_THORNBER ? "Thornber low-Mach" : "ordinary")")
+if USE_SLAU2
+    println("Inviscid flux: SLAU2")
+else
+    hllc_reconstruction = if USE_THORNBER
+        "Thornber low-Mach"
+    else
+        "ordinary"
+    end
+    println("Inviscid flux: HLLC ($hllc_reconstruction)")
+end
 println("Wall model: $(USE_NO_SLIP_WALLS ? "no-slip viscous" : "slip adiabatic")")
 println("Transient return code: $(sol.retcode), final time: $(sol.t[end])")
 println(
@@ -650,6 +694,7 @@ println("Steady state admissible: $(!state_is_invalid(steady_state, p_guess, 0.0
 if !OrdinaryDiffEq.SciMLBase.successful_retcode(sol_steady)
     error("steady solve failed with return code $(sol_steady.retcode)")
 end
+=#
 #=
 du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, geo, p_guess, track_progress = false);
 

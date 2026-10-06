@@ -14,14 +14,14 @@ function update_species_mass_fractions!(du, u, p, t, system, geo, cell_id)
 end
 
 """
-    add_hllc_species_advection_flux!(du, u, idx_a, idx_b, area, density_flux)
+    add_species_advection_flux!(du, u, idx_a, idx_b, area, density_flux)
 
-Advect every conservative species density with the HLLC mass flux. The mass
-fraction is selected from the upwind side of the face. Consequently, when the
-cell fractions sum to one, the species fluxes sum exactly to the HLLC density
-flux.
+Advect every conservative species density with a numerical mixture mass flux.
+The mass fraction is selected from the upwind side of the face. Consequently,
+when the cell fractions sum to one, the species fluxes sum exactly to the
+mixture density flux.
 """
-function add_hllc_species_advection_flux!(
+function add_species_advection_flux!(
     du,
     u,
     idx_a,
@@ -39,6 +39,25 @@ function add_hllc_species_advection_flux!(
         species_density_flow[idx_a] -= integrated_species_flux
         species_density_flow[idx_b] += integrated_species_flux
     end
+    return nothing
+end
+
+function add_hllc_species_advection_flux!(
+    du,
+    u,
+    idx_a,
+    idx_b,
+    area,
+    density_flux,
+)
+    add_species_advection_flux!(
+        du,
+        u,
+        idx_a,
+        idx_b,
+        area,
+        density_flux,
+    )
     return nothing
 end
 

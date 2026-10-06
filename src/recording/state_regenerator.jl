@@ -42,7 +42,7 @@ function regenerate_fvm_state(sol, system, solve_system!, geo, p_guess; u_additi
         #if this breaks in the future, we can just fallback to only running update_fluid_properties! each iteration instead of solve_system!
         #if we don't run the entire solve_system! stuff like u.mass_face or u.heat will not get updated
         for propertyname in propertynames(u_named[i])
-            getproperty(u, propertyname)[1:end] = getproperty(u_named[i], propertyname)[1:end] #we have to use getproperty() because just doing u[propertyname] doesn't update it
+            getproperty(u, propertyname) .= getproperty(u_named[i], propertyname) #we have to use getproperty() because just doing u[propertyname] doesn't update it
         end
 
         #TODO: we may also want to log the experimental transducer data into the vtk file so that we can observe it
@@ -54,16 +54,17 @@ function regenerate_fvm_state(sol, system, solve_system!, geo, p_guess; u_additi
         if i == 1
             #for the first time step we can't use finite differences so we will just set it to 0.0
             for propertyname in propertynames(temporary_cache) #we use finite differences for apprroximating the time derivative of the cached variables who derivatives are not cached
-                if iszero(du_list[i][propertyname]) #we don't want to overwrite cached variables that already have a value
-                    getproperty(du_list[i], propertyname)[1:end] .= 0.0
+                du_prop = getproperty(du_list[i], propertyname)
+                if iszero(du_prop) #we don't want to overwrite cached variables that already have a value
+                    du_prop .= 0.0
                 end
             end
         else
+            dt = t - t_last
             for propertyname in propertynames(temporary_cache) #we use finite differences for apprroximating the time derivative of the cached variables who derivatives are not cached
-                if iszero(du_list[i][propertyname])  #we don't want to overwrite cached variables that already have a value
-                    for cell_id in eachindex(temporary_cache[propertyname])
-                        getproperty(du_list[i], propertyname)[cell_id] = (u_list[i][propertyname][cell_id] - u_list[i-1][propertyname][cell_id]) / (t - t_last)
-                    end
+                du_prop = getproperty(du_list[i], propertyname)
+                if iszero(du_prop)  #we don't want to overwrite cached variables that already have a value
+                    du_prop .= (getproperty(u_list[i], propertyname) .- getproperty(u_list[i-1], propertyname)) / dt
                 end
             end
         end

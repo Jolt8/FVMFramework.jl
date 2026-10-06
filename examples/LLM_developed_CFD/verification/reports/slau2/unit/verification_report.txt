@@ -1,0 +1,17 @@
+FVMFramework Verification Report
+Target: SLAU2 compressible flux with conservative species and SST advection    Level: unit
+
+COMPONENT
+PASS  slau2_identical_state_flux         identical-state SLAU2 equals the analytical Euler flux
+PASS  slau2_published_pressure_form      mass split and velocity-scaled pressure dissipation match SLAU2, not SLAU
+PASS  slau2_zero_velocity_pressure_jump  zero-speed SLAU2 limit retains pressure diffusion and centered pressure
+PASS  slau2_stationary_contact_flux      SLAU2 preserves a stationary contact and tangential-velocity jump
+PASS  slau2_orientation_symmetry         swapping states and reversing the normal negates the SLAU2 flux
+PASS  slau2_internal_face_conservation   one SLAU2 face conserves and mass-flux-couples Euler, species, and SST states
+PASS  slau2_auxiliary_upwinding          positive and negative SLAU2 mass fluxes upwind rho*Y, rho*k, and rho*omega
+
+RESIDUAL
+PASS  slau2_free_stream_residual         uniform flow with species and SST variables has zero SLAU2 FVM residual
+PASS  slau2_stationary_auxiliary_contact stationary density, composition, k, and omega contacts have zero SLAU2 residual
+
+RESULT: PASS (9/9 checks passed)
