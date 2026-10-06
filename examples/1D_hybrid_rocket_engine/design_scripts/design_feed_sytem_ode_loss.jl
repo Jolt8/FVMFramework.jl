@@ -51,10 +51,12 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     pressure_drop_ratio_loss = 0.0
     oxidizer_to_fuel_ratio_loss = 0.0
     thrust_loss = 0.0
+    chamber_pressure_loss = 0.0
     
     #Loss updated once
     unburned_fuel_loss = 0.0
     unutilized_oxidizer_loss = 0.0
+    fuel_grain_overburn_loss = 0.0
 
     #Performance Metrics
     cummulative_impulse = 0.0
@@ -97,6 +99,8 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
             #unburned_fuel_loss = 0.001 * abs2(p.fuel_mass)
             #break #stop evaluating loss if the fuel has burned out
         end
+
+        chamber_pressure_loss += (1 / length(sol.u)) * abs2(p.target_chamber_pressure - p.chamber_pressure)
 
         adjustable_valve_pressure_drop = adjustable_valve_flow!(du_temporary, u_named, p, curr_t)
 
@@ -210,6 +214,8 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         display(tank_mass_plt)
 
         port_diameter_plot = plot(sol.t, port_diameter_over_time, label = "Port Diameter", xlabel = "Time [s]", ylabel = "Port Diameter [m]")
+        plot!(port_diameter_plot, sol.t, [p.final_fuel_grain_void_diameter for _ in sol.t], label = "Desired final fuel grain void diameter")
+        plot!(port_diameter_plot, sol.t, [p.phenolic_liner_inner_diameter for _ in sol.t], label = "phenolic liner inner diameter")
         display(port_diameter_plot)
 
         pressure_plot = plot(sol.t, tank_pressure_over_time, label = "Tank Pressure", xlabel = "Time [s]", ylabel = "Pressure [Pa]")
@@ -251,6 +257,12 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
     p.oxidizer_to_fuel_ratio = total_oxidizer_used / max(total_fuel_burned, 1e-9)
     oxidizer_to_fuel_ratio_loss = 0.1 * abs2(p.desired_oxidizer_to_fuel_ratio - p.oxidizer_to_fuel_ratio)
 
+    @show p.final_fuel_grain_void_diameter
+    @show u_end.port_diameter
+    residual_fuel_grain_web_thickness = (p.phenolic_liner_inner_diameter - u_end.port_diameter) / 2
+    @show residual_fuel_grain_web_thickness
+    fuel_grain_overburn_loss = abs2(p.final_fuel_grain_void_diameter - u_end.port_diameter)
+
     #above_max_fuel_grain_diameter_loss = 0.01 * abs2(p.u0_fuel_grain_void_diameter + p.additional_fuel_grain_void_diameter - p.fuel_grain_max_diameter)
     #we'll just enforce a bound on final_fuel_grain_void_diameter
 
@@ -268,7 +280,8 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         impulse_loss = impulse_loss,
         burn_time_loss = burn_time_loss,
         unburned_fuel_loss = unburned_fuel_loss,
-        unutilized_oxidizer_loss = unutilized_oxidizer_loss
+        unutilized_oxidizer_loss = unutilized_oxidizer_loss,
+        fuel_grain_overburn_loss = fuel_grain_overburn_loss
     )
 
     #@show sum(all_losses)
