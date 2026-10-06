@@ -233,7 +233,7 @@ function valve_is_closed(u, p, t)
     end
 
     if (p.mid_section_pressure - p.chamber_pressure) / p.chamber_pressure <= 0.20 && t > 1.0
-        @show "pressure dropped below 20 percent of tank pressure"
+        #@show "pressure dropped below 20 percent of tank pressure"
         p.valve_already_closed = 1.0
         if t < 0.5
             pressure_difference = (p.mid_section_pressure - p.chamber_pressure) / p.chamber_pressure
@@ -241,12 +241,12 @@ function valve_is_closed(u, p, t)
         end
         return true
     elseif u.port_diameter >= p.final_fuel_grain_void_diameter - 0.0009
-        @show "fuel burned out"
+        #@show "fuel burned out"
         p.valve_already_closed = 1.0
         return true
     elseif p.valve_already_closed == 1.0
         p.valve_already_closed = 1.0
-        @show "valve already closed"
+        #@show "valve already closed"
         return true
     else 
         return false
@@ -380,12 +380,12 @@ properties = ComponentVector(
     fuel_mass = 0.0u"kg", #this will be derived by substracting the volume of the cylinder formed by the u0_fuel_grain_void_diameter by the final_fuel_grain_void_diameter and then multiplying by the fuel density
     fuel_density = 950.0u"kg/m^3",
     #fuel_regression_rate = 0.5u"mm/s",
-    additional_fuel_grain_void_diameter = 0.7u"cm", #optimized
+    additional_fuel_grain_void_diameter = 0.82u"cm", #optimized
     phenolic_liner_inner_diameter = 33.32u"mm",
     final_fuel_grain_void_diameter = 0.0u"mm", #the actual OD of the fuel grain should be about 33.32 mm #Update: this is not going to be defined by the phenolic_liner_inner_diameter - 2 * desired_residual_fuel_web_thickness
     #not optimized, we're going to be using a COTS phenolic liner, so we're just going to use the ID that the manufactuerer specifies
-    fuel_grain_length = 30.0u"cm", #optimized
-    desired_residual_fuel_web_thickness = 5.0u"mm", 
+    fuel_grain_length = 28.0u"cm", #optimized
+    desired_residual_fuel_web_thickness = 2.0u"mm", 
     #This could be optimized, but I think we'll just choose something that's a good safety factor (1.00mm is safe, but let's just do a little more than necessary)
     #Also, I'm just going to set this to 5.0 mm because we're just going for a static fire test for the prototype, so more safety doesn't hurt us
     #If we were using this in a real rocket where mass is absolutely critical, we would aim for around 2.0 mm
@@ -412,7 +412,7 @@ properties = ComponentVector(
     combustion_efficiency = 0.9,
 
     #Nozzle
-    nozzle_throat_diameter = 1.6u"cm", #optimized
+    nozzle_throat_diameter = 14.5u"mm", #optimized
     nozzle_throat_area = 0.0u"m^2",
     nozzle_exit_diameter = 0.0u"m",
     nozzle_exit_area = 0.0u"m^2",
@@ -435,20 +435,22 @@ optimized_properties = [
     #OptimizedParameter(:tank_pressure, 50.0u"bar", 71.0u"bar",),
 
     #adjustable valve
-    OptimizedParameter(:valve_flow_capacity_factor, 3.0u"mm^2", 12.0u"mm^2"),
+    OptimizedParameter(:valve_flow_capacity_factor, 3.0u"mm^2", 15.0u"mm^2"),
+    #OptimizedParameter(:valve_flow_capacity_factor, 1.0u"mm^2", 30.0u"mm^2"),
 
     #Mid section
 
     #Injector properties
-    OptimizedParameter(:injector_orifice_area, 4.0u"mm^2", 15.0u"mm^2"),
+    OptimizedParameter(:injector_orifice_area, 2.0u"mm^2", 15.0u"mm^2"),
+    #OptimizedParameter(:injector_orifice_area, 1.0u"mm^2", 30.0u"mm^2"),
 
     #Chamber
 
     #Fuel grain
     #OptimizedParameter(:u0_fuel_grain_void_diameter, 1.0u"cm", 5.0u"cm"),
     #OptimizedParameter(:final_fuel_grain_void_diameter, 1.0u"cm", 20.0u"cm"),
-    OptimizedParameter(:additional_fuel_grain_void_diameter, 0.5u"cm", 2.0u"cm"),
-    OptimizedParameter(:fuel_grain_length, 20.0u"cm", 100.0u"cm"),
+    OptimizedParameter(:additional_fuel_grain_void_diameter, 0.6u"cm", 0.9u"cm"),
+    OptimizedParameter(:fuel_grain_length, 24.0u"cm", 50.0u"cm"),
 
     #Fuel Grain Empirical Parameters
 
@@ -456,7 +458,7 @@ optimized_properties = [
 
     #Nozzle
     OptimizedParameter(:nozzle_throat_diameter, 10.0u"mm", 20.0u"mm"),
-    OptimizedParameter(:expansion_ratio, 3.0, 10.0)
+    #OptimizedParameter(:expansion_ratio, 3.0, 10.0)
 ]
 
 Revise.includet(joinpath(@__DIR__, "CEA_lookup_table.jl"))
@@ -536,6 +538,23 @@ optimized_cb_set = CallbackSet(
 
 Revise.includet(joinpath(@__DIR__, "internals/loss_closures.jl"))
 
+#=
+viewable_system_design_loss(
+    ComponentVector(
+        valve_flow_capacity_factor = 4.391161222485351e-6,
+        injector_orifice_area = 1.2031662045469543e-5,
+        nozzle_throat_diameter = 0.013960236329121214,
+    ), properties_unitless
+)
+
+viewable_system_design_loss(
+    ComponentVector(
+        valve_flow_capacity_factor = 1.5e-5,
+        injector_orifice_area = 1.0e-5,
+        nozzle_throat_diameter = 0.014384253249577968,
+    ), properties_unitless
+)
+
 viewable_system_design_loss(
     ComponentVector(
         #u0_tank_oxidizer_mass = 1.1306761278408962,
@@ -547,7 +566,7 @@ viewable_system_design_loss(
         expansion_ratio = 7.166350757172843,
     ), properties_unitless
 ) 
-#=
+
 viewable_system_design_loss(
     ComponentVector(
         #u0_tank_oxidizer_mass = 1.1306761278408962,
@@ -596,8 +615,7 @@ viewable_system_design_loss(
         expansion_ratio = 4.0,
     ), properties_unitless
 )
-
-isp_interpolator_Pa(ustrip(upreferred(12u"bar")), 7.9, 4.0)
+=#
 
 opt_f = OptimizationFunction(pure_system_design_loss_closure, Optimization.AutoFiniteDiff())
 opt_prob = OptimizationProblem(opt_f, Vector(theta_guess_unitless), Vector(properties_unitless), lb = Vector(theta_lb_unitless), ub = Vector(theta_ub_unitless))

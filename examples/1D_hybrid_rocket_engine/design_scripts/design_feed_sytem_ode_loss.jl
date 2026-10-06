@@ -42,8 +42,8 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
 
     if !(sol.retcode == SciMLBase.ReturnCode.Success || sol.retcode == SciMLBase.ReturnCode.Terminated)
         #@show p.final_fuel_grain_void_diameter
-        u_named = ComponentVector(sol.u[end], u_axes)
-        did_not_finish_loss += 1e10 + 1e8 * p.final_fuel_grain_void_diameter - u_named.port_diameter
+        #u_named = ComponentVector(sol.u[end], u_axes)
+        did_not_finish_loss += 1e10 #+ 1e8 * p.final_fuel_grain_void_diameter - u_named.port_diameter
     end
 
     #Losses updated every iteration
@@ -100,7 +100,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
             #break #stop evaluating loss if the fuel has burned out
         end
 
-        chamber_pressure_loss += (1 / length(sol.u)) * abs2(p.target_chamber_pressure - p.chamber_pressure)
+        chamber_pressure_loss += (1 / length(sol.u)) * abs2(p.target_chamber_pressure - p.chamber_pressure) * 1e-14
 
         adjustable_valve_pressure_drop = adjustable_valve_flow!(du_temporary, u_named, p, curr_t)
 
@@ -224,7 +224,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         display(pressure_plot)
 
         thrust_plt = plot(sol.t, [0.0, thrust_over_time...], label = "Thrust", xlabel = "Time [s]", ylabel = "Thrust [N]")
-        #display(thrust_plt)
+        display(thrust_plt)
 
         @show ComponentVector(sol.u[end], u_axes).tank_oxidizer_mass
     end
@@ -274,6 +274,7 @@ function trainsient_system_design_loss(theta, u0, p, theta_axes, u_axes, p_axes,
         injector_velocity_loss = injector_velocity_loss,
         pressure_drop_ratio_loss = pressure_drop_ratio_loss,
         oxidizer_to_fuel_ratio_loss = oxidizer_to_fuel_ratio_loss,
+        chamber_pressure_loss = chamber_pressure_loss,
         #thrust_loss = thrust_loss, #this seems like a bad metric, it allows short burn times with better average thrusts
 
         #Updated once at the end of the simulation
