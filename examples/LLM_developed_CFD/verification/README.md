@@ -32,6 +32,8 @@ and OrdinaryDiffEq paths on intentionally small hexahedral meshes. It provides:
 - conservative SST `rho*k`/`rho*omega`, blending, source, flux, channel, and
   flat-plate checks;
 - stationary-contact and first-order/MUSCL Sod benchmark comparisons;
+- isolated SLAU2 Euler, species, SST-advection, conservation, free-stream, and
+  Sod checks;
 - concise text and structured JSON reports.
 
 Run from the repository root:
@@ -40,6 +42,15 @@ Run from the repository root:
 julia --project=. examples/LLM_developed_CFD/verification/run_verification.jl unit
 julia --project=. examples/LLM_developed_CFD/verification/run_verification.jl integration
 julia --project=. examples/LLM_developed_CFD/verification/run_verification.jl full
+```
+
+SLAU2 has a separate runner so it can be verified without executing any HLLC
+tests:
+
+```powershell
+julia --project=. examples/LLM_developed_CFD/verification/run_slau2_verification.jl unit
+julia --project=. examples/LLM_developed_CFD/verification/run_slau2_verification.jl integration
+julia --project=. examples/LLM_developed_CFD/verification/run_slau2_verification.jl full
 ```
 
 An optional second argument selects the report directory. The Julia API is:
@@ -60,6 +71,50 @@ and implicit integrators, performance comparisons, and long-time cases.
 `:full` uses 64-cell Sod cases and extends the smooth MUSCL convergence study
 through 192 cells. Reports
 record the mesh, tolerances, algorithms, package versions, and random seed.
+
+## SLAU2
+
+The production implementation is
+[`riemann_solvers/SLAU2.jl`](../navier_stokes_testing_grounds/riemann_solvers/SLAU2.jl).
+It follows Kitamura and Shima's 2013 SLAU2 formulation: the all-speed SLAU mass
+flux is retained, while the pressure flux uses the SLAU2 velocity-scaled
+dissipation term. This distinction is protected by a frozen subsonic reference
+whose pressure flux differs by about `1216.59 Pa` from the original SLAU result.
+The equations were checked against the
+[published paper](https://doi.org/10.1016/j.jcp.2013.02.046) and the
+[official SU2 implementation](https://github.com/su2code/SU2/blob/master/SU2_CFD/src/numerics/flow/convection/ausm_slau.cpp).
+
+Species and SST transport use the same signed SLAU2 mixture mass flux as
+continuity. Each auxiliary face flux is `F_rho*phi_upwind`, where `phi` is a
+species mass fraction, `k`, or `omega`. Thus the species fluxes sum to the
+mixture density flux whenever the cell mass fractions sum to one, while
+`rho*k` and `rho*omega` remain conservative. The existing diffusion, SST
+closure/source, and boundary routines remain independent of the inviscid flux
+choice.
+
+The dedicated suite checks identical-state consistency, the zero-speed
+pressure-jump limit, stationary-contact preservation, normal/state reversal,
+both signs of auxiliary upwinding, internal-face conservation, complete
+free-stream and stationary-composition/SST residuals, and a fixed-CFL Sod
+solve against the independent exact Riemann solution. In the 48-cell run, the
+species-density sum, mass fraction, `k`, and `omega` invariants remain within
+`5e-15`. Density and pressure L1 errors remain approximately `2.82e-2` and
+`2.62e-2`, respectively.
+
+No SLAU2-specific constants object was introduced. Each face reads
+`u.cp[cell_id] / u.cv[cell_id]` from its two regions, and the existing region
+properties continue to provide all species and SST data. The no-species smoke
+path remains available:
+
+```powershell
+julia --project=. examples/LLM_developed_CFD/navier_stokes_testing_grounds/new_navier_stokes_solver_no_species.jl --slau2 --smoke-test
+```
+
+The complete species-plus-SST operator can be assembled with:
+
+```powershell
+julia --project=. examples/LLM_developed_CFD/navier_stokes_testing_grounds/new_navier_stokes_solver.jl --slau2 --setup-only
+```
 
 ## Stage 3 transport verification
 

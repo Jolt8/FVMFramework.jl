@@ -161,6 +161,52 @@ large supersonic-inlet example: passing a low-Mach component or Sod test does
 not establish that applying the correction during a mixed-Mach startup is a
 good modelling choice.
 
+## SLAU2 inviscid flux
+
+`riemann_solvers/SLAU2.jl` implements the SLAU2 Euler flux as a sibling of
+HLLC. It uses the density-weighted SLAU normal-speed mass split and
+the Kitamura--Shima SLAU2 pressure split. The defining SLAU2 change is the last
+pressure-dissipation term, which is proportional to RMS velocity, mean density,
+and interface sound speed; the original SLAU pressure-based term is not used.
+The implementation follows the 2013 Journal of Computational Physics paper
+(DOI `10.1016/j.jcp.2013.02.046`) and was cross-checked against SU2's independent
+`CUpwSLAU2_Flow` implementation.
+
+No solver-specific constants container was introduced. The only face-local
+thermodynamic parameter is the heat-capacity ratio, read from each region as
+`u.cp[cell_id] / u.cv[cell_id]`. `SLAU2!` uses the standard face reconstructor
+and `interface_geometry`, then writes exactly equal-and-opposite integrated
+mass, momentum, and energy fluxes.
+
+The species and SST modules now expose solver-neutral advection helpers. HLLC's
+old function names remain compatibility wrappers, while SLAU2 passes its signed
+density flux to the neutral routines. Species use upwind mass fractions and
+SST uses upwind `k` and `omega`, producing conservative `rho*Y_k`, `rho*k`, and
+`rho*omega` fluxes. When mass fractions sum to one, their face fluxes sum
+exactly to the SLAU2 density flux. Boundary advection, species diffusion, SST
+diffusion/sources, and viscous closure remain shared and do not depend on the
+Riemann solver.
+
+Both example drivers select SLAU2 with `--slau2`. The species-plus-SST driver's
+`--setup-only` path exercises reconstruction, SLAU2 advection, species and SST
+diffusion, SST closure/sources, boundaries, and capping in one 900-DOF finite
+residual assembly. The no-species driver retains its separate 500-DOF smoke
+path. No additional SST constants structure was created.
+
+SLAU2 verification is isolated in `verification/slau2` and has its own runner,
+so its tests do not execute HLLC checks. Independent oracles cover the physical
+Euler flux, the analytical zero-velocity pressure-jump limit, a frozen
+published-formula state that distinguishes SLAU2 from SLAU, a stationary
+contact, orientation symmetry, face conservation, and the full free-stream
+residual. A fixed-CFL SSPRK43 Sod solve is compared with the independent exact
+Riemann solution. Direct tests exercise positive and negative mass fluxes and
+the full face assembler verifies auxiliary upwinding plus equal-and-opposite
+conservation. The coupled Sod integration keeps the species-density sum,
+constant composition, `k`, and `omega` within about `5e-15`. Unit, integration,
+full, and both actual-driver smoke runs pass. There is not yet an SLAU2
+implicit-solver performance baseline or a multidimensional hypersonic
+carbuncle/heating benchmark.
+
 ## No-species driver and steady-state scope
 
 `new_navier_stokes_solver_no_species.jl` now makes the important numerical
@@ -192,6 +238,44 @@ HLLC branch sensitivity; trust-region, pseudo-transient, and least-squares
 experiments reduced the residual but could stall. The optional no-slip case
 uses the transient result as its steady initial guess and has not been shown to
 converge to a steady root.
+
+## Future experiments
+
+The first-order SLAU2 configuration is currently much friendlier to implicit
+integration than limited MUSCL. The following experiments are possible middle
+grounds between first-order robustness and fully coupled limited
+reconstruction:
+
+- Use unlimited linear reconstruction only in demonstrably smooth regions.
+  This provides a differentiable second-order reconstruction there, but it
+  must fall back near shocks because an unlimited reconstruction does not
+  prevent oscillations or inadmissible face states.
+- Test a continuously differentiable, regularized limiter. A smooth
+  Venkatakrishnan-style limiter may give ForwardDiff and Newton-like methods a
+  more consistent local Jacobian than hard clipping, extrema selection, or
+  branch-heavy limiter combinations.
+- Use a hybrid reconstruction selected by a shock or smoothness sensor:
+  first-order SLAU2 around discontinuities and higher-order linear
+  reconstruction in smooth cells. Sensor transitions must themselves be
+  checked for residual and Jacobian discontinuities.
+- Freeze MUSCL gradients and limiter coefficients during each implicit stage
+  or nonlinear solve. Recomputing them after an accepted step or outer
+  iteration would keep the inner linearization fixed, at the cost of requiring
+  outer iterations to recover a self-consistent high-order residual.
+- Investigate deferred correction. The implicit operator and Jacobian would
+  use the narrow, robust first-order SLAU2 residual, while the difference
+  between MUSCL and first order would be applied as a lagged correction. This
+  is the most direct experiment for retaining a solver-friendly matrix without
+  permanently accepting first-order spatial accuracy.
+
+Each experiment should be compared with the same first-order and fully coupled
+MUSCL cases. Correctness evidence should include smooth-field convergence,
+shock/contact error, conservation, and minimum density/pressure. Solver-health
+evidence should include accepted/rejected steps, RHS calls, linear and
+nonlinear iterations, minimum and maximum accepted timestep, Jacobian stencil
+width, and runtime as a secondary metric. A method is only useful here if its
+accuracy improvement justifies any loss in admissible timestep or increase in
+linear-solver work.
 
 ## Current limitations
 

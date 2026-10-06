@@ -27,9 +27,11 @@ function species_numerical_flux(
     if area < 0.0
         throw(ArgumentError("area must be non-negative"))
     end
+    #=
     if density_a < 0.0 || density_b < 0.0
         throw(ArgumentError("densities must be non-negative"))
     end
+    =#
     if diffusion_coefficient_a < 0.0 || diffusion_coefficient_b < 0.0
         throw(ArgumentError("diffusion coefficients must be non-negative"))
     end
