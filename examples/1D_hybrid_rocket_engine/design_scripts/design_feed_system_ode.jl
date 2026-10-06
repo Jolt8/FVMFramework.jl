@@ -368,7 +368,7 @@ properties = ComponentVector(
     u0_chamber_hdpe_mass_fraction = 0.0,
     chamber_pressure = 1.0u"atm", #this determines the initial kg of nitrous oxide in the chamber
     chamber_temperature = 21.0u"°C",
-    chamber_volume = 212.0u"cm^3",
+    chamber_volume = 212.0u"cm^3", #this is very imperfect, we should update this in the future
     chamber_density = 0.0u"kg/m^3",
     wall_heat_loss = 0.0u"W",
     chamber_vapor_fraction = 0.0,
@@ -617,6 +617,29 @@ viewable_system_design_loss(
 )
 #Chamber pressure is way too low, likely caused by the injector being too restrictive
 #I'm slightly leaning towards an injector orifice area of 4.0mm^2
+
+viewable_system_design_loss(
+    ComponentVector(
+        valve_flow_capacity_factor = 1.0e-5,
+        injector_orifice_area = 4.0e-6,
+        additional_fuel_grain_void_diameter = 0.0085,
+        fuel_grain_length = 0.28,
+        nozzle_throat_diameter = 0.014,
+    ), properties_unitless
+)
+
+viewable_system_design_loss(
+    ComponentVector(
+        valve_flow_capacity_factor = 1.0e-5,
+        injector_orifice_area = 4.0e-6,
+        additional_fuel_grain_void_diameter = 0.012,
+        fuel_grain_length = 0.31,
+        nozzle_throat_diameter = 0.014,
+    ), properties_unitless
+)
+#These parameters work very well, giv eus a burn time of about 6.5 seconds 
+#and result in a final cummulative impulse of aorund 2900 N*s
+#It also uses up much more of the avaliable oxidizer while the other don't
 
 viewable_system_design_loss(
     ComponentVector(
