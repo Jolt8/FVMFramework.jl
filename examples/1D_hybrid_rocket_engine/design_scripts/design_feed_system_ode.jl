@@ -240,7 +240,7 @@ function valve_is_closed(u, p, t)
             error("Even after startup, the current injector results in a $(pressure_difference*100)% pressure difference between the mid section and chamber, which will likely cause combustion instabilities")
         end
         return true
-    elseif u.port_diameter >= p.final_fuel_grain_void_diameter 
+    elseif u.port_diameter >= p.final_fuel_grain_void_diameter - 0.0009
         @show "fuel burned out"
         p.valve_already_closed = 1.0
         return true
@@ -326,7 +326,6 @@ properties = ComponentVector(
     #we would likely want a better correlation in the future that will return the specific impulse for a given oxidizer to fuel ratio and exit pressure
     gravity = 9.81u"m/s^2",
     target_injector_pressure_drop_to_adjustable_valve_pressure_drop_ratio = 2.0, #not an optimized parameter, but the ideal choice is hard to know
-    fuel_grain_max_diameter = (12.0u"inch" |> u"cm"),
     burned_out = 0.0, #this switches to 1 with a callback whenever the fuel has burned out
     burn_out_time = 0.0, #this gets set to the t in which 
     
@@ -374,6 +373,7 @@ properties = ComponentVector(
     wall_heat_loss = 0.0u"W",
     chamber_vapor_fraction = 0.0,
     chamber_specific_enthalpy = 0.0u"J/kg",
+    target_chamber_pressure = 20.0u"bar",
 
     #Fuel grain
     #u0_fuel_grain_void_diameter = 3.0u"cm",
@@ -385,7 +385,11 @@ properties = ComponentVector(
     final_fuel_grain_void_diameter = 0.0u"mm", #the actual OD of the fuel grain should be about 33.32 mm #Update: this is not going to be defined by the phenolic_liner_inner_diameter - 2 * desired_residual_fuel_web_thickness
     #not optimized, we're going to be using a COTS phenolic liner, so we're just going to use the ID that the manufactuerer specifies
     fuel_grain_length = 30.0u"cm", #optimized
-    desired_residual_fuel_web_thickness = 1.7u"mm", #This could be optimized, but I think we'll just choose something that's a good safety factor (1.00mm is safe, but let's just do a little more than necessary)
+    desired_residual_fuel_web_thickness = 5.0u"mm", 
+    #This could be optimized, but I think we'll just choose something that's a good safety factor (1.00mm is safe, but let's just do a little more than necessary)
+    #Also, I'm just going to set this to 5.0 mm because we're just going for a static fire test for the prototype, so more safety doesn't hurt us
+    #If we were using this in a real rocket where mass is absolutely critical, we would aim for around 2.0 mm
+
     #most hybrids have some residual fuel grain to protect the phenolic liner beneath it
     #I wonder if it would be a good idea to shut off the valve as soon as the port_diameter reaches the final_fuel_grain_void_diameter
     #This should probably be subtracted from the ID of a COTS phenolic liner which will then determine the final_fuel_grain_void_diameter
@@ -532,6 +536,18 @@ optimized_cb_set = CallbackSet(
 
 Revise.includet(joinpath(@__DIR__, "internals/loss_closures.jl"))
 
+viewable_system_design_loss(
+    ComponentVector(
+        #u0_tank_oxidizer_mass = 1.1306761278408962,
+        valve_flow_capacity_factor = 1.044540755220477e-5,
+        injector_orifice_area = 8.771076290124904e-6,
+        additional_fuel_grain_void_diameter = 0.008788884715228236,
+        fuel_grain_length = 0.3693090672635274,
+        nozzle_throat_diameter = 0.01299699858980607,
+        expansion_ratio = 7.166350757172843,
+    ), properties_unitless
+) 
+#=
 viewable_system_design_loss(
     ComponentVector(
         #u0_tank_oxidizer_mass = 1.1306761278408962,
