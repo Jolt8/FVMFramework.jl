@@ -1,3 +1,8 @@
+# Note: `clean_normalize` is used for normals where any components smaller than `1e-12` are forced to zero. 
+# This is to combat numerical noise from Ferrite >= 1.5.0 grid generation, which can generate normals 
+# with `1e-16` components. If left unchecked, these tiny non-zeros degrade the Jacobian sparsity graph 
+# via `SparseConnectivityTracer`.
+
 function calculate_hex_volume(p)
     c = sum(p) / 8.0
     
@@ -95,7 +100,9 @@ function rebuild_fvm_geometry_hexa!(
                 total_area_vec = -total_area_vec
             end
 
-            cell_normal = normalize(total_area_vec)
+            raw_normal = normalize(total_area_vec)
+            clean_normal = map(x -> abs(x) < 1e-12 ? zero(x) : x, raw_normal)
+            cell_normal = normalize(clean_normal)
 
             #get distance 
             dist = norm(cell_centroids[cell_id] - cell_centroids[neighbor_id])
@@ -127,7 +134,9 @@ function rebuild_fvm_geometry_hexa!(
 
         dist_to_face_vec = (node_1_coords + node_2_coords + node_3_coords + node_4_coords) / 4 - cell_centroids[cell_id]
 
-        cell_face_normals[cell_id][face_idx] = normalize(dist_to_face_vec)
+        raw_face_normal = normalize(dist_to_face_vec)
+        clean_face_normal = map(x -> abs(x) < 1e-12 ? zero(x) : x, raw_face_normal)
+        cell_face_normals[cell_id][face_idx] = normalize(clean_face_normal)
         cell_face_distances[cell_id][face_idx] = norm(dist_to_face_vec)
     end
 end

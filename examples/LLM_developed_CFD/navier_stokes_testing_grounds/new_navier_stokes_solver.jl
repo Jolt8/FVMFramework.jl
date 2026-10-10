@@ -638,7 +638,7 @@ callbacks = CallbackSet(
 )
 
 sol.destats
-#=
+
 sol.alg
 
 #f_closure_steady = (du, u, p) -> f_closure_implicit(du, u, p, 0.0)
@@ -656,7 +656,7 @@ reduced_sol = (
     t = [sol.t[1:(Int(1/save_fraction)):length(sol.t)]..., sol.t[end]]
 )
 
-du_named, u_named = regenerate_fvm_state(reduced_sol, system, solve_system!, geo, p_guess, track_progress = true);
+du_named, u_named = regenerate_fvm_state(reduced_sol, system, solve_system!, geo, p_guess, save_properties_and_caches = true, track_progress = true);
 
 add_xyz_vec_to_u_named!(u_named, :velocity, :vel_u, :vel_v, :vel_w)
 #we previously didn't need this when vel used to be a single vector of u, v, and w components, since they're separate named fields, we must now do this explicitly, oh well...

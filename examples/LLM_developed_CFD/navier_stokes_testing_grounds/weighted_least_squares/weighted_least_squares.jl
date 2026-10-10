@@ -1,3 +1,8 @@
+# Note: The `LinearAlgebra.pinv` call in `build_weighted_least_squares_stencil` has been modified 
+# to use an explicit `rtol = 1e-10` to threshold numerical noise in the centroid coordinates 
+# (which is present in Ferrite >= 1.5.0 grids). Without this, coordinate noise on the order of 
+# 1e-17 causes `pinv` to produce massive (1e16) transverse gradient coefficients, blowing up the solver.
+
 import LinearAlgebra
 
 """
@@ -60,10 +65,9 @@ function build_weighted_least_squares_stencil(geo; weight_power=2)
             end
         end
 
-        # If A contains centroid displacements and W contains the weights, the
         # gradient is (sqrt(W) * A)^+ * sqrt(W) * delta_phi.
         coefficients[cell_id] =
-            LinearAlgebra.pinv(weighted_displacements) *
+            LinearAlgebra.pinv(weighted_displacements; rtol = 1e-10) *
             LinearAlgebra.Diagonal(square_root_weights)
     end
 
