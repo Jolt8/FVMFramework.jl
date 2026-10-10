@@ -25,7 +25,7 @@ function add_xyz_vec_to_u_named!(u_named, field_name::Symbol, field_x::Symbol, f
                 view(u_named[i], field_z)[c],
                 -view(u_named[i], field_y)[c], 
                 view(u_named[i], field_x)[c], 
-            ) for c in 1:n_cells
+            ) for c in 1:length(getproperty(u_named[1], field_x))
         ]
 
         field_matrix = reduce(hcat, field_vec)
