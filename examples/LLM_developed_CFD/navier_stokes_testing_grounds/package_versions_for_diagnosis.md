@@ -86,6 +86,47 @@ Status `C:\Users\wille\.julia\environments\v1.12\Project.toml`
   [2f01184e] SparseArrays v1.12.0
 Info Packages marked with ⌃ have new versions available and may be upgradable.
 
+# AH HA! Updated all packages on my other desktop computer makes the solver take forever again (pain)
+Status `C:\Users\wille\.julia\environments\v1.12\Project.toml`
+  [47edcb42] ADTypes v1.24.0
+  [6e4b80f9] BenchmarkTools v1.8.0
+⌃ [336ed68f] CSV v0.10.17
+⌃ [b0b7db55] ComponentArrays v0.15.44
+  [a93c6f00] DataFrames v1.8.2
+⌃ [82cc6244] DataInterpolations v8.10.0
+  [3bea8ca0] FVMFramework v0.1.0 `..\..\..\Desktop\FVMFramework`
+  [c061ca5d] Ferrite v1.7.0
+  [4f95f4f8] FerriteGmsh v1.5.0
+  [6a86dc24] FiniteDiff v2.33.0
+  [f6369f11] ForwardDiff v1.4.6
+  [38e38edf] GLM v1.9.5
+  [86223c79] Graphs v1.15.0
+  [88f59080] ILUZero v0.2.0
+  [57b37032] ImplicitDifferentiation v0.9.3
+  [2fda8390] LsqFit v0.16.1
+  [fa8bd995] MetaGraphsNext v0.8.0
+⌃ [8913a72c] NonlinearSolve v4.16.0
+⌃ [7f7a1694] Optimization v5.7.0
+⌃ [3e6eede4] OptimizationBBO v0.4.11
+⌃ [36348300] OptimizationOptimJL v0.4.18
+⌃ [1dea7af3] OrdinaryDiffEq v6.109.0
+  [91a5bcdd] Plots v1.41.7
+  [f517fe37] Polyester v0.7.19
+  [f27b6e38] Polynomials v4.1.3
+⌃ [d236fae5] PreallocationTools v0.4.34
+  [c46f51b8] ProfileView v1.10.3
+  [295af30f] Revise v3.17.2
+  [f2b01f46] Roots v3.0.11
+⌃ [1ed8b502] SciMLSensitivity v7.94.0
+  [9f842d2f] SparseConnectivityTracer v1.2.4
+  [e56a9233] Sparspak v0.3.15
+  [90137ffa] StaticArrays v1.9.23
+  [1986cc42] Unitful v1.29.0
+  [acc8e2b2] UnitfulAssets v0.3.0
+  [fdbf4ff8] XLSX v0.13.1
+  [2f01184e] SparseArrays v1.12.0
+Info Packages marked with ⌃ have new versions available and may be upgradable.
+
 # My new laptop with an intel ultra 9 275HX (this one runs terribly and get stuck at a certain timestep)
 Status `C:\Users\wille\.julia\environments\v1.12\Project.toml`
 ⌃ [47edcb42] ADTypes v1.22.3
