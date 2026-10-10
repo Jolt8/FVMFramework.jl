@@ -14,7 +14,6 @@ using LinearAlgebra
 using StaticArrays
 using FVMFramework
 
-
 grid_x_length = 1.0
 grid_y_length = 0.1
 grid_z_length = 0.1
@@ -651,14 +650,15 @@ sol.alg
 #@time sol_steady = solve(prob, NonlinearSolve.NewtonRaphson(concrete_jac = true))
 
 #we do this instead of changing the saveat because saveat is pretty linear and doesn't automatically capture fast and slow transient behaviour well
+save_fraction = 1
 reduced_sol = (
-    u = [[sol.u[i] for i in 1:10:length(sol.u)]..., sol.u[end]],
-    t = [sol.t[1:10:length(sol.t)]..., sol.t[end]]
+    u = [[sol.u[i] for i in 1:(Int(1/save_fraction)):length(sol.u)]..., sol.u[end]],
+    t = [sol.t[1:(Int(1/save_fraction)):length(sol.t)]..., sol.t[end]]
 )
 
 du_named, u_named = regenerate_fvm_state(reduced_sol, system, solve_system!, geo, p_guess, track_progress = true);
 
-add_xyz_vec_to_u_named!(u_named, :velocity, :vel_u, :vel_v, :vel_w) 
+add_xyz_vec_to_u_named!(u_named, :velocity, :vel_u, :vel_v, :vel_w)
 #we previously didn't need this when vel used to be a single vector of u, v, and w components, since they're separate named fields, we must now do this explicitly, oh well...
 
 root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"

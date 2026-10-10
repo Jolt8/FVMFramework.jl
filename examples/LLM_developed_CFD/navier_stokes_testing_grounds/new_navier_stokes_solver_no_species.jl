@@ -388,16 +388,10 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
 
             #if USE_NO_SLIP_WALLS
                 non_moving_wall_viscous_and_diffusive_flux!(
-                    du,
-                    u,
-                    p,
-                    t,
-                    system,
-                    geo,
-                    idx_a,
-                    face_a,
-                    idx_b,
-                    face_b,
+                    du, u, p, t,
+                    system, geo,
+                    idx_a, face_a,
+                    idx_b, face_b,
                 )
             #end
         end
@@ -530,10 +524,12 @@ transient_solve_kwargs = (
 
 @time sol = solve(
     implicit_prob,
+    #FBDF(linsolve = KrylovJL_GMRES()),
+    #FBDF(linsolve = KrylovJL_GMRES(), autodiff = ADTypes.AutoFiniteDiff()),
     #FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true, autodiff = ADTypes.AutoForwardDiff()),
-    #FBDF(linsolve = SparspakFactorization(), autodiff = ADTypes.AutoForwardDiff()),
+    FBDF(linsolve = SparspakFactorization(), autodiff = ADTypes.AutoForwardDiff()),
     #AutoTsit5(FBDF(linsolve = SparspakFactorization(), autodiff = ADTypes.AutoForwardDiff())),
-    Tsit5(),
+    #Tsit5(),
     #transient_algorithm;
     #transient_solve_kwargs...,
     callback = approximate_time_to_finish_cb,
