@@ -15,13 +15,17 @@ Regenerates the FVM state from a solution object.
 - `du_list`: List of derivative vectors
 - `u_list`: List of state vectors
 """
-function regenerate_fvm_state(sol, system, solve_system!, geo, p_guess; u_additional_information = ComponentVector(), track_progress = false)
+function regenerate_fvm_state(sol, system, solve_system!, geo, p_guess; u_additional_information = ComponentVector(), save_properties_and_caches = true, track_progress = false)
     #we don't need an du_additional_information because we're not updating any new fields each time and because we can just put derivatives in u_additional_information
     du_list = ComponentVector[]
     u_list = ComponentVector[]
 
     u_named = [ComponentVector(sol.u[i], system.state_axes) for i in eachindex(sol.u)]
-    du_named = [ComponentVector(deepcopy(sol.u[i]), system.state_axes) for i in eachindex(sol.u)]
+    du_named = [ComponentVector(deepcopy(sol.u[i] .* 0.0), system.state_axes) for i in eachindex(sol.u)]
+
+    if save_properties_and_caches == false
+        return du_named, u_named
+    end
 
     temporary_cache = ComponentVector(system.cache_vec, system.cache_axes)
     temporary_cache .= 0.0
