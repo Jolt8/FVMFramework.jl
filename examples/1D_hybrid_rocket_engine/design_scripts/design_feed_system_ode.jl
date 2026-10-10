@@ -632,7 +632,7 @@ viewable_system_design_loss(
     ComponentVector(
         valve_flow_capacity_factor = 1.0e-5,
         injector_orifice_area = 4.0e-6,
-        additional_fuel_grain_void_diameter = 0.012,
+        additional_fuel_grain_void_diameter = 0.010,
         fuel_grain_length = 0.31,
         nozzle_throat_diameter = 0.014,
     ), properties_unitless
