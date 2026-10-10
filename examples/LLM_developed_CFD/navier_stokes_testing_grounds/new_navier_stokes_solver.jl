@@ -14,7 +14,6 @@ using LinearAlgebra
 using StaticArrays
 using FVMFramework
 
-
 grid_x_length = 1.0
 grid_y_length = 0.1
 grid_z_length = 0.1
