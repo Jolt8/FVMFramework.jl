@@ -560,6 +560,8 @@ jac_sparsity = ADTypes.jacobian_sparsity(
 #this scales absolutely abysmally as the number of cells goes up
 #for example, a 10x increase in the amount of cells made this take around 100x longer! 
 
+Revise.includet(joinpath(@__DIR__, "suspicious_jacobians.jl"))
+check_suspicious_jacobian(jac_sparsity, du0_vec, u0_vec, p_guess, 0.0, system, geo, f_closure_implicit);
 
 function state_is_invalid(u, p, t, system)
     u_named = ComponentVector(u, system.state_axes)
