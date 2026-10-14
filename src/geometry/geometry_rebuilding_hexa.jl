@@ -132,11 +132,24 @@ function rebuild_fvm_geometry_hexa!(
 
         cell_face_areas[cell_id][face_idx] = total_area 
 
-        dist_to_face_vec = (node_1_coords + node_2_coords + node_3_coords + node_4_coords) / 4 - cell_centroids[cell_id]
+        face_centroid = (node_1_coords + node_2_coords + node_3_coords + node_4_coords) / 4
 
-        raw_face_normal = normalize(dist_to_face_vec)
-        clean_face_normal = map(x -> abs(x) < 1e-12 ? zero(x) : x, raw_face_normal)
-        cell_face_normals[cell_id][face_idx] = normalize(clean_face_normal)
-        cell_face_distances[cell_id][face_idx] = norm(dist_to_face_vec)
+        dist_to_face_vec =  face_centroid - cell_centroids[cell_id]
+
+        if dot(total_area_vec, dist_to_face_vec) < 0
+            total_area_vec = -total_area_vec
+        end
+        
+        raw_face_normal = normalize(total_area_vec)
+        clean_face_normal = map(
+            x -> abs(x) < 1e-12 ? zero(x) : x,
+            raw_face_normal,
+        )
+        face_normal = normalize(clean_face_normal)
+        
+        #face_normal = normalize(total_area_vec)
+
+        cell_face_normals[cell_id][face_idx] = face_normal
+        cell_face_distances[cell_id][face_idx] = abs(dot(dist_to_face_vec, face_normal))
     end
 end
