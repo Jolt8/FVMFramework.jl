@@ -122,37 +122,37 @@ function add_conservative_species_diffusion_flux!(
     distance,
 )
     uncorrected_flux_sum = 0.0
-    foreach_field_at!(idx_a, u.mass_fractions, u.diffusion_coefficients) do local_cell_id, mass_fractions, diffusion_coefficients
+    foreach_field_at!(idx_a, u.mass_fractions, u.diffusion_coefficients) do species, mass_fractions, diffusion_coefficients
         uncorrected_flux_sum += species_numerical_flux(
             u.density[idx_a],
             u.density[idx_b],
-            mass_fractions[idx_a],
-            mass_fractions[idx_b],
-            diffusion_coefficients[idx_a],
-            diffusion_coefficients[idx_b],
+            mass_fractions[species[idx_a]],
+            mass_fractions[species[idx_b]],
+            diffusion_coefficients[species[idx_a]],
+            diffusion_coefficients[species[idx_b]],
             area,
             distance,
         )
     end
 
-    foreach_field_at!(idx_a, u.mass_fractions, u.diffusion_coefficients, du.species_density_flow) do local_cell_id, mass_fractions, diffusion_coefficients, species_density_flow
+    foreach_field_at!(idx_a, u.mass_fractions, u.diffusion_coefficients, du.species_density_flow) do species, mass_fractions, diffusion_coefficients, species_density_flow
         uncorrected_flux = species_numerical_flux(
             u.density[idx_a],
             u.density[idx_b],
-            mass_fractions[idx_a],
-            mass_fractions[idx_b],
-            diffusion_coefficients[idx_a],
-            diffusion_coefficients[idx_b],
+            mass_fractions[species[idx_a]],
+            mass_fractions[species[idx_b]],
+            diffusion_coefficients[species[idx_a]],
+            diffusion_coefficients[species[idx_b]],
             area,
             distance,
         )
-        face_mass_fraction = 0.5 * (
-            mass_fractions[idx_a] + mass_fractions[idx_b]
-        )
-        corrected_flux = uncorrected_flux -
-            face_mass_fraction * uncorrected_flux_sum
-        species_density_flow[idx_a] -= corrected_flux
-        species_density_flow[idx_b] += corrected_flux
+
+        face_mass_fraction = 0.5 * (mass_fractions[species[idx_a]] + mass_fractions[species[idx_b]])
+
+        corrected_flux = uncorrected_flux - face_mass_fraction * uncorrected_flux_sum
+
+        species_density_flow[species[idx_a]] -= corrected_flux
+        species_density_flow[species[idx_b]] += corrected_flux
     end
     return nothing
 end
