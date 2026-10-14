@@ -561,7 +561,8 @@ jac_sparsity = ADTypes.jacobian_sparsity(
 #for example, a 10x increase in the amount of cells made this take around 100x longer! 
 
 Revise.includet(joinpath(@__DIR__, "suspicious_jacobians.jl"))
-check_suspicious_jacobian(jac_sparsity, du0_vec, u0_vec, p_guess, 0.0, system, geo, f_closure_implicit);
+check_suspicious_jacobian(jac_sparsity, du0_vec, u0_vec, p_guess, 0.0, system, geo, f_closure_implicit)
+check_phantom_dependencies(jac_sparsity, u0_vec, system)
 
 function state_is_invalid(u, p, t, system)
     u_named = ComponentVector(u, system.state_axes)
@@ -632,7 +633,7 @@ callbacks = CallbackSet(
     #Tsit5(),
     #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
     FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()),
-    #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoFiniteDiff()),
+    #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoForwardDiff()),
     #FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
     #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
     callback = callbacks,
