@@ -30,7 +30,8 @@ function add_xyz_vec_to_u_named!(u_named, field_name::Symbol, field_x::Symbol, f
 
         field_matrix = reduce(hcat, field_vec)
         field_matrix = transpose(field_matrix)
-        
-        u_named[i] = merge_properties(u_named[i], ComponentVector(field_name = field_matrix,))
+
+        #u_named[i] = merge_properties(u_named[i], ComponentVector(Symbol(field_name) = field_matrix,)) #this works fine, but it makes :field_name the name of the field
+        u_named[i] = merge_properties(u_named[i], ComponentVector(Dict(Symbol(field_name) => field_matrix,)))
     end
 end
