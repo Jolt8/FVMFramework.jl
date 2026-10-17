@@ -285,6 +285,7 @@ function SLAU2!(
             density_flux,
         )
     end
+    
     if hasproperty(u, :turbulent_kinetic_energy_density)
         add_sst_advection_flux!(
             du,

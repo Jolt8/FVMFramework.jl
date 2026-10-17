@@ -11,4 +11,8 @@ function cap_navier_stokes_flow!(du, u, p, t, system, geo, cell_id)
     if hasproperty(du, :species_densities)
         cap_species_density_flow!(du, u, p, t, system, geo, cell_id)
     end
+
+    if system.compressible_solver_options.use_sst_turbulence == true
+        cap_sst_transport!(du, u, p, t, system, geo, cell_id)
+    end
 end

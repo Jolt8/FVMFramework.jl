@@ -212,10 +212,10 @@ function _verification_internal_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a,
         idx_b, face_b,
-        system.additional_data.face_reconstructor,
-        system.additional_data.low_mach_correction,
+        system.face_reconstructor,
+        system.low_mach_correction,
     )
-    if system.additional_data.species_diffusion
+    if system.species_diffusion
         (
             distance,
             face_area_a, face_normal_a, face_distance_a, volume_a,

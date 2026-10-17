@@ -63,6 +63,7 @@ add_setup_syms!(
         momentum_density_w_flow = u"N",
         volumetric_energy_flow = u"W",
         k = u"W/(m*K)",
+        gamma = u"1",
         #specific_internal_energy = u"J/kg", #not cached right now, just a property
     ),
     special_caches = ComponentVector(
@@ -112,13 +113,22 @@ struct Fluid <: AbstractPhysics end
 
 Revise.includet(joinpath(@__DIR__, "face_reconstructors/first_order_face_reconstruction.jl"))
 Revise.includet(joinpath(@__DIR__, "turbulence/sst_k_omega.jl"))
-# Boundary flux helpers (`physical_flux` and `primitive_from_conservative`).
+
+Revise.includet(joinpath(@__DIR__, "boundary_flux_helpers/boundary_flux_helpers.jl")) # Boundary flux helpers (`physical_flux` and `primitive_from_conservative`).
+Revise.includet(joinpath(@__DIR__, "boundary_conditions/boundary_condition_exports.jl")) # Boundary Conditions
+
 Revise.includet(joinpath(@__DIR__, "riemann_solvers/HLLC_low_mach_correction.jl"))
 Revise.includet(joinpath(@__DIR__, "riemann_solvers/HLLC.jl"))
 Revise.includet(joinpath(@__DIR__, "riemann_solvers/SLAU2.jl"))
+
 Revise.includet(joinpath(@__DIR__, "weighted_least_squares/weighted_least_squares.jl"))
+
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/fluid_viscous_and_diffusive_fluxes.jl"))
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/wall_viscous_and_diffusive_fluxes.jl"))
+
+Revise.includet(joinpath(@__DIR__, "navier_stokes_fluid_property_update_functions/fluid_property_update_functions.jl"))
+Revise.includet(joinpath(@__DIR__, "navier_stokes_fluid_property_update_functions/non_standard_fluid_property_update_functions.jl"))
+Revise.includet(joinpath(@__DIR__, "sum_and_cap_functions/cap_functions.jl"))
 
 function fluid_fluid_flux!(
     du, u, p, t, system, geo,
@@ -150,33 +160,6 @@ function fluid_fluid_flux!(
     )=#
 
     fluid_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
-
-    if compressible_solver_options.use_sst_turbulence == true
-        add_sst_diffusion_flux!(du, u, idx_a, idx_b, face_area_a, face_normal_a, distance)
-    end
-end
-
-function airfoil_wall_flux!(du, u, p, t, system, geo, cell_id, face_id)
-    face_area, face_normal, _, _ = boundary_geometry(geo, cell_id, face_id)
-    gamma = u.cp[cell_id] / u.cv[cell_id]
-    _, _, _, pressure, _ = primitive_from_conservative(
-        u.density[cell_id],
-        u.momentum_density_u[cell_id],
-        u.momentum_density_v[cell_id],
-        u.momentum_density_w[cell_id],
-        u.volumetric_energy[cell_id],
-        gamma,
-    )
-
-    du.momentum_density_u_flow[cell_id] -= face_area * pressure * face_normal[1]
-    du.momentum_density_v_flow[cell_id] -= face_area * pressure * face_normal[2]
-    du.momentum_density_w_flow[cell_id] -= face_area * pressure * face_normal[3]
-    
-    non_moving_wall_viscous_and_diffusive_flux!(du, u, p, t, system, geo, cell_id, face_id, 0, 0)
-    
-    if compressible_solver_options.use_sst_turbulence
-        add_sst_wall_flux!(du, u, geo, cell_id, face_id)
-    end
 end
 
 # Mapping connection functions
@@ -186,10 +169,6 @@ function connection_map_function(phys_a, phys_b)
     phys_a isa Fluid && phys_b isa Fluid && return fluid_fluid_flux!
     error("No flux is defined between $(typeof(phys_a)) and $(typeof(phys_b))")
 end
-
-Revise.includet(joinpath(@__DIR__, "navier_stokes_fluid_property_update_functions/fluid_property_update_functions.jl"))
-Revise.includet(joinpath(@__DIR__, "navier_stokes_fluid_property_update_functions/non_standard_fluid_property_update_functions.jl"))
-Revise.includet(joinpath(@__DIR__, "sum_and_cap_functions/cap_functions.jl"))
 
 function construct_initial_conditions_from_intuitive_inputs(u)
     momentum_density_u = u.density * u.vel_u
@@ -211,7 +190,7 @@ function construct_initial_conditions_from_intuitive_inputs(u)
         prandtl_number = u.prandtl_number,
     )
 
-    if compressible_solver_options.use_sst_turbulence == true
+    if system.compressible_solver_options.use_sst_turbulence == true
         turbulent_kinetic_energy_density = u.density * u.turbulent_kinetic_energy
         specific_dissipation_rate_density = u.density * u.specific_dissipation_rate
         return ComponentVector(
@@ -263,17 +242,11 @@ add_region!(
     function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
         update_k_from_prandtl!(du, u, p, t, system, geo, cell_id)
         overall_navier_stokes_property_update!(du, u, p, t, system, geo, cell_id)
-        if compressible_solver_options.use_sst_turbulence == true
-            update_sst_primitives!(du, u, p, t, system, geo, cell_id)
-        end
     end,
     region_function = 
     function fluid_physics!(du, u, p, t, system, geo, cell_id)
         cap_navier_stokes_flow!(du, u, p, t, system, geo, cell_id)
-        if compressible_solver_options.use_sst_turbulence == true
-            cap_sst_transport!(du, u, geo, cell_id)
-        end
-    end,
+    end
 )
 
 supersonic_inlet_initial_conditions, supersonic_inlet_properties = construct_initial_conditions_from_intuitive_inputs(
@@ -302,66 +275,16 @@ add_patch!(
     #type_a = Fluid(),
     #type_b = nothing,
     properties = ComponentVector(),
-    patch_function = 
-    function supersonic_inlet_flux!(
+    patch_function = function inlet_patch_flux!(
         du, u, p, t, system, geo,
-        idx_a, face_a, 
-        idx_b, face_b,
+        idx_a, face_a, idx_b, face_b,
     )
-        face_area, face_normal, face_distance, vol = boundary_geometry(geo, idx_a, face_a)
-
-        density_bc = supersonic_inlet_initial_conditions_stripped.density
-        momentum_density_u_bc = supersonic_inlet_initial_conditions_stripped.momentum_density_u
-        momentum_density_v_bc = supersonic_inlet_initial_conditions_stripped.momentum_density_v
-        momentum_density_w_bc = supersonic_inlet_initial_conditions_stripped.momentum_density_w
-        volumetric_energy_bc = supersonic_inlet_initial_conditions_stripped.volumetric_energy
-
-        gamma_bc = u.cp[idx_a] / u.cv[idx_a]
-
-        _, _, _, pressure_bc, _ =
-            primitive_from_conservative(
-                density_bc,
-                momentum_density_u_bc,
-                momentum_density_v_bc,
-                momentum_density_w_bc,
-                volumetric_energy_bc,
-                gamma_bc,
-            )
-
-        (
-            F_density,
-            F_momentum_density_u,
-            F_momentum_density_v,
-            F_momentum_density_w,
-            F_volumetric_energy,
-        ) = physical_flux(
-            density_bc,
-            momentum_density_u_bc,
-            momentum_density_v_bc,
-            momentum_density_w_bc,
-            volumetric_energy_bc,
-            pressure_bc,
-            face_normal,
+        supersonic_inlet_flux!(
+            du, u, p, t, system, geo,
+            idx_a, face_a,
+            idx_b, face_b,
+            inlet_conditions = supersonic_inlet_initial_conditions_stripped,
         )
-
-        du.density_flow[idx_a] -= face_area * F_density
-
-        du.momentum_density_u_flow[idx_a] -= face_area * F_momentum_density_u
-        du.momentum_density_v_flow[idx_a] -= face_area * F_momentum_density_v
-        du.momentum_density_w_flow[idx_a] -= face_area * F_momentum_density_w
-
-        du.volumetric_energy_flow[idx_a] -= face_area * F_volumetric_energy
-
-        if compressible_solver_options.use_sst_turbulence == true
-            add_prescribed_boundary_sst_advection_flux!(
-                du, idx_a, face_area,
-                F_density,
-                supersonic_inlet_initial_conditions_stripped.turbulent_kinetic_energy_density /
-                    supersonic_inlet_initial_conditions_stripped.density,
-                supersonic_inlet_initial_conditions_stripped.specific_dissipation_rate_density /
-                    supersonic_inlet_initial_conditions_stripped.density,
-            )
-        end
     end
 )
 
@@ -370,211 +293,25 @@ add_patch!(
     #type_a = Fluid(),
     #type_b = nothing,
     properties = ComponentVector(),
-    patch_function = 
-    function supersonic_outlet_flux!(
-        du, u, p, t, system, geo,
-        idx_a, face_a, 
-        idx_b, face_b,
-    )
-        face_area, face_normal, face_distance, vol = boundary_geometry(geo, idx_a, face_a)
-
-        gamma = u.cp[idx_a] / u.cv[idx_a]
-
-        _, _, _, pressure, _ =
-            primitive_from_conservative(
-                u.density[idx_a],
-                u.momentum_density_u[idx_a],
-                u.momentum_density_v[idx_a],
-                u.momentum_density_w[idx_a],
-                u.volumetric_energy[idx_a],
-                gamma,
-            )
-
-        (
-            F_density,
-            F_momentum_density_u,
-            F_momentum_density_v,
-            F_momentum_density_w,
-            F_volumetric_energy,
-        ) = physical_flux(
-            u.density[idx_a],
-            u.momentum_density_u[idx_a],
-            u.momentum_density_v[idx_a],
-            u.momentum_density_w[idx_a],
-            u.volumetric_energy[idx_a],
-            pressure,
-            face_normal
-        )
-
-        du.density_flow[idx_a] -= face_area * F_density
-
-        du.momentum_density_u_flow[idx_a] -= face_area * F_momentum_density_u
-        du.momentum_density_v_flow[idx_a] -= face_area * F_momentum_density_v
-        du.momentum_density_w_flow[idx_a] -= face_area * F_momentum_density_w
-
-        du.volumetric_energy_flow[idx_a] -= face_area * F_volumetric_energy
-
-        if compressible_solver_options.use_sst_turbulence == true
-            add_boundary_sst_advection_flux!(du, u, idx_a, face_area, F_density)
-        end
-    end
+    patch_function = supersonic_outlet_flux!
 )
-
-"""
-    characteristic_farfield_flux!(...)
-
-Open far-field boundary for subsonic or supersonic normal flow.  At subsonic
-faces the outgoing acoustic invariant is taken from the interior and the
-incoming invariant from the prescribed freestream.  Entropy and tangential
-velocity are taken from the upwind side.  Supersonic outflow extrapolates the
-interior state, while supersonic inflow prescribes the complete freestream
-state.
-"""
-function characteristic_farfield_flux!(
-    du, u, p, t, system, geo,
-    idx_a, face_a,
-    idx_b, face_b,
-)
-    face_area, face_normal, _, _ = boundary_geometry(geo, idx_a, face_a)
-
-    gamma = u.cp[idx_a] / u.cv[idx_a]
-    density_i = u.density[idx_a]
-    momentum_u_i = u.momentum_density_u[idx_a]
-    momentum_v_i = u.momentum_density_v[idx_a]
-    momentum_w_i = u.momentum_density_w[idx_a]
-    energy_i = u.volumetric_energy[idx_a]
-    vel_u_i, vel_v_i, vel_w_i, pressure_i, sound_i =
-        primitive_from_conservative(
-            density_i,
-            momentum_u_i,
-            momentum_v_i,
-            momentum_w_i,
-            energy_i,
-            gamma,
-        )
-    normal_vel_i =
-        vel_u_i * face_normal[1] +
-        vel_v_i * face_normal[2] +
-        vel_w_i * face_normal[3]
-
-    density_inf = supersonic_inlet_initial_conditions_stripped.density
-    momentum_u_inf = supersonic_inlet_initial_conditions_stripped.momentum_density_u
-    momentum_v_inf = supersonic_inlet_initial_conditions_stripped.momentum_density_v
-    momentum_w_inf = supersonic_inlet_initial_conditions_stripped.momentum_density_w
-    energy_inf = supersonic_inlet_initial_conditions_stripped.volumetric_energy
-    vel_u_inf, vel_v_inf, vel_w_inf, pressure_inf, sound_inf =
-        primitive_from_conservative(
-            density_inf,
-            momentum_u_inf,
-            momentum_v_inf,
-            momentum_w_inf,
-            energy_inf,
-            gamma,
-        )
-    normal_vel_inf =
-        vel_u_inf * face_normal[1] +
-        vel_v_inf * face_normal[2] +
-        vel_w_inf * face_normal[3]
-
-    if normal_vel_i >= sound_i
-        # Every characteristic leaves the domain.
-        density_b = density_i
-        momentum_u_b = momentum_u_i
-        momentum_v_b = momentum_v_i
-        momentum_w_b = momentum_w_i
-        energy_b = energy_i
-    elseif normal_vel_i <= -sound_i
-        # Every characteristic enters the domain.
-        density_b = density_inf
-        momentum_u_b = momentum_u_inf
-        momentum_v_b = momentum_v_inf
-        momentum_w_b = momentum_w_inf
-        energy_b = energy_inf
-    else
-        # R+ leaves the domain and R- enters it.
-        invariant_plus = normal_vel_i + 2.0 * sound_i / (gamma - 1.0)
-        invariant_minus = normal_vel_inf - 2.0 * sound_inf / (gamma - 1.0)
-        normal_vel_b = 0.5 * (invariant_plus + invariant_minus)
-        sound_b = max(
-            0.25 * (gamma - 1.0) * (invariant_plus - invariant_minus),
-            1e-8,
-        )
-
-        if normal_vel_b >= 0.0
-            # Subsonic outflow: entropy and tangential velocity leave the domain.
-            entropy_b = pressure_i / density_i^gamma
-            tangential_u = vel_u_i - normal_vel_i * face_normal[1]
-            tangential_v = vel_v_i - normal_vel_i * face_normal[2]
-            tangential_w = vel_w_i - normal_vel_i * face_normal[3]
-        else
-            # Subsonic inflow: entropy and tangential velocity enter from freestream.
-            entropy_b = pressure_inf / density_inf^gamma
-            tangential_u = vel_u_inf - normal_vel_inf * face_normal[1]
-            tangential_v = vel_v_inf - normal_vel_inf * face_normal[2]
-            tangential_w = vel_w_inf - normal_vel_inf * face_normal[3]
-        end
-
-        density_b = (sound_b^2 / (gamma * entropy_b))^(1.0 / (gamma - 1.0))
-        pressure_b = entropy_b * density_b^gamma
-        vel_u_b = tangential_u + normal_vel_b * face_normal[1]
-        vel_v_b = tangential_v + normal_vel_b * face_normal[2]
-        vel_w_b = tangential_w + normal_vel_b * face_normal[3]
-        momentum_u_b = density_b * vel_u_b
-        momentum_v_b = density_b * vel_v_b
-        momentum_w_b = density_b * vel_w_b
-        energy_b = pressure_b / (gamma - 1.0) + 0.5 * density_b * (
-            vel_u_b^2 + vel_v_b^2 + vel_w_b^2
-        )
-    end
-
-    (
-        F_density,
-        F_momentum_density_u,
-        F_momentum_density_v,
-        F_momentum_density_w,
-        F_volumetric_energy,
-    ) = slau2_flux(
-        density_i,
-        momentum_u_i,
-        momentum_v_i,
-        momentum_w_i,
-        energy_i,
-        gamma,
-        density_b,
-        momentum_u_b,
-        momentum_v_b,
-        momentum_w_b,
-        energy_b,
-        gamma,
-        face_normal,
-    )
-
-    du.density_flow[idx_a] -= face_area * F_density
-    du.momentum_density_u_flow[idx_a] -= face_area * F_momentum_density_u
-    du.momentum_density_v_flow[idx_a] -= face_area * F_momentum_density_v
-    du.momentum_density_w_flow[idx_a] -= face_area * F_momentum_density_w
-    du.volumetric_energy_flow[idx_a] -= face_area * F_volumetric_energy
-
-    if compressible_solver_options.use_sst_turbulence == true
-        if F_density >= 0.0
-            add_boundary_sst_advection_flux!(du, u, idx_a, face_area, F_density)
-        else
-            add_prescribed_boundary_sst_advection_flux!(
-                du, idx_a, face_area, F_density,
-                supersonic_inlet_initial_conditions_stripped.turbulent_kinetic_energy_density /
-                    supersonic_inlet_initial_conditions_stripped.density,
-                supersonic_inlet_initial_conditions_stripped.specific_dissipation_rate_density /
-                    supersonic_inlet_initial_conditions_stripped.density,
-            )
-        end
-    end
-end
 
 for name in ["top_patch", "bottom_patch"]
     add_patch!(
         config, name;
         properties = ComponentVector(),
-        patch_function = characteristic_farfield_flux!,
+        patch_function = function top_and_bottom_patch_flux!(
+            du, u, p, t, system, geo,
+            idx_a, face_a, 
+            idx_b, face_b,
+        )
+            characteristic_farfield_flux!(
+                du, u, p, t, system, geo,
+                idx_a, face_a,
+                idx_b, face_b,
+                farfield_conditions = supersonic_inlet_initial_conditions_stripped,
+            )
+        end
     )
 end
 
@@ -585,113 +322,46 @@ add_patch!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
     )
-        airfoil_wall_flux!(du, u, p, t, system, geo, idx_a, face_a)
+        no_slip_adiabatic_wall_flux!(du, u, p, t, system, geo, idx_a, face_a)
     end,
 )
-
-#=
-for name in ["top_patch", "bottom_patch"]
-    add_patch!(
-        config, name;
-        #type_a = Fluid(),
-        #type_b = nothing,
-        properties = ComponentVector(),
-        patch_function = 
-        function wall_patch_flux!(
-            du, u, p, t, system, geo,
-            idx_a, face_a, 
-            idx_b, face_b,
-        )
-            face_area, face_normal, face_distance, vol = boundary_geometry(geo, idx_a, face_a)
-
-            gamma = u.cp[idx_a] / u.cv[idx_a]
-
-            _, _, _, pressure, _ = primitive_from_conservative(
-                u.density[idx_a],
-                u.momentum_density_u[idx_a],
-                u.momentum_density_v[idx_a],
-                u.momentum_density_w[idx_a],
-                u.volumetric_energy[idx_a],
-                gamma,
-            )
-
-            du.momentum_density_u_flow[idx_a] -= face_area * pressure * face_normal[1]
-            du.momentum_density_v_flow[idx_a] -= face_area * pressure * face_normal[2]
-            du.momentum_density_w_flow[idx_a] -= face_area * pressure * face_normal[3]
-
-            non_moving_wall_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
-            
-            if compressible_solver_options.use_sst_turbulence == true
-                add_sst_wall_flux!(du, u, geo, idx_a, face_a)
-            end
-        end
-    ) 
-end
-=#
 
 # The mesh is one cell thick. These front/back faces are symmetry planes for
 # the nominally two-dimensional airfoil calculation.
 add_patch!(
     config, "side_patches";
     properties = ComponentVector(),
-    patch_function = function symmetry_flux!(
-        du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b,
-    )
-        face_area, face_normal, _, _ = boundary_geometry(geo, idx_a, face_a)
-        gamma = u.cp[idx_a] / u.cv[idx_a]
-        _, _, _, pressure, _ = primitive_from_conservative(
-            u.density[idx_a],
-            u.momentum_density_u[idx_a],
-            u.momentum_density_v[idx_a],
-            u.momentum_density_w[idx_a],
-            u.volumetric_energy[idx_a],
-            gamma,
-        )
-        du.momentum_density_u_flow[idx_a] -= face_area * pressure * face_normal[1]
-        du.momentum_density_v_flow[idx_a] -= face_area * pressure * face_normal[2]
-        du.momentum_density_w_flow[idx_a] -= face_area * pressure * face_normal[3]
-    end
+    patch_function = symmetry_flux!
+)
+
+wls_stencil = build_weighted_least_squares_stencil(config.geo)
+sst_wall_distances = create_sst_wall_distances(grid, config.geo, 
+    [
+        "airfoil_surface_patches",
+    ]
 )
 
 #I think we're going to add an additional_data field of the system so that arbitrary data can be passed into any function without allocations
 additional_data = (
-    #You could put a neural network in here, custom structs, interpolations, just any useful data in general. 
-    #This does require that every function have system in its arguments though
+    compressible_solver_options,
+    wls_stencil,
+    sst_wall_distances
 )
+#There's an overload that allows you to access the additional data like system.field
 
 du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, additional_data, check_units = false);
-WLS_STENCIL = build_weighted_least_squares_stencil(geo)
-
-if compressible_solver_options.use_sst_turbulence == true
-    airfoil_face_centers = typeof(geo.cell_centroids[1])[]
-    for (cell_id, face_id) in getfacetset(grid, "airfoil_surface_patches")
-        face_node_ids = Ferrite.faces(grid.cells[cell_id])[face_id]
-        face_center = sum(grid.nodes[node_id].x for node_id in face_node_ids) /
-            length(face_node_ids)
-        push!(airfoil_face_centers, face_center)
-    end
-
-    isempty(airfoil_face_centers) && error("No fluid-airfoil interface was found in the mesh")
-    SST_WALL_DISTANCES = fill(1.0, n_cells)
-    for cell_id in eachindex(geo.cell_centroids)
-        SST_WALL_DISTANCES[cell_id] = minimum(
-            norm(geo.cell_centroids[cell_id] - face_center)
-            for face_center in airfoil_face_centers
-        )
-    end
-end
 
 # System solver function
 function solve_system!(du, u, p, t, system, geo)
     update_region_groups!(du, u, p, t, system, geo)
 
-    update_weighted_least_squares_gradients!(u, WLS_STENCIL)
+    update_weighted_least_squares_gradients!(u, system.wls_stencil)
     
-    if compressible_solver_options.use_sst_turbulence == true
-        update_sst_closure!(u, SST_WALL_DISTANCES)
+    if system.compressible_solver_options.use_sst_turbulence == true
+        update_sst_closure!(u, system.sst_wall_distances)
     end
     
-    #update_MUSCL_gradients!(u, WLS_STENCIL) #REMEMBER TO REACTIVATE THIS!!!
+    #update_MUSCL_gradients!(u, wls_stencil) #REMEMBER TO REACTIVATE THIS!!!
     solve_connection_groups!(du, u, p, t, system, geo)
     solve_patch_groups!(du, u, p, t, system, geo)
     solve_region_groups!(du, u, p, t, system, geo)

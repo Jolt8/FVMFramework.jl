@@ -395,7 +395,7 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
                 )
             #end
         end
-    ) 
+    )
 end
 
 #I think we're going to add an additional_data field of the system so that arbitrary data can be passed into any function without allocations
@@ -403,14 +403,15 @@ additional_data = (
     #You could put a neural network in here, custom structs, interpolations, just any useful data in general. 
     #This does require that every function have system in its arguments though
 )
+#There's an overload that allows you to access the additional_data through system.field
 
 du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, additional_data, check_units = false);
-WLS_STENCIL = build_weighted_least_squares_stencil(geo)
+wls_stencil = build_weighted_least_squares_stencil(geo)
 
 # System solver function
 function solve_system!(du, u, p, t, system, geo)
     update_region_groups!(du, u, p, t, system, geo)
-    update_weighted_least_squares_gradients!(u, WLS_STENCIL)
+    update_weighted_least_squares_gradients!(u, wls_stencil)
     solve_connection_groups!(du, u, p, t, system, geo)
     solve_patch_groups!(du, u, p, t, system, geo)
     solve_region_groups!(du, u, p, t, system, geo)

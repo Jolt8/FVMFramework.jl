@@ -45,7 +45,22 @@ struct FVMSystem
     properties_axes::Tuple
     p_vec::Vector{Float64}
     p_axes::Tuple
-    additional_data::NamedTuple
+    data::NamedTuple
+end
+
+function Base.getproperty(sys::FVMSystem, sym::Symbol)
+    # 1. Fall back to FVMSystem's own fields
+    if sym in fieldnames(FVMSystem)
+        return getfield(sys, sym)
+    end
+    
+    # 2. Otherwise look inside the additional_data NamedTuple
+    additional_data = getfield(sys, :additional_data)
+    if haskey(additional_data, sym)
+        return getfield(additional_data, sym)
+    end
+    
+    return getfield(sys, sym) # triggers standard error
 end
 
 function finish_fvm_config(config, connection_map_function, additional_data; check_units::Bool)

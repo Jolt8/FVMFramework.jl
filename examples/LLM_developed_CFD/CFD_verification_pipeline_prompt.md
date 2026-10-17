@@ -87,6 +87,8 @@ First inspect the existing architecture and adapt the verification framework to 
 
 In general, try to stay pretty consistent with my solver architecture. If there's some data that cannot be easily accessed, first try to put it into the system.additional_data NamedTuple since that can store any arbitrary data in a safe manner. If something truly can't be added through already existing methods, data structures, etc. etc., just make the modification and make a note about it and then I'll review it later.
 
+Do note that once you put something in the additional_data NamedTuple, you there's a function overload that allows system.field to work for any field you add to the additional_data NamedTuple. And try to do this because I want this to be convention.
+
 The following repository-specific instructions override generic implementation preferences elsewhere in this prompt. Do not refactor existing FVMFramework conventions merely because another implementation would be more conventional. However, if there's something that you truly believe would make the code more understandable, more efficient, or easier to work with, definitely suggest and implement the change while making a note of it and then I'll review it later.
 
 Also, before creating a new data structure, helper function, storage mechanism, or geometry-access pattern, search the repository for an existing equivalent and use it where practical.

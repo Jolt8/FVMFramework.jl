@@ -149,7 +149,7 @@ function _slau2_internal_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a,
         idx_b, face_b,
-        system.additional_data.face_reconstructor,
+        system.face_reconstructor,
     )
     return nothing
 end
@@ -190,7 +190,7 @@ function _slau2_boundary_flux!(
         face_a,
     )
 
-    if system.additional_data.boundary_condition == :transmissive
+    if system.boundary_condition == :transmissive
         (
             density_flux,
             momentum_density_u_flux,
@@ -225,7 +225,7 @@ function _slau2_boundary_flux!(
             face_area,
             density_flux,
         )
-    elseif system.additional_data.boundary_condition == :slip_wall
+    elseif system.boundary_condition == :slip_wall
         pressure = u.pressure[idx_a]
         du.momentum_density_u_flow[idx_a] -= face_area * pressure * face_normal[1]
         du.momentum_density_v_flow[idx_a] -= face_area * pressure * face_normal[2]

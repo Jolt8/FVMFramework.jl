@@ -2,70 +2,6 @@ include(joinpath(
     @__DIR__, "..", "species_transport", "conservative_species_transport.jl",
 ))
 
-function physical_flux(
-    density,
-    momentum_density_u,
-    momentum_density_v,
-    momentum_density_w,
-    volumetric_energy,
-    pressure,
-    normal
-)
-    vel_u = momentum_density_u / density
-    vel_v = momentum_density_v / density
-    vel_w = momentum_density_w / density
-
-    normal_velocity =
-        vel_u * normal[1] +
-        vel_v * normal[2] +
-        vel_w * normal[3]
-
-    return (
-        density * normal_velocity,
-
-        momentum_density_u * normal_velocity +
-            pressure * normal[1],
-
-        momentum_density_v * normal_velocity +
-            pressure * normal[2],
-
-        momentum_density_w * normal_velocity +
-            pressure * normal[3],
-
-        (volumetric_energy + pressure) * normal_velocity
-    )
-end
-
-function primitive_from_conservative(
-    density,
-    momentum_density_u,
-    momentum_density_v,
-    momentum_density_w,
-    volumetric_energy,
-    specific_heat_ratio
-)
-    density = max(density, 1e-10)
-
-    vel_u = momentum_density_u / density
-    vel_v = momentum_density_v / density
-    vel_w = momentum_density_w / density
-
-    kinetic_energy_density = 0.5 * (
-        momentum_density_u^2 +
-        momentum_density_v^2 +
-        momentum_density_w^2
-    ) / density
-
-    internal_energy_density = max((volumetric_energy - kinetic_energy_density), 1e-10) 
-
-    pressure = (specific_heat_ratio - 1) * internal_energy_density
-
-    speed_of_sound = sqrt(specific_heat_ratio * pressure / density)
-
-    return vel_u, vel_v, vel_w, pressure, speed_of_sound
-end
-
-
 function energy_with_corrected_velocity(
     volumetric_energy,
     density,
@@ -348,31 +284,6 @@ function HLLC!(
         idx_a, face_a, 
         idx_b, face_b,
     )
-
-    if idx_a == 0
-        @show idx_a
-        @show idx_b
-        println("density")
-        @show u.density[idx_a]
-        @show u.density[idx_b]
-        @show density_a
-        println("momentum_density_u")
-        @show u.momentum_density_u[idx_a]
-        @show u.momentum_density_u[idx_b]
-        @show momentum_density_u_a
-        println("momentum_density_v")
-        @show u.momentum_density_v[idx_a]
-        @show u.momentum_density_v[idx_b]
-        @show momentum_density_v_a
-        println("momentum_density_w")
-        @show u.momentum_density_w[idx_a]
-        @show u.momentum_density_w[idx_b]
-        @show momentum_density_w_a
-        println("volumetric_energy")
-        @show u.volumetric_energy[idx_a]
-        @show u.volumetric_energy[idx_b]
-        @show volumetric_energy_a
-    end
 
     density_b, momentum_density_u_b, momentum_density_v_b, momentum_density_w_b, volumetric_energy_b = 
     face_reconstructor!(

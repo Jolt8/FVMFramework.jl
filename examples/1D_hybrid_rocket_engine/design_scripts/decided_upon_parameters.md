@@ -67,8 +67,8 @@ viewable_system_design_loss(
         nozzle_throat_diameter = 0.014,
     ), properties_unitless
 )
-#These parameters work very well, giv eus a burn time of about 6.5 seconds 
-#and result in a final cummulative impulse of aorund 2900 N*s
+#These parameters work very well, give us a burn time of about 6.5 seconds 
+#and result in a final cummulative impulse of around 2900 N*s
 #It also uses up much more of the avaliable oxidizer while the others don't
 ```
 Only leaves behind 0.1 kg of nitrous oxide while achieiving a cummulative impulse of around 2900 N*s. This simulation including all the others usually have chamber pressures of around 1.8 MPa (peak of around 2.0 MPa), which is slightly lower than the commonly cited 2.0 MPa for most student hybrids. This one has an oxidizer to fuel ratio of around 7.8 which is in the right range. Honestly, I think this one might be one of the most trustworthy simulations.
@@ -87,7 +87,7 @@ viewable_system_design_loss(
 ```
 Has a chamber pressure that's much more inline with historical data (around 2.0 MPa) and has a cummulative impulse of 2617 N*s. It also has an injector velocity of around 50 m/s which seems perfect. This one leaves behind 0.2 kg of nitrous oxide. This one also has an oxidizer to fuel ratio of around 8.8 which is a little too high.
 
-I'm staring to get a feeling that my ISP calculations are wrong, 2400 N*s of impulse from around 0.9 kg of nitrous oxide doesn't seem realistic, although under ideal circumstances you could theoretically achieve around 2600 Ns with this much nitrous oxide. I wonder if I could just multiply the get_isp() funciton by about (200 / 260) to roughly correct it. That being said, I think everything else in the simulation (pressure, mass, O/F ratio, injector velocity, etc.) is very realistic.
+I'm staring to get a feeling that my ISP calculations are wrong, 2400 N*s of impulse from around 0.9 kg of nitrous oxide doesn't seem realistic, although under ideal circumstances you could theoretically achieve around 2600 Ns with this much nitrous oxide. I wonder if I could just multiply the get_isp() function by about (200 / 260) to roughly correct it. That being said, I think everything else in the simulation (pressure, mass, O/F ratio, injector velocity, etc.) is very realistic.
 
 # Parameters Used in These Simulations:
 ```julia

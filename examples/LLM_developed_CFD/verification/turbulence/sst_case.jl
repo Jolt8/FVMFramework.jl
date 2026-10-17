@@ -171,7 +171,7 @@ function build_sst_verification_case(n_cells; wall_distance = 1e-5)
         end,
         region_function = function (du, u, p, t, system, geo, cell_id)
             cap_navier_stokes_flow!(du, u, p, t, system, geo, cell_id)
-            cap_sst_transport!(du, u, geo, cell_id)
+            cap_sst_transport!(du, u, p, t, system, geo, cell_id)
         end,
     )
     for patch_name in ("x_min", "x_max", "y_min", "y_max", "z_min", "z_max")

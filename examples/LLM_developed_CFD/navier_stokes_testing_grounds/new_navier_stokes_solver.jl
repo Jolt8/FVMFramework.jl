@@ -285,8 +285,7 @@ add_region!(
     region_function = 
     function fluid_physics!(du, u, p, t, system, geo, cell_id)
         cap_navier_stokes_flow!(du, u, p, t, system, geo, cell_id)
-        cap_sst_transport!(du, u, geo, cell_id)
-    end,
+    end
 )
 
 supersonic_inlet_initial_conditions, supersonic_inlet_properties = construct_initial_conditions_from_intuitive_inputs(
@@ -493,7 +492,7 @@ for name in ["y_min_wall", "y_max_wall", "z_min_wall", "z_max_wall"]
             du.momentum_density_w_flow[idx_a] -= face_area * pressure * face_normal[3]
 
             non_moving_wall_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
-            add_sst_wall_flux!(du, u, geo, idx_a, face_a)
+            add_sst_wall_flux!(du, u, p, t, system, geo, idx_a, face_a)
         end
     ) 
 end
@@ -505,8 +504,8 @@ additional_data = (
 )
 
 du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, additional_data, check_units = false);
-WLS_STENCIL = build_weighted_least_squares_stencil(geo)
-SST_WALL_DISTANCES = [
+wls_stencil = build_weighted_least_squares_stencil(geo)
+sst_wall_distances = [
     min(
         geo.cell_centroids[cell_id][2],
         grid_y_length - geo.cell_centroids[cell_id][2],
@@ -518,9 +517,9 @@ SST_WALL_DISTANCES = [
 # System solver function
 function solve_system!(du, u, p, t, system, geo)
     update_region_groups!(du, u, p, t, system, geo)
-    update_weighted_least_squares_gradients!(u, WLS_STENCIL)
-    update_sst_closure!(u, SST_WALL_DISTANCES)
-    #update_MUSCL_gradients!(u, WLS_STENCIL) #REMEMBER TO REACTIVATE THIS!!!
+    update_weighted_least_squares_gradients!(u, system.wls_stencil)
+    update_sst_closure!(u, system.sst_wall_distances)
+    #update_MUSCL_gradients!(u, wls_stencil) #REMEMBER TO REACTIVATE THIS!!!
     solve_connection_groups!(du, u, p, t, system, geo)
     solve_patch_groups!(du, u, p, t, system, geo)
     solve_region_groups!(du, u, p, t, system, geo)
