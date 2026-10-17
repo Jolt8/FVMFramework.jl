@@ -45,8 +45,8 @@ elemental_compositions = ComponentVector(
 If you just do:
 ```julia
 foreach_field_at!(cell_id, mass_fractions, elemental_compositions) do species, mass_fractions, elemental_compositions
-    mass_fractions[species[cell_id]] += 1.0
-    elemental_compositions[species[cell_id]] += 1.0
+    mass_fractions[species] += 1.0
+    elemental_compositions[species] += 1.0
 end
 ```
 **species** will just be [1], [2] etc.
@@ -60,7 +60,7 @@ mass_fractions_species_idx = 1
 
 foreach_field_at!(cell_id, elemental_compositions) do species, elemental_compositions
     view(mass_fractions, cell_id)[mass_fractions_species_idx] += 1.0
-    elemental_compositions[species[cell_id]] += 1.0
+    elemental_compositions[species] += 1.0
     mass_fractions_species_idx += 1
 end
 ```
@@ -124,13 +124,77 @@ end
 
     # Example:
     ```julia
-    for_fields!(du.mass_fractions) do species, du_mass_fractions
-        du_mass_fractions[species] += 1.0 
+    for_fields!(u.mass_fractions) do species, u_mass_fractions
+        u_mass_fractions[species[cell_id]] += 1.0
     end
     ```
 
-    Similar to for_fields_at! this function exists because looping using propertynames() causes a significant amount of 
-    allocations and dynamic dispatch
+    Note the fact that I keep the "u_" prefix on the name of the mass fractions because it makes it clear what it represents
+
+    each loop, **species** increses like this:
+    iter 1: species = 1:n_cells (1:100 for example)
+    iter 2: species = n_cells+1:2*n_cells (101:200 for example)
+    ...
+
+    so species[cell_id] returns something like 201 for the second species at the first cell_id
+
+    Similar to for_fields_at!, this function exists because looping using propertynames() causes a significant amount of 
+    allocations and dynamic dispatch, this one is different because you don't have to provide a cell_id and you use it in the inner loop itself.
+    I usually prefer this one because it's more clear what it's doing.
+
+    The reason this function exists is that this causes a ton of allocations and dynamic dispatch:
+    ```julia
+    for name in propertynames(du.mass_fractions[1])
+        getproperty(du.mass_fractions, name)[cell_id] += 1.0 
+    end
+    ```
+    
+    However, with how this function works, there are sometimes cases where it does not behave as you would expect.
+    For example, let's say you have these two vectors and wanted to iterate through both of them:
+    ```julia
+    mass_fractions = ComponentVector(
+        methane = 0.5,
+        water = 0.5
+    )
+    
+    elemental_compositions = ComponentVector(
+        methane = (
+            C = 1,
+            H = 4,
+            O = 0
+        ),
+        water = (
+            C = 0,
+            H = 2,
+            O = 1
+        )
+    )
+    ```
+    \n
+    If you just do:
+    ```julia
+    for_fields!(mass_fractions, elemental_compositions) do species, mass_fractions, elemental_compositions
+        mass_fractions[species] += 1.0
+        elemental_compositions[species] += 1.0
+    end
+    ```
+    **species** will just be [1], [2] etc.
+    \n
+    This will not index [elemental_compositions] properly because it needs be indexed as [1:3], [4:6]
+    thus, **elemental_compositions[species]** will just return the value for **elemental_compositions.methane.C** and nothing else
+    
+    To make this this doesn't happen, do this:
+    ```julia
+    mass_fractions_species_idx = 1
+    
+    for_fields!(cell_id, elemental_compositions) do species, elemental_compositions
+        view(mass_fractions, cell_id)[mass_fractions_species_idx] += 1.0
+        elemental_compositions[species] += 1.0
+        
+        mass_fractions_species_idx += 1
+    end
+    ```
+    While this is not the most ideal, it's pretty much the best option avaliable without introducing even more bloated looping functions
 """
 @generated function for_fields!(f, groups::Vararg{Any, N}) where {N}
     G1 = groups[1]
