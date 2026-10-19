@@ -126,8 +126,9 @@ Revise.includet(joinpath(@__DIR__, "weighted_least_squares/weighted_least_square
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/fluid_viscous_and_diffusive_fluxes.jl"))
 Revise.includet(joinpath(@__DIR__, "viscous_and_diffusive_terms/wall_viscous_and_diffusive_fluxes.jl"))
 
-Revise.includet(joinpath(@__DIR__, "navier_stokes_fluid_property_update_functions/fluid_property_update_functions.jl"))
 Revise.includet(joinpath(@__DIR__, "navier_stokes_fluid_property_update_functions/non_standard_fluid_property_update_functions.jl"))
+Revise.includet(joinpath(@__DIR__, "navier_stokes_fluid_property_update_functions/fluid_property_update_functions.jl"))
+
 Revise.includet(joinpath(@__DIR__, "sum_and_cap_functions/cap_functions.jl"))
 
 function fluid_fluid_flux!(

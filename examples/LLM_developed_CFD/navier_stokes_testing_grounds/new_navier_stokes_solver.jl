@@ -317,16 +317,8 @@ supersonic_inlet_initial_conditions, supersonic_inlet_properties = construct_ini
 
 supersonic_inlet_initial_conditions_stripped = ustrip.(upreferred.(supersonic_inlet_initial_conditions))
 supersonic_inlet_mass_fractions_stripped = ComponentVector(
-    species_a = fill(
-        supersonic_inlet_initial_conditions_stripped.species_densities.species_a /
-            supersonic_inlet_initial_conditions_stripped.density,
-        n_cells,
-    ),
-    species_b = fill(
-        supersonic_inlet_initial_conditions_stripped.species_densities.species_b /
-            supersonic_inlet_initial_conditions_stripped.density,
-        n_cells,
-    ),
+    species_a = supersonic_inlet_initial_conditions_stripped.species_densities.species_a / supersonic_inlet_initial_conditions_stripped.density,
+    species_b = supersonic_inlet_initial_conditions_stripped.species_densities.species_b / supersonic_inlet_initial_conditions_stripped.density,
 )
 
 add_patch!(
@@ -384,12 +376,12 @@ add_patch!(
 
         du.volumetric_energy_flow[idx_a] -= face_area * F_volumetric_energy
         add_prescribed_boundary_species_advection_flux!(
-            du,
-            idx_a,
-            face_area,
+            du, u,
+            idx_a, face_area,
             F_density,
             supersonic_inlet_mass_fractions_stripped,
         )
+        
         add_prescribed_boundary_sst_advection_flux!(
             du,
             idx_a,
