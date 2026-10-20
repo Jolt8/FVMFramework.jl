@@ -241,5 +241,9 @@ function fluid_viscous_and_diffusive_flux!(
         add_sst_diffusion_flux!(du, u, idx_a, idx_b, face_area_a, face_normal_a, distance)
     end
 
+    if hasproperty(u, :species_densities)
+        add_conservative_species_diffusion_flux!(du, u, idx_a, idx_b, face_area_a, distance)
+    end
+
     return nothing
 end

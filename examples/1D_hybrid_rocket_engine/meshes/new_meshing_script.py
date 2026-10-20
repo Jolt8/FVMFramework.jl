@@ -37,7 +37,7 @@ import gmsh
 # ---------------------------------------------------------------------------
 # #import the assembly:
 # ---------------------------------------------------------------------------
-path_to_hybrid_cad_files = r"C:\Users\wille\Desktop\hybrid-rocket-CAD\src"
+path_to_hybrid_cad_files = r"C:\Users\wille\OneDrive\Desktop\hybrid-rocket-CAD\src"
 path_to_cfd_assembly = os.path.join(path_to_hybrid_cad_files, "hybrid_assembly_for_cfd.FCStd")
 
 if not os.path.exists(path_to_cfd_assembly):
@@ -468,9 +468,10 @@ step_filename = os.path.basename(step_export_path)
 with open(geo_viewer_path, "w") as f:
     f.write('// Auto-generated Gmsh viewer script for 3D Hybrid Rocket CFD\n')
     f.write('SetFactory("OpenCASCADE");\n')
-    f.write(f'Merge "{step_filename}";\n')
+    f.write(f'Merge "exploded_slice.step";\n')
     f.write('// Scale the CAD geometry from mm to meters so it matches the scaled mesh\n')
     f.write('Dilate {{0, 0, 0}, 0.001} { Surface{:}; }\n')
+    f.write('Extrude {0, -0.001, 0.0} { Surface{:}; }\n')
     f.write(f'Merge "{msh_output_path}";\n')
     f.write('Mesh.SurfaceFaces = 1;\n')
     f.write('Mesh.Lines = 1;\n')
