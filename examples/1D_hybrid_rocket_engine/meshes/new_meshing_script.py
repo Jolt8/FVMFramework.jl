@@ -37,7 +37,11 @@ import gmsh
 # ---------------------------------------------------------------------------
 # #import the assembly:
 # ---------------------------------------------------------------------------
-path_to_hybrid_cad_files = r"C:\Users\wille\OneDrive\Desktop\hybrid-rocket-CAD\src"
+candidate_paths = [
+    r"C:\Users\wille\Desktop\hybrid-rocket-CAD\src",
+    r"C:\Users\wille\OneDrive\Desktop\hybrid-rocket-CAD\src",
+]
+path_to_hybrid_cad_files = next((p for p in candidate_paths if os.path.exists(p)), candidate_paths[0])
 path_to_cfd_assembly = os.path.join(path_to_hybrid_cad_files, "hybrid_assembly_for_cfd.FCStd")
 
 if not os.path.exists(path_to_cfd_assembly):
@@ -246,12 +250,17 @@ print("=" * 80)
 #     - For all volumes: Call them '{part_name}_volume'
 #     - Special Rule: Call the fluid domain 'fluid_domain'
 volumes_by_name = {}
+special_volumes = set()
+non_special_volumes = set()
+
 for v_dim, v_tag in gmsh.model.getEntities(3):
     pname = vol_to_part.get(v_tag, "fluid_domain")
     if pname == "fluid_domain":
         v_group_name = "fluid_domain"
+        special_volumes.add(v_group_name)
     else:
         v_group_name = f"{pname}_volume"
+        non_special_volumes.add(v_group_name)
     volumes_by_name.setdefault(v_group_name, []).append(v_tag)
 
 for vname, vtags in sorted(volumes_by_name.items()):
@@ -261,6 +270,31 @@ for vname, vtags in sorted(volumes_by_name.items()):
 # Classify 2D Surfaces
 all_surfs_3d = gmsh.model.getEntities(2)
 surface_groups = {}
+special_interfaces = set()
+non_special_interfaces = set()
+special_wall_patches = set()
+non_special_wall_patches = set()
+
+# Pre-identify injector_inlet_patch:
+# Facing upwards (+Z normal) at the highest Z coordinate of the model, closest to the center Z axis
+top_inlet_candidates = []
+for dim, s_tag in all_surfs_3d:
+    up, _ = gmsh.model.getAdjacencies(dim, s_tag)
+    if len(up) == 1:
+        bounds = gmsh.model.getParametrizationBounds(dim, s_tag)
+        u_mid = 0.5 * (bounds[0][0] + bounds[0][1])
+        v_mid = 0.5 * (bounds[1][0] + bounds[1][1])
+        norm = gmsh.model.getNormal(s_tag, [u_mid, v_mid])
+        if abs(norm[1]) < 0.5 and norm[2] > 0.8:
+            bb = gmsh.model.getBoundingBox(dim, s_tag)
+            top_inlet_candidates.append((s_tag, bb))
+
+if top_inlet_candidates:
+    max_z_val = max(cand[1][5] for cand in top_inlet_candidates)
+    at_top = [cand for cand in top_inlet_candidates if abs(cand[1][5] - max_z_val) < 1.0]
+    injector_inlet_tag = min(at_top, key=lambda cand: cand[1][0])[0]
+else:
+    injector_inlet_tag = None
 
 for dim, s_tag in all_surfs_3d:
     bounds = gmsh.model.getParametrizationBounds(dim, s_tag)
@@ -278,6 +312,7 @@ for dim, s_tag in all_surfs_3d:
     # -----------------------------------------------------------------------
     if abs(norm[1]) > 0.9 and abs(norm[2]) < 1e-3:
         surface_groups.setdefault("out_of_plane_patch", []).append(s_tag)
+        special_wall_patches.add("out_of_plane_patch")
         
     # -----------------------------------------------------------------------
     # Internal Interface between two different parts/volumes:
@@ -291,10 +326,12 @@ for dim, s_tag in all_surfs_3d:
         # Special Rule: fluid_domain and fuel grain interface
         if (name1 == "fluid_domain" and name2 == "fuel_grain") or (name2 == "fluid_domain" and name1 == "fuel_grain"):
             surface_groups.setdefault("fuel_wall_patch", []).append(s_tag)
+            special_interfaces.add("fuel_wall_patch")
         elif name1 != name2:
             sorted_names = sorted([name1, name2])
             interface_name = f"{sorted_names[0]}_to_{sorted_names[1]}_interface"
             surface_groups.setdefault(interface_name, []).append(s_tag)
+            non_special_interfaces.add(interface_name)
             
     # -----------------------------------------------------------------------
     # External Boundary Surfaces (interface with nothing):
@@ -303,32 +340,39 @@ for dim, s_tag in all_surfs_3d:
         v = up[0]
         vname = vol_to_part[v]
         
-        if vname == "fluid_domain":
+        # Special Rule: Facing upwards at highest z coordinate of model, closest to center z axis
+        if s_tag == injector_inlet_tag:
+            surface_groups.setdefault("injector_inlet_patch", []).append(s_tag)
+            special_wall_patches.add("injector_inlet_patch")
+            
+        elif vname == "fluid_domain":
             # Special Rule: Essentially defines the z axis -> symmetry_patch
             if abs(bb[0]) < 1e-3 and abs(bb[3]) < 1e-3:
                 surface_groups.setdefault("symmetry_patch", []).append(s_tag)
-                
-            # Special Rule: Facing upwards at highest z coordinate (Z ~ 390 mm), closest to center z axis
-            elif abs(bb[5] - 390.0) < 1.0 and abs(bb[2] - 390.0) < 1.0 and bb[0] < 2.0:
-                surface_groups.setdefault("injector_inlet_patch", []).append(s_tag)
+                special_wall_patches.add("symmetry_patch")
                 
             # Special Rule: Lower than the face that defines the bottom of the fuel grain (Z < 50 mm)
             elif bb[5] < 50.0:
                 # Face normal parallel to z axis (flat horizontal bottom at Z = -35 mm) -> outlet_patch
                 if abs(bb[2] - bb[5]) < 1e-3:
                     surface_groups.setdefault("outlet_patch", []).append(s_tag)
+                    special_wall_patches.add("outlet_patch")
                 # Face normal perpendicular to z axis (vertical outer boundary at X ~ 36.9 mm) -> far_field_patch
                 else:
                     surface_groups.setdefault("far_field_patch", []).append(s_tag)
+                    special_wall_patches.add("far_field_patch")
                     
             # All other fluid walls with nothing (e.g. top bulkhead contact or casing step)
             else:
                 surface_groups.setdefault("fluid_domain_wall_patch", []).append(s_tag)
+                non_special_wall_patches.add("fluid_domain_wall_patch")
                 
         # General Rule: For all surfaces that are not out of plane patches but still form a wall with nothing
         #     - Call them '{part_name}_wall_patch'
         else:
-            surface_groups.setdefault(f"{vname}_wall_patch", []).append(s_tag)
+            patch_name = f"{vname}_wall_patch"
+            surface_groups.setdefault(patch_name, []).append(s_tag)
+            non_special_wall_patches.add(patch_name)
 
 # Register physical surface groups in Gmsh
 for sname, stags in sorted(surface_groups.items()):
@@ -478,6 +522,43 @@ with open(geo_viewer_path, "w") as f:
     f.write('Mesh.ColorCarousel = 1;\n')
 
 print(f"Created Gmsh .geo viewer script: '{geo_viewer_path}'")
+
+# Create markdown summary file for special and non-special groups
+md_summary_path = os.path.join(mesh_output_dir, "mesh_groups_summary.md")
+with open(md_summary_path, "w", encoding="utf-8") as f:
+    f.write("# Mesh Physical Groups Summary\n\n")
+    
+    f.write("## Special Volumes\n")
+    for v in sorted(special_volumes):
+        f.write(f"- {v}\n")
+    f.write("\n")
+    
+    f.write("## Non-Special Volumes\n")
+    for v in sorted(non_special_volumes):
+        f.write(f"- {v}\n")
+    f.write("\n")
+    
+    f.write("## Special Interfaces\n")
+    for s in sorted(special_interfaces):
+        f.write(f"- {s}\n")
+    f.write("\n")
+    
+    f.write("## Non-Special Interfaces\n")
+    for s in sorted(non_special_interfaces):
+        f.write(f"- {s}\n")
+    f.write("\n")
+    
+    f.write("## Special Wall Patches\n")
+    for p in sorted(special_wall_patches):
+        f.write(f"- {p}\n")
+    f.write("\n")
+    
+    f.write("## Non-Special Wall Patches\n")
+    for p in sorted(non_special_wall_patches):
+        f.write(f"- {p}\n")
+    f.write("\n")
+
+print(f"Created mesh groups markdown summary: '{md_summary_path}'")
 
 gmsh.finalize()
 print("\n" + "=" * 80)
