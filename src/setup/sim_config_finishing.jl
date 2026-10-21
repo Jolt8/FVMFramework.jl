@@ -140,7 +140,7 @@ function finish_fvm_config(config, connection_map_function, additional_data; che
                 )
                 )
             #=elseif (region_a.name, region_b.name) in unique_region_connection_pairs && isempty(connection_groups[connection_group_id].cell_neighbors[idx_a])
-                println("I'm unsure if this actually ever happens, check to line 237 in sim config if it does")
+                println("I'm unsure if this actually ever happens, check line 237 in sim config if it does")
                 #after using this framework for a while, I've never actually seen this trigger
                 connection_group_id = findfirst(item -> item == (region_a.name, region_b.name), unique_region_connection_pairs)
                 push!(connection_groups[connection_group_id].cell_neighbors[idx_a], (
