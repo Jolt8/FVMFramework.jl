@@ -76,9 +76,7 @@ Base.axes(values::CellFaceVector) = axes(values.data)
 Base.IndexStyle(::Type{<:CellFaceVector}) = IndexLinear()
 Base.parent(values::CellFaceVector) = values.data
 
-@inline Base.getindex(values::CellFaceVector, index::Int) = values.data[index]
-@inline Base.setindex!(values::CellFaceVector, value, index::Int) =
-    (values.data[index] = value)
+@inline Base.getindex(values::CellFaceVector, index::Int) = @views values.data[values.layout[index]]
 
 @inline function Base.getindex(values::CellFaceVector, cell_id::Int, face_idx::Int)
     packed_face_id = values.layout[cell_id, face_idx]
@@ -102,8 +100,5 @@ end
 
 Base.copy(values::CellFaceVector) = CellFaceVector(values.layout, copy(values.data))
 
-cell_face_zeros(::Type{T}, layout::CellFaceLayout) where {T} =
+cell_face_layout_zeros(::Type{T}, layout::CellFaceLayout) where {T} =
     CellFaceVector(layout, zeros(T, total_faces(layout)))
-
-cell_face_fill(value, layout::CellFaceLayout) =
-    CellFaceVector(layout, fill(value, total_faces(layout)))
