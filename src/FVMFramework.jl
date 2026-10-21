@@ -33,26 +33,23 @@ import Logging
 #] instantiate
 
 # ----- Geometry -----
-include("geometry/geometry_helper_functions.jl")
+include("new_geometry/geometry_helper_functions.jl")
 export get_node_coordinates, get_cell_topology, get_nodes_of_cells, get_face_nodes
 export get_cell_neighbors, get_unconnected_map, get_cell_face_map, cross_product
 
-include("geometry/get_x_geometry_functions/interface_geometry.jl")
-include("geometry/get_x_geometry_functions/boundary_geometry.jl")
-include("geometry/get_x_geometry_functions/cell_geometry.jl")
+include("new_geometry/cell_face_layout.jl")
+export CellFaceLayout
+
+include("new_geometry/get_x_geometry_functions/interface_geometry.jl")
+include("new_geometry/get_x_geometry_functions/boundary_geometry.jl")
+include("new_geometry/get_x_geometry_functions/cell_geometry.jl")
 export interface_geometry, boundary_geometry, cell_geometry
 
-include("geometry/geometry_rebuilding_tetra.jl")
-export rebuild_fvm_geometry_tetra!
+include("new_geometry/geometry_building.jl")
+export build_fvm_geo_into_struct, update_fvm_geometry!, FVMGeometry, FVMTopology
 
-include("geometry/geometry_rebuilding_hexa.jl")
-export rebuild_fvm_geometry_hexa!
-
-include("geometry/geometry_building.jl")
-export build_fvm_geo_into_struct, FVMGeometry, FVMGeometryTetra, FVMGeometryHexa
-
-include("geometry/topology_checking.jl")
-export check_cellset_connectivity, check_grid_connectivity
+include("new_geometry/frontend_geo_helper_functions.jl")
+export face_zeros, face_fill
 
 # ----- ComponentArray Addons -----
 include("component_arrays_addons/simple_merge.jl")
