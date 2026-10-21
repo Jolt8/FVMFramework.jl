@@ -24,21 +24,6 @@ function check_cellset_connectivity(grid, set_name)
     end
     return matched_cell_set_times
 end
-
-#THIS IS BROKEN AND DOES NOT WORK! DO NOT USE!
-#check_cellset_connectivity works
-function check_grid_connectivity(grid)
-    cellset_names = collect(keys(grid.cellsets))
-
-    all_connectivity_vec = Dict()
-
-    for set_name in cellset_names
-        cell_set_connectivity = check_cellset_connectivity(grid, set_name)
-        merge(all_connectivity_vec, Dict(set_name * "_" * key => value for (key, value) in cell_set_connectivity))
-    end
-
-    return all_connectivity_vec
-end
     
 
 #=NOTE:

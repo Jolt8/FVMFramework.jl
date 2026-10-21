@@ -120,17 +120,7 @@ function rebuild_fvm_geometry_hexa!(
         node_3_coords = node_coordinates[face_node_indices[3]]
         node_4_coords = node_coordinates[face_node_indices[4]]
 
-        #get_area
-        cross_a = cross_product(node_2_coords - node_1_coords, node_3_coords - node_1_coords)
-        cross_b = cross_product(node_3_coords - node_1_coords, node_4_coords - node_1_coords)
-        
-        area_vec_1 = 0.5 * cross_a
-        area_vec_2 = 0.5 * cross_b
-
-        total_area_vec = area_vec_1 + area_vec_2
-        total_area = norm(total_area_vec)
-
-        cell_face_areas[cell_id][face_idx] = total_area 
+        cell_face_areas[cell_id][face_idx] = calculate_quad_face_area([node_1_coords, node_2_coords, node_3_coords, node_4_coords]) 
 
         face_centroid = (node_1_coords + node_2_coords + node_3_coords + node_4_coords) / 4
 

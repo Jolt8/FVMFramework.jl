@@ -21,6 +21,7 @@ function get_node_coordinates(grid)
             node_coordinates[node_id] = SVector(coordinates[1], coordinates[2], coordinates[3])
         end
     end
+    
     return node_coordinates
 end
 
@@ -75,7 +76,7 @@ function get_neighbor_map(grid, top)
     cell_neighbor_pairs = Tuple{Int, Int}[]
 
     n_nodes_per_face = length(get_face_nodes(grid, 1, 1))
-    neighbor_map_respective_node_ids = NTuple{n_nodes_per_face, Int}[]
+    neighbor_map_respective_node_ids = []
 
     n_cells = length(grid.cells)
 
@@ -176,14 +177,15 @@ function get_cell_face_map(grid)
     n_nodes_per_face = length(get_face_nodes(grid, 1, 1))
 
     cell_face_map = NTuple{2, Int}[]
-    map_respective_node_ids = NTuple{n_nodes_per_face, Int}[]
+    map_respective_node_ids = []
 
     for cell_id in 1:n_cells
         for face_idx in 1:nfacets(grid.cells[cell_id])
             respective_nodes = get_face_nodes(grid, cell_id, face_idx)
+            n_nodes = length(get_face_nodes(grid, 1, 1))
 
             push!(cell_face_map, (cell_id, face_idx))
-            push!(map_respective_node_ids, ntuple(i -> respective_nodes[i], n_nodes_per_face))
+            push!(map_respective_node_ids, ntuple(i -> respective_nodes[i], n_nodes))
         end
     end
     return cell_face_map, map_respective_node_ids

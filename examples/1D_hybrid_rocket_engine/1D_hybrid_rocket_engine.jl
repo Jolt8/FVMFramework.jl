@@ -22,6 +22,8 @@ grid = togrid(mesh_path)
 num_hex = count(c -> isa(c, Hexahedron), grid.cells)
 num_wedges = count(c -> isa(c, Wedge), grid.cells)
 
+typeof(grid)
+
 n_cells = length(grid.cells)
 n_faces = nfacets(grid.cells[1])
 
