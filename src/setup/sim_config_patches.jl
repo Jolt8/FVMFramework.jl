@@ -16,7 +16,7 @@ end
 
 function add_patch!(
     config, name;
-    properties,
+    properties = nothing,
     patch_function,
 )
     cell_ids_and_face_idxs = [cell_id_facet_idx.idx for cell_id_facet_idx in keys(config.grid.facetsets[name].dict)]
