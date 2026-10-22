@@ -6,6 +6,8 @@
 
 ## Non-Special Volumes
 - aluminum_housing_volume
+- flange_fasteners_bottom_volume
+- flange_fasteners_top_volume
 - fuel_grain_volume
 - housing_o_ring_volume
 - injector_bulkhead_volume
@@ -19,11 +21,16 @@
 - fuel_wall_patch
 
 ## Non-Special Interfaces
+- aluminum_housing_to_flange_fasteners_bottom_interface
+- aluminum_housing_to_flange_fasteners_top_interface
 - aluminum_housing_to_housing_o_ring_interface
 - aluminum_housing_to_injector_bulkhead_interface
 - aluminum_housing_to_inner_graphite_nozzle_interface
 - aluminum_housing_to_outer_aluminum_nozzle_casing_interface
 - aluminum_housing_to_phenolic_liner_interface
+- flange_fasteners_bottom_to_fluid_domain_interface
+- flange_fasteners_bottom_to_outer_aluminum_nozzle_casing_interface
+- flange_fasteners_top_to_injector_bulkhead_interface
 - fluid_domain_to_injector_bulkhead_interface
 - fluid_domain_to_injector_disk_interface
 - fluid_domain_to_inner_graphite_nozzle_interface
@@ -47,6 +54,8 @@
 
 ## Non-Special Wall Patches
 - aluminum_housing_wall_patch
+- flange_fasteners_bottom_wall_patch
+- flange_fasteners_top_wall_patch
 - injector_bulkhead_wall_patch
 - injector_disk_wall_patch
 - outer_aluminum_nozzle_casing_wall_patch

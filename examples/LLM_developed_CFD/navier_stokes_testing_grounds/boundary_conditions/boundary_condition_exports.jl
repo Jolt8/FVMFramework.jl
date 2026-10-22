@@ -9,3 +9,6 @@ export supersonic_outlet_flux!
 
 include(joinpath(@__DIR__, "bcs/slip_wall_flux.jl"))
 export slip_wall_flux!, symmetry_flux!
+
+include(joinpath(@__DIR__, "bcs/supersonic_inlet_flux.jl"))
+export supersonic_inlet_flux!

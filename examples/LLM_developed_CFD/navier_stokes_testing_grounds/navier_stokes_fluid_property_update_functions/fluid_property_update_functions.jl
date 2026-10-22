@@ -52,6 +52,10 @@ function update_speed_of_sound_ideal!(du, u, p, t, system, geo, cell_id)
     u.speed_of_sound[cell_id] = get_speed_of_sound_ideal(u, cell_id)
 end
 
+#gamma 
+function update_gamma!(du, u, p, t, system, geo, cell_id)
+    u.gamma[cell_id] = u.cp[cell_id] / u.cv[cell_id]
+end
 
 function overall_navier_stokes_property_update!(du, u, p, t, system, geo, cell_id)
     if hasproperty(u, :species_densities)
@@ -62,6 +66,7 @@ function overall_navier_stokes_property_update!(du, u, p, t, system, geo, cell_i
     update_temperature_ideal!(du, u, p, t, system, geo, cell_id)
     update_pressure_ideal!(du, u, p, t, system, geo, cell_id)
     update_speed_of_sound_ideal!(du, u, p, t, system, geo, cell_id)
+    update_gamma!(du, u, p, t, system, geo, cell_id)
 
     if system.compressible_solver_options.use_sst_turbulence == true
         update_sst_primitives!(du, u, p, t, system, geo, cell_id)

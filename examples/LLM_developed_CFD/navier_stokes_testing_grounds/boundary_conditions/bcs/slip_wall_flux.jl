@@ -12,6 +12,7 @@ function slip_wall_flux!(
         u.volumetric_energy[idx_a],
         u.gamma[idx_a],
     )
+    
     du.momentum_density_u_flow[idx_a] -= face_area * pressure * face_normal[1]
     du.momentum_density_v_flow[idx_a] -= face_area * pressure * face_normal[2]
     du.momentum_density_w_flow[idx_a] -= face_area * pressure * face_normal[3]

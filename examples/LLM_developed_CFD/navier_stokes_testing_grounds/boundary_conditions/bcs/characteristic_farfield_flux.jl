@@ -98,7 +98,7 @@ function characteristic_farfield_flux!(
         momentum_u_b = density_b * vel_u_b
         momentum_v_b = density_b * vel_v_b
         momentum_w_b = density_b * vel_w_b
-        energy_b = pressure_b / (gamma - 1.0) + 0.5 * density_b * (vel_u_b^2 + vel_v_b^2 + vel_w_b^2)
+        energy_b = pressure_b / (u.gamma[idx_a] - 1.0) + 0.5 * density_b * (vel_u_b^2 + vel_v_b^2 + vel_w_b^2)
     end
 
     (
