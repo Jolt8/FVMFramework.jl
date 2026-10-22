@@ -96,78 +96,87 @@ function finish_fvm_config(config, connection_map_function, additional_data; che
     end
 
     #Connections
+    # Connections
     unique_region_connection_pairs = Vector{Tuple{String, String}}()
-    already_accessed_cells_in_each_connection_pair = Dict{Any, Vector{SVector{2, Int}}}()
-    #we specifically use strings here because checking if (region_a, region_b) == (region_b, region_a) was fragile
+    visited_mesh_faces = Set{Tuple{Int, Int}}()
 
     for (idx_a, idx_a_neighbors) in config.geo.cell_neighbors
         for (idx_b, face_idx_a, face_idx_b) in idx_a_neighbors
             if idx_b <= 0
-                continue #we skip this face iteration if the cell doesn't have a neighbor at a face
+                continue
             end
 
-            region_a = cell_regions_map[idx_a]
-            region_b = cell_regions_map[idx_b]
-
-            #NOTE: since we're no longer going to be evaluating fluxes two times per face, now the conneciton map function only needs:
-            #region_a && region_b == some function
-            
-            #rather than
-
-            #region_a && region_b == some function
-            #region_b && region_a == some other function
-            flux_function! = connection_map_function(cell_region_phys_map[idx_a], cell_region_phys_map[idx_b])
-
-            if !(typeof(flux_function!) <: Function)
-                flux_function! = connection_map_function(cell_region_phys_map[idx_b], cell_region_phys_map[idx_a])
+            # Ensure each physical internal face between idx_a and idx_b is processed once
+            face_key = minmax(idx_a, idx_b)
+            if face_key in visited_mesh_faces
+                continue
             end
+            push!(visited_mesh_faces, face_key)
 
-            if !(typeof(flux_function!) <: Function)
-                error("Connection map function did not return a function for region pair $(region_a.name) and $(region_b.name)")
-            end
+            reg_a = cell_regions_map[idx_a]
+            reg_b = cell_regions_map[idx_b]
+            phys_a = cell_region_phys_map[idx_a]
+            phys_b = cell_region_phys_map[idx_b]
 
-            connection_group_id = findfirst(item -> item == (region_a.name, region_b.name), unique_region_connection_pairs)
+            # Determine canonical connection group and face orientation
+            if reg_a.name == reg_b.name
+                canon_reg_a, canon_reg_b = reg_a, reg_b
+                flux_function! = connection_map_function(phys_a, phys_b)
+                if !(typeof(flux_function!) <: Function)
+                    error("Connection map function did not return a function for region $(reg_a.name)")
+                end
+                c_idx_a, c_face_a = idx_a, face_idx_a
+                c_idx_b, c_face_b = idx_b, face_idx_b
+            else
+                f_fwd = connection_map_function(phys_a, phys_b)
+                f_rev = connection_map_function(phys_b, phys_a)
 
-            #I feel bad for anyone who has to read this
-            if !((region_a.name, region_b.name) in unique_region_connection_pairs)
-                push!(unique_region_connection_pairs, (region_a.name, region_b.name))
-                
-                push!(already_accessed_cells_in_each_connection_pair, (region_a.name, region_b.name) => [SVector{2, Int}(idx_a, idx_b)])
-                
-                new_connection_group_id = findfirst(item -> item == (region_a.name, region_b.name), unique_region_connection_pairs)
-                
-                push!(connection_groups, ConnectionGroup(
-                    region_a,
-                    region_b,
-                    flux_function!,
-                    [(idx_a, Tuple{Int, Int, Int}[]) for idx_a in 1:n_cells]
-                )
-                )
-                push!(connection_groups[new_connection_group_id].cell_neighbors[idx_a][2], (
-                    (idx_b, face_idx_a, face_idx_b)
-                )
-                )
-            #=elseif (region_a.name, region_b.name) in unique_region_connection_pairs && isempty(connection_groups[connection_group_id].cell_neighbors[idx_a])
-                println("I'm unsure if this actually ever happens, check line 237 in sim config if it does")
-                #after using this framework for a while, I've never actually seen this trigger
-                connection_group_id = findfirst(item -> item == (region_a.name, region_b.name), unique_region_connection_pairs)
-                push!(connection_groups[connection_group_id].cell_neighbors[idx_a], (
-                    (idx_a, Vector{Tuple{Int, Int, Int}}((idx_b, face_idx_b, face_idx_b)))
-                )
-                )=#
-            elseif !isempty(connection_groups[connection_group_id].cell_neighbors[idx_a])
-                connection_group_id = findfirst(item -> item == (region_a.name, region_b.name), unique_region_connection_pairs)
-                
-                if !(SVector{2, Int}(idx_b, idx_a) in already_accessed_cells_in_each_connection_pair[(region_a.name, region_b.name)])
-                    push!(connection_groups[connection_group_id].cell_neighbors[idx_a][2], (
-                        (idx_b, face_idx_a, face_idx_b)
-                    )
-                    )
-                    push!(already_accessed_cells_in_each_connection_pair[(region_a.name, region_b.name)], SVector{2, Int}(idx_a, idx_b))
+                if (typeof(f_fwd) <: Function) && !(typeof(f_rev) <: Function)
+                    canon_reg_a, canon_reg_b = reg_a, reg_b
+                    flux_function! = f_fwd
+                    c_idx_a, c_face_a = idx_a, face_idx_a
+                    c_idx_b, c_face_b = idx_b, face_idx_b
+                elseif !(typeof(f_fwd) <: Function) && (typeof(f_rev) <: Function)
+                    canon_reg_a, canon_reg_b = reg_b, reg_a
+                    flux_function! = f_rev
+                    c_idx_a, c_face_a = idx_b, face_idx_b
+                    c_idx_b, c_face_b = idx_a, face_idx_a
+                elseif (typeof(f_fwd) <: Function) && (typeof(f_rev) <: Function)
+                    # Symmetric or bidirectional (e.g. Solid-Solid)
+                    if reg_a.name <= reg_b.name
+                        canon_reg_a, canon_reg_b = reg_a, reg_b
+                        flux_function! = f_fwd
+                        c_idx_a, c_face_a = idx_a, face_idx_a
+                        c_idx_b, c_face_b = idx_b, face_idx_b
+                    else
+                        canon_reg_a, canon_reg_b = reg_b, reg_a
+                        flux_function! = f_rev
+                        c_idx_a, c_face_a = idx_b, face_idx_b
+                        c_idx_b, c_face_b = idx_a, face_idx_a
+                    end
+                else
+                    error("Connection map function did not return a function for region pair $(reg_a.name) and $(reg_b.name)")
                 end
             end
+
+            group_key = (canon_reg_a.name, canon_reg_b.name)
+            connection_group_id = findfirst(==(group_key), unique_region_connection_pairs)
+
+            if isnothing(connection_group_id)
+                push!(unique_region_connection_pairs, group_key)
+                push!(connection_groups, ConnectionGroup(
+                    canon_reg_a,
+                    canon_reg_b,
+                    flux_function!,
+                    [(i, Tuple{Int, Int, Int}[]) for i in 1:n_cells]
+                ))
+                connection_group_id = length(connection_groups)
+            end
+
+            push!(connection_groups[connection_group_id].cell_neighbors[c_idx_a][2], (c_idx_b, c_face_a, c_face_b))
         end
     end
+
 
     #remove empty tuples from cell_neighbors
     for CG in connection_groups

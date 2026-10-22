@@ -16,17 +16,27 @@ end
 
 function add_patch!(
     config, name;
+    owner_region = nothing,
     properties = ComponentVector(),
     patch_function,
 )
     cell_ids_and_face_idxs = [cell_id_facet_idx.idx for cell_id_facet_idx in keys(config.grid.facetsets[name].dict)]
     #[(cell_id, face_idx), (cell_id, face_idx), ...]
 
+    if !isnothing(owner_region)
+        owner_region_cell_ids = getcellset(config.grid, owner_region)
+    end
+
     n_cells = length(config.grid.cells)
     
     cell_neighbors = [(cell_id, Vector{Tuple{Int, Int, Int}}()) for cell_id in 1:n_cells]
 
     for (cell_id, face_a) in cell_ids_and_face_idxs
+        if !isnothing(owner_region)
+            if !(cell_id in owner_region_cell_ids)
+                continue
+            end
+        end
         idx_b, face_b = get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_a, config.top)
         if !isnothing(idx_b)
             push!(cell_neighbors[cell_id][2], (idx_b, face_a, face_b))
