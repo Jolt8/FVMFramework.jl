@@ -1,22 +1,22 @@
 #this could probably also be handled by dynamic dispatch for facets, but it helps the user know a different routine is happening
 #this needs to be updated, it currently doesn't work
-function get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_idx, top) #returning the neighbor_face_idx is not really necessary
+function get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_idx, top) #returning the face_b is not really necessary
     neighbor_info = top.face_face_neighbor[cell_id, face_idx]
 
     if !isempty(neighbor_info)
         face_idx_neighbor = first(neighbor_info)
-        neighbor_id = face_idx_neighbor.idx[1]
-        neighbor_face_idx = face_idx_neighbor.idx[2]
+        idx_b = face_idx_neighbor.idx[1]
+        face_b = face_idx_neighbor.idx[2]
     else
         return nothing, nothing
     end
 
-    return neighbor_id, neighbor_face_idx
+    return idx_b, face_b
 end
 
 function add_patch!(
     config, name;
-    properties = nothing,
+    properties = ComponentVector(),
     patch_function,
 )
     cell_ids_and_face_idxs = [cell_id_facet_idx.idx for cell_id_facet_idx in keys(config.grid.facetsets[name].dict)]
@@ -26,13 +26,13 @@ function add_patch!(
     
     cell_neighbors = [(cell_id, Vector{Tuple{Int, Int, Int}}()) for cell_id in 1:n_cells]
 
-    for (cell_id, face_idx_a) in cell_ids_and_face_idxs
-        neighbor_id, neighbor_face_idx = get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_idx_a, config.top)
-        if !isnothing(neighbor_id)
-            push!(cell_neighbors[cell_id][2], (neighbor_id, face_idx_a, face_idx_b))
-            #push!(cell_neighbors[neighbor_id][2], (cell_id, neighbor_face_idx)) #This is not necessary
+    for (cell_id, face_a) in cell_ids_and_face_idxs
+        idx_b, face_b = get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_a, config.top)
+        if !isnothing(idx_b)
+            push!(cell_neighbors[cell_id][2], (idx_b, face_a, face_b))
+            #push!(cell_neighbors[idx_b][2], (cell_id, face_b)) #This is not necessary
         else
-            push!(cell_neighbors[cell_id][2], (0, face_idx_a, 0))
+            push!(cell_neighbors[cell_id][2], (0, face_a, 0))
         end
     end
 
@@ -68,13 +68,13 @@ function update_patch!(config, name)
     
     cell_neighbors = [(cell_id, Vector{Tuple{Int, Int, Int}}()) for cell_id in 1:n_cells]
 
-    for (cell_id, face_idx_a) in cell_ids_and_face_idxs
-        neighbor_id, neighbor_face_idx = get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_idx_a, config.top)
-        if !isnothing(neighbor_id)
-            push!(cell_neighbors[cell_id][2], (neighbor_id, face_idx_a, face_idx_b))
-            #push!(cell_neighbors[neighbor_id][2], (cell_id, neighbor_face_idx)) #This is not necessary
+    for (cell_id, face_a) in cell_ids_and_face_idxs
+        idx_b, face_b = get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_a, config.top)
+        if !isnothing(idx_b)
+            push!(cell_neighbors[cell_id][2], (idx_b, face_a, face_b))
+            #push!(cell_neighbors[idx_b][2], (cell_id, face_b)) #This is not necessary
         else
-            push!(cell_neighbors[cell_id][2], (0, face_idx_a, 0))
+            push!(cell_neighbors[cell_id][2], (0, face_a, 0))
         end
     end
 
