@@ -58,7 +58,8 @@ if compressible_solver_options.use_sst_turbulence == true
 end
 
 Revise.includet(joinpath(@__DIR__, "injector_delivery_train_scripts/injector_delivery_train_scripts.jl"))
-injector_u0 = get_injector_train_u_proto()
+nitrous_oxide_model = PR(["nitrous oxide"])
+injector_u0, injector_properties = get_injector_train_u0_and_properties(nitrous_oxide_model)
 
 u_proto = merge_properties(u_proto, injector_u0)
 
@@ -109,14 +110,14 @@ add_setup_syms!(
             water = u"kg/s",
         ),
         diffusion_coefficients = (
-            nitrous_oxide = u"kg/s",
-            ethylene = u"kg/s",
-            nitrogen = u"kg/s",
-            oxygen = u"kg/s",
-            carbon_dioxide = u"kg/s",
-            carbon_monoxide = u"kg/s",
-            hydrogen = u"kg/s",
-            water = u"kg/s",
+            nitrous_oxide = u"m^2/s",
+            ethylene = u"m^2/s",
+            nitrogen = u"m^2/s",
+            oxygen = u"m^2/s",
+            carbon_dioxide = u"m^2/s",
+            carbon_monoxide = u"m^2/s",
+            hydrogen = u"m^2/s",
+            water = u"m^2/s",
         )
     ),
     special_caches = ComponentVector(
@@ -130,7 +131,7 @@ add_setup_syms!(
         vel_u_face = zeros(n_cells, 6)u"m/s",
         vel_v_face = zeros(n_cells, 6)u"m/s",
         vel_w_face = zeros(n_cells, 6)u"m/s",
-        temperature_face = zeros(n_cells, 6)u"J/m^3",
+        temperature_face = zeros(n_cells, 6)u"K",
 
         grad_turbulent_kinetic_energy = zeros(n_cells, 3)u"m/s^2",
         grad_specific_dissipation_rate = zeros(n_cells, 3)u"1/(m*s)",
@@ -230,6 +231,26 @@ function heat_diffusion!(
 
     du.volumetric_energy[idx_a] -= heat_exchange / volume_a
     du.volumetric_energy[idx_b] += heat_exchange / volume_b
+
+    #=
+    if idx_a == 443
+        @show dist
+        @show face_area_a
+        @show volume_a
+        @show volume_b 
+        @show u.k[idx_a]
+        @show u.k[idx_b]
+        @show k_effective
+        @show u.temperature[idx_b]
+        @show u.temperature[idx_a]
+        @show grad_T
+        @show heat_exchange
+        @show du.volumetric_energy[idx_a]
+        @show du.volumetric_energy[idx_b]
+        @show u.density[idx_a]
+        @show u.cp[idx_a]
+    end
+    =#
 end
 
 function fluid_solid_flux!(
@@ -265,10 +286,11 @@ function connection_map_function(phys_a, phys_b)
     typeof(phys_a) <: Fluid && typeof(phys_b) <: Solid && return fluid_solid_flux!
     typeof(phys_a) <: FuelGrain && typeof(phys_b) <: FuelGrain && return solid_solid_flux!
     typeof(phys_a) <: FuelGrain && typeof(phys_b) <: Solid && return solid_solid_flux!
-    typeof(phys_a) <: FuelGrain && typeof(phys_b) <: Fluid && return no_flux! #this one is special
+    typeof(phys_a) <: Fluid && typeof(phys_b) <: FuelGrain && return no_flux! #this one is special
 end
 
 Revise.includet(joinpath(@__DIR__, "construct_state_from_intuitive_inputs/construct_state_from_intuitive_inputs.jl"))
+Revise.includet(joinpath(@__DIR__, "update_solid_properties/update_solid_properties.jl"))
 
 fluid_initial_conditions, fluid_properties = construct_fluid_initial_conditions_from_intuitive_inputs(compressible_solver_options,
     #TODO: fill out properties of air
@@ -322,6 +344,18 @@ function update_fluid_diffusion_coefficients!(du, u, p, t, system, geo, cell_id)
     end
 end
 
+function add_axisymmetric_inviscid_source!(
+    du, u, p, t, system, geo, cell_id
+)
+    r = geo.cell_centroids[cell_id][1]
+
+    # Radial momentum source for axisymmetric Euler flow without swirl.
+    du.momentum_density_u[cell_id] += u.pressure[cell_id] / r
+    #Note, this must be (p + ρ u_θ² - τ_θθ) / r in the future
+
+    return nothing
+end
+
 add_region!(
     config, "fluid_domain";
     type = Fluid(),
@@ -336,6 +370,7 @@ add_region!(
     region_function = 
     function fluid_physics!(du, u, p, t, system, geo, cell_id)
         cap_navier_stokes_flow!(du, u, p, t, system, geo, cell_id)
+        add_axisymmetric_inviscid_source!(du, u, p, t, system, geo, cell_id)
     end
 )
 
@@ -356,11 +391,11 @@ add_region!(
     properties = fuel_grain_properties,
     property_update_function = 
     function update_fuel_grain_region!(du, u, p, t, system, geo, cell_id)
-        #update_solid_properties!(du, u, p, t, system, geo, cell_id)
+        update_solid_properties!(du, u, p, t, system, geo, cell_id)
     end,
     region_function = 
     function fuel_grain_region!(du, u, p, t, system, geo, cell_id)
-        fuel_grain_regression!(du, u, p, t, system, geo, cell_id)
+        #fuel_grain_regression!(du, u, p, t, system, geo, cell_id)
     end
 )
 
@@ -378,7 +413,9 @@ aluminum_regions = [
     "aluminum_housing_volume",
     "injector_bulkhead_volume",
     "injector_disk_volume",
-    "outer_aluminum_nozzle_casing_volume"
+    "outer_aluminum_nozzle_casing_volume",
+    "flange_fasteners_bottom_volume",
+    "flange_fasteners_top_volume",
 ]
 
 for name in aluminum_regions
@@ -389,7 +426,7 @@ for name in aluminum_regions
         properties = aluminum_properties,
         property_update_function = 
         function update_aluminum_region!(du, u, p, t, system, geo, cell_id)
-            #update_solid_properties!(du, u, p, t, system, geo, cell_id)
+            update_solid_properties!(du, u, p, t, system, geo, cell_id)
         end,
         region_function = 
         function aluminum_region!(du, u, p, t, system, geo, cell_id)
@@ -418,7 +455,7 @@ add_region!(
     properties = graphite_properties,
     property_update_function = 
     function update_graphite_region!(du, u, p, t, system, geo, cell_id)
-        #update_solid_properties!(du, u, p, t, system, geo, cell_id)
+        update_solid_properties!(du, u, p, t, system, geo, cell_id)
     end,
     region_function = 
     function graphite_region!(du, u, p, t, system, geo, cell_id)
@@ -442,7 +479,7 @@ add_region!(
     properties = phenolic_liner_properties,
     property_update_function = 
     function update_phenolic_liner_region!(du, u, p, t, system, geo, cell_id)
-        #update_solid_properties!(du, u, p, t, system, geo, cell_id)
+        update_solid_properties!(du, u, p, t, system, geo, cell_id)
     end,
     region_function = 
     function phenolic_liner_region!(du, u, p, t, system, geo, cell_id)
@@ -468,7 +505,7 @@ for name in ["housing_o_ring_volume", "injector_disk_o_ring_volume"]
         properties = o_ring_properties,
         property_update_function = 
         function update_o_ring_region!(du, u, p, t, system, geo, cell_id)
-            #update_solid_properties!(du, u, p, t, system, geo, cell_id)
+            update_solid_properties!(du, u, p, t, system, geo, cell_id)
         end,
         region_function = 
         function o_ring_region!(du, u, p, t, system, geo, cell_id)
@@ -479,6 +516,7 @@ end
 #Special Interfaces
 add_patch!(
     config, "fuel_wall_patch";
+    owner_region = "fluid_domain",
     patch_function = function fuel_wall_patch_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
@@ -504,12 +542,56 @@ add_patch!(
     end,
 )
 
+supersonic_inlet_initial_conditions, supersonic_inlet_properties = construct_fluid_initial_conditions_from_intuitive_inputs(compressible_solver_options,
+    ComponentVector(
+        vel_u = 0.0u"m/s",
+        vel_v = 0.0u"m/s",
+        vel_w = -600.0u"m/s",
+        density = 1.18u"kg/m^3",
+        temperature = 300.0u"K",
+        cp = 1.005e3u"J/(kg*K)",
+        cv = 718.0u"J/(kg*K)",
+        R_gas = 8.314u"J/(mol*K)",
+        mw = 28.97u"g/mol",
+        mu = 1e-5u"Pa*s",
+        turbulent_kinetic_energy = 54.0u"m^2/s^2",
+        specific_dissipation_rate = 1900.0u"1/s",
+        #k = 0.026u"W/(m*K)",
+        prandtl_number = 0.705,
+        mass_fractions = (
+            nitrous_oxide = 0.0,
+            ethylene = 0.0,
+            nitrogen = 0.781,
+            oxygen = 0.211,
+            carbon_dioxide = 0.0003,
+            carbon_monoxide = 0.0,
+            hydrogen = 0.0,
+            water = 0.0
+        ),
+        diffusion_coefficients_ambient = (
+            nitrous_oxide = 1.4e-5u"m^2/s",
+            ethylene = 1.4e-5u"m^2/s",
+            nitrogen = 1.8e-5u"m^2/s",
+            oxygen = 1.9e-5u"m^2/s",
+            carbon_dioxide = 1.6e-5u"m^2/s",
+            carbon_monoxide = 2.1e-5u"m^2/s",
+            hydrogen = 7.6e-5u"m^2/s",
+            water = 2.4e-5u"m^2/s",
+        ),
+        diffusion_coefficients_ambient_temperature = 21.13u"°C",
+        diffusion_coefficients_ambient_pressure = 1.0u"atm"
+    )
+)
+
+supersonic_inlet_initial_conditions_stripped = ustrip.(upreferred.(supersonic_inlet_initial_conditions))
+
 add_patch!(
     config, "injector_inlet_patch";
     patch_function = function injector_inlet_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b, 
     )
+        #=
         (
             injector_mass_flow, 
             post_injector_temperature, 
@@ -517,13 +599,24 @@ add_patch!(
             post_injector_density,
             post_injector_specific_internal_energy
         ) = update_injector_train!(du, u, p, t, system, geo)
+         =#
         
+        #=
         subsonic_inlet_flux!(
             du, u, p, t, system, geo,
             idx_a, face_a, 
             idx_b, face_b;
             inlet_conditions = inlet_conditions
         )
+            =#
+        
+        supersonic_inlet_flux!(
+            du, u, p, t, system, geo,
+            idx_a, face_a,
+            idx_b, face_b,
+            inlet_conditions = supersonic_inlet_initial_conditions_stripped,
+        )
+        
         #TODO: we need a new subsonic inlet boundary condition function
     end,
 )
@@ -546,7 +639,7 @@ add_patch!(
 
 add_patch!(
     config, "symmetry_patch";
-    patch_function = symmetry_flux!
+    patch_function = no_flux!
 )
 
 ambient_air_properties = ustrip.(upreferred.(ComponentVector(
@@ -566,16 +659,30 @@ function ambient_air_heat_exchange!(
     idx_b, face_b; 
     air = nothing
 )
-    face_area, face_normal, face_distance, vol = boundary_geometry(geo, cell_id, face_idx)
+    face_area, face_normal, face_distance, vol = boundary_geometry(geo, idx_a, face_a)
 
-    thermal_diffusivity = air.thermal_conductivity / (air.density / air.cp)
+    thermal_diffusivity = air.thermal_conductivity / (air.density * air.cp)
 
     characteristic_length = sqrt(face_area)
 
+    #=
+    @show air.gravity
+    @show air.coefficient_of_thermal_expansion
+    @show u.temperature[idx_a]
+    @show air.air_temperature
+    @show characteristic_length
+    @show air.kinematic_viscosity
+    @show thermal_diffusivity
+    =#
+
     rayleigh_number = (
-        ((air.gravity * air.coefficient_of_thermal_expansion * (u.temeperature[idx_a] - air.air_temperature)) * characteristic_length^3) /
+        ((air.gravity * air.coefficient_of_thermal_expansion * (u.temperature[idx_a] - air.air_temperature)) * characteristic_length^3) /
         (air.kinematic_viscosity * thermal_diffusivity)
     )
+
+    if rayleigh_number < 1e-9
+        return nothing
+    end
 
     nusselt_number = (
         0.825 + (0.387 * (rayleigh_number)^(1/6)) /
@@ -584,7 +691,7 @@ function ambient_air_heat_exchange!(
 
     convection_coefficient = nusselt_number * air.thermal_conductivity / characteristic_length
 
-    du.volumetric_energy[idx_a] -= (convection_coefficient * face_area * (u.temeperature[idx_a] - air.air_temperature)) / vol
+    du.volumetric_energy[idx_a] -= (convection_coefficient * face_area * (u.temperature[idx_a] - air.air_temperature)) / vol
 
     #NOTE: this does not currently account for Radiation, but I don't think the alunimum would get hot enough for it to matter
 end
@@ -610,6 +717,7 @@ for name in [
     )
 end
 
+wls_stencil = build_weighted_least_squares_stencil(config.geo)
 sst_wall_distances = create_sst_wall_distances(grid, config.geo, 
     [
         "fuel_wall_patch",
@@ -618,7 +726,8 @@ sst_wall_distances = create_sst_wall_distances(grid, config.geo,
         "fluid_domain_to_injector_disk_interface",
         "fluid_domain_to_inner_graphite_nozzle_interface",
         "fluid_domain_to_outer_aluminum_nozzle_casing_interface",
-        "fluid_domain_to_phenolic_liner_interface"
+        "fluid_domain_to_phenolic_liner_interface",
+        "flange_fasteners_bottom_to_fluid_domain_interface"
     ]
 )
 
@@ -628,17 +737,19 @@ injector_u0, injector_properties = get_injector_train_u0_and_properties(nitrous_
 
 valve_opening = 1.0
 
-getfacetset(grid, "injector_inlet_patch")
+post_injector_cell_ids = [face.idx[1] for face in getfacetset(grid, "injector_inlet_patch")]
 
 additional_data = (
     #Navier stokes data
     compressible_solver_options = compressible_solver_options,
+    wls_stencil = wls_stencil,
     sst_wall_distances = sst_wall_distances,
     
     #Injector train properties
     injector_train_properties = injector_properties,
     valve_opening = valve_opening,
-    nitrous_oxide_model = nitrous_oxide_model
+    nitrous_oxide_model = nitrous_oxide_model,
+    post_injector_cell_ids = post_injector_cell_ids
 )
 
 du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, additional_data, check_units = false);
@@ -658,6 +769,25 @@ function solve_system!(du, u, p, t, system, geo)
     solve_connection_groups!(du, u, p, t, system, geo)
     solve_patch_groups!(du, u, p, t, system, geo)
     solve_region_groups!(du, u, p, t, system, geo)
+
+    #=
+    @show findall(isnan, du.density)
+    @show findall(isnan, u.density)
+    @show findall(isnan, u.volumetric_energy)
+    @show findall(isnan, du.volumetric_energy)
+    @show findall(isnan, u.momentum_density_u)
+    @show findall(isnan, du.momentum_density_u)
+    @show findall(isnan, u.momentum_density_v)
+    @show findall(isnan, du.momentum_density_v)
+    @show findall(isnan, u.momentum_density_w)
+    @show findall(isnan, du.momentum_density_w)
+    @show findall(isnan, u.turbulent_kinetic_energy_density)
+    @show findall(isnan, du.turbulent_kinetic_energy_density)
+    @show findall(isnan, u.specific_dissipation_rate_density)
+    @show findall(isnan, du.specific_dissipation_rate_density)
+    @show findall(isnan, u.species_densities[1:end])
+    @show u.tank
+    @show u.mid_section=#
 end
 
 f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
@@ -698,3 +828,19 @@ state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
     callback = callbacks,
     isoutofdomain = state_is_invalid_closure,
 )
+
+desired_shown_steps = 250
+save_fraction = desired_shown_steps / length(startup_sol.t)
+
+reduced_sol = (
+    u = [[startup_sol.u[i] for i in 1:(Int(ceil(1/save_fraction))):length(startup_sol.u)]..., startup_sol.u[end]],
+    t = [startup_sol.t[1:(Int(ceil(1/save_fraction))):length(startup_sol.t)]..., startup_sol.t[end]]
+)
+
+du_named, u_named = regenerate_fvm_state(reduced_sol, system, solve_system!, geo, p_guess, save_properties_and_caches = true, track_progress = true);
+
+add_xyz_vec_to_u_named!(u_named, :velocity, :vel_u, :vel_v, :vel_w)
+
+root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
+
+sol_to_vtk(reduced_sol, du_named, u_named, grid, geo, @__FILE__, root_dir, include_zeros_fields = false, track_progress = true)
