@@ -66,7 +66,6 @@ function construct_solid_initial_conditions_from_intuitive_inputs(u)
     - density
     - temperature
     - cp
-    - cv
     - k 
     """
     u = upreferred.(u)
@@ -76,7 +75,7 @@ function construct_solid_initial_conditions_from_intuitive_inputs(u)
         momentum_density_u = 0.0,
         momentum_density_v = 0.0,
         momentum_density_w = 0.0,
-        volumetric_energy = u.density * u.cv * u.temperature,
+        volumetric_energy = u.density * u.cp * u.temperature,
     )
 
     properties_comp_vec = ComponentVector(
