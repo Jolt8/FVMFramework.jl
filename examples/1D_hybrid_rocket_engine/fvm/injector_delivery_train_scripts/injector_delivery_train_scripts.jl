@@ -124,13 +124,7 @@ function injector_valve_flow(du, u, p, t, system, geo)
     chamber_pressure = sum([u.pressure[cell_id] for cell_id in post_injector_cell_ids]) / length(post_injector_cell_ids)
 
     if props.mid_section.pressure - chamber_pressure <= 0
-        return ComponentVector(
-            mass_flow = 0.0,
-            mid_section_temperature = props.mid_section.temperature,
-            mid_section_pressure = props.mid_section.pressure,
-            mid_section_density = props.mid_section.density,
-            mid_section_specific_internal_energy = props.mid_section.specific_internal_energy,
-        )
+        return 0.0
     end
 
     volumetric_flow = p.injector_discharge_coefficient * p.injector_orifice_area * sqrt((2 * (props.mid_section.pressure - chamber_pressure)) / props.mid_section.density)
@@ -150,18 +144,18 @@ function update_injector_train!(du, u, p, t, system, geo)
     #Tank
     du.tank.mass = -tank_to_mid_section_mass_flow
 
-    du_tank_internal_energy = tank_to_mid_section_mass_flow * props.tank.enthalpy
-    du.tank.temperature = (du_tank_internal_energy - props.tank.internal_energy * tank_to_mid_section_mass_flow) / (props.tank.mass * props.tank.cv)
+    #du_tank_internal_energy = tank_to_mid_section_mass_flow * props.tank.specific_enthalpy
+    #du.tank.temperature = (du_tank_internal_energy - props.tank.specific_internal_energy * tank_to_mid_section_mass_flow) / (u.tank.mass * props.tank.cv)
 
     #Mid Section
     du.mid_section.mass = tank_to_mid_section_mass_flow - injector_mass_flow
 
-    du_mid_section_internal_energy = tank_to_mid_section_mass_flow * props.tank.enthalpy - injector_mass_flow * props.mid_section.enthalpy
-    du.mid_section.temperature = (du_mid_section_internal_energy - props.mid_section.internal_energy * (tank_to_mid_section_mass_flow - injector_mass_flow)) / (props.mid_section.mass * props.mid_section.cv)
+    #du_mid_section_internal_energy = tank_to_mid_section_mass_flow * props.tank.specific_enthalpy - injector_mass_flow * props.mid_section.specific_enthalpy
+    #du.mid_section.temperature = (du_mid_section_internal_energy - props.mid_section.specific_internal_energy * (tank_to_mid_section_mass_flow - injector_mass_flow)) / (u.mid_section.mass * props.mid_section.cv)
 
     return ComponentVector(
         mass_flow = tank_to_mid_section_mass_flow,
-        mid_section_temperature = props.mid_section.temperature,
+        mid_section_temperature = u.mid_section.temperature,
         mid_section_pressure = props.mid_section.pressure,
         mid_section_density = props.mid_section.density,
         mid_section_specific_internal_energy = props.mid_section.specific_internal_energy,
