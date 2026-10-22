@@ -146,18 +146,18 @@ function add_conservative_species_diffusion_flux!(
             u.density[idx_b],
             u_mass_fractions[species[idx_a]],
             u_mass_fractions[species[idx_b]],
-            diffusion_coefficients[species[idx_a]],
-            diffusion_coefficients[species[idx_b]],
+            u_diffusion_coefficients[species[idx_a]],
+            u_diffusion_coefficients[species[idx_b]],
             area,
             distance,
         )
 
-        face_mass_fraction = 0.5 * (mass_fractions[species[idx_a]] + mass_fractions[species[idx_b]])
+        face_mass_fraction = 0.5 * (u_mass_fractions[species[idx_a]] + u_mass_fractions[species[idx_b]])
 
         corrected_flux = uncorrected_flux - face_mass_fraction * uncorrected_flux_sum
 
-        species_density_flow[species[idx_a]] -= corrected_flux
-        species_density_flow[species[idx_b]] += corrected_flux
+        u_species_density_flow[species[idx_a]] -= corrected_flux
+        u_species_density_flow[species[idx_b]] += corrected_flux
     end
     return nothing
 end

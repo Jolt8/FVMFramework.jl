@@ -213,7 +213,7 @@ function SLAU2!(
     face_reconstructor!,
 )
     (
-        distance,
+        dist,
         face_area_a, face_normal_a, face_distance_a, volume_a,
         face_area_b, face_normal_b, face_distance_b, volume_b,
     ) = interface_geometry(geo, idx_a, face_a, idx_b, face_b)

@@ -169,7 +169,7 @@ function fluid_fluid_flux!(
 
     fluid_viscous_and_diffusive_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     (
-        distance,
+        dist,
         face_area_a, face_normal_a, face_distance_a, volume_a,
         face_area_b, face_normal_b, face_distance_b, volume_b,
     ) = interface_geometry(geo, idx_a, face_a, idx_b, face_b)
@@ -180,7 +180,7 @@ function fluid_fluid_flux!(
         idx_a,
         idx_b,
         face_area_a,
-        distance,
+        dist,
     )
     add_sst_diffusion_flux!(
         du,
@@ -189,7 +189,7 @@ function fluid_fluid_flux!(
         idx_b,
         face_area_a,
         face_normal_a,
-        distance,
+        dist,
     )
 end
 

@@ -45,7 +45,7 @@ struct FVMSystem
     properties_axes::Tuple
     p_vec::Vector{Float64}
     p_axes::Tuple
-    data::NamedTuple
+    additional_data::NamedTuple
 end
 
 function Base.getproperty(sys::FVMSystem, sym::Symbol)
@@ -117,6 +117,14 @@ function finish_fvm_config(config, connection_map_function, additional_data; che
             #region_a && region_b == some function
             #region_b && region_a == some other function
             flux_function! = connection_map_function(cell_region_phys_map[idx_a], cell_region_phys_map[idx_b])
+
+            if !(typeof(flux_function!) <: Function)
+                flux_function! = connection_map_function(cell_region_phys_map[idx_b], cell_region_phys_map[idx_a])
+            end
+
+            if !(typeof(flux_function!) <: Function)
+                error("Connection map function did not return a function for region pair $(region_a.name) and $(region_b.name)")
+            end
 
             connection_group_id = findfirst(item -> item == (region_a.name, region_b.name), unique_region_connection_pairs)
 
