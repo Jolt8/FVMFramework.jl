@@ -153,12 +153,15 @@ function update_injector_train!(du, u, p, t, system, geo)
     #du_mid_section_internal_energy = tank_to_mid_section_mass_flow * props.tank.specific_enthalpy - injector_mass_flow * props.mid_section.specific_enthalpy
     #du.mid_section.temperature = (du_mid_section_internal_energy - props.mid_section.specific_internal_energy * (tank_to_mid_section_mass_flow - injector_mass_flow)) / (u.mid_section.mass * props.mid_section.cv)
 
+    injector_velocity = injector_mass_flow / (props.mid_section.density * props.injector_orifice_area)
+
     return ComponentVector(
         mass_flow = tank_to_mid_section_mass_flow,
         mid_section_temperature = u.mid_section.temperature,
         mid_section_pressure = props.mid_section.pressure,
         mid_section_density = props.mid_section.density,
         mid_section_specific_internal_energy = props.mid_section.specific_internal_energy,
+        injector_velocity = injector_velocity,
     )
 end
 

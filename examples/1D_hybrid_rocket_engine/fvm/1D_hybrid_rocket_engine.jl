@@ -591,31 +591,34 @@ add_patch!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b, 
     )
+        
         #=
         (
             injector_mass_flow, 
             post_injector_temperature, 
             post_injector_pressure,
             post_injector_density,
-            post_injector_specific_internal_energy
-        ) = update_injector_train!(du, u, p, t, system, geo)
-         =#
+            post_injector_specific_internal_energy,
+            injector_velocity,
+        )
+        =#
+        inlet_conditions = update_injector_train!(du, u, p, t, system, geo)
         
-        #=
         subsonic_inlet_flux!(
             du, u, p, t, system, geo,
             idx_a, face_a, 
             idx_b, face_b;
             inlet_conditions = inlet_conditions
         )
-            =#
         
+        #=
         supersonic_inlet_flux!(
             du, u, p, t, system, geo,
             idx_a, face_a,
             idx_b, face_b,
             inlet_conditions = supersonic_inlet_initial_conditions_stripped,
         )
+            =#
         
         #TODO: we need a new subsonic inlet boundary condition function
     end,
