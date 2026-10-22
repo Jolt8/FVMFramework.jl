@@ -45,9 +45,18 @@ function write_to_vtk_helper!(vtk, named_step, n_cells, geo; prev_field = "", pr
                 vector_data = fill(SVector{3, Float64}(0.0, 0.0, 0.0), n_cells)
                 
                 for cell_id in 1:n_cells
-                    for face_idx in 1:size(data, 2)
+
+                    data_length = 0
+
+                    if size(data, 2) == 3
+                        data_length = 3
+                    else
+                        data_length = geo.cell_n_faces[cell_id]
+                    end
+
+                    for face_idx in 1:data_length
                         # Use the absolute face normal to find the nearest axis
-                        normal = geo.cell_face_normals[cell_id][face_idx]
+                        normal = geo.cell_face_normals[cell_id, face_idx]
                         nx, ny, nz = normal[1], normal[2], normal[3]
                         abs_nx, abs_ny, abs_nz = abs(nx), abs(ny), abs(nz)
                         
