@@ -48,7 +48,7 @@ Special meshing instructions
         - Call them 'out_of_plane_patch'
 
     - For the plane that's
-        - Facing upwards ()
+        - Has a face normal that's parallel to the z axis 
         - Closest to the center z axis
         - Has a node that's on the center z axis
 

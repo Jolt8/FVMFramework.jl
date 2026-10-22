@@ -47,7 +47,6 @@
 
 ## Non-Special Wall Patches
 - aluminum_housing_wall_patch
-- fluid_domain_wall_patch
 - injector_bulkhead_wall_patch
 - injector_disk_wall_patch
 - outer_aluminum_nozzle_casing_wall_patch

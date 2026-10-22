@@ -331,8 +331,11 @@ special_wall_patches = set()
 non_special_wall_patches = set()
 
 # Pre-identify injector_inlet_patch:
-# Facing upwards (+Z normal) at the highest Z coordinate of the model, closest to the center Z axis
-top_inlet_candidates = []
+# - Has a face normal that's parallel to the z axis (abs(norm[2]) > 0.8)
+# - Closest to the center z axis (minimum X distance)
+# - Has a node that's on the center z axis (abs(bb[0]) < 1e-3)
+# - Higher than the bottom of the fuel grain (so it is not the outlet_patch at Z = -35 mm)
+inlet_candidates = []
 for dim, s_tag in all_surfs_3d:
     up, _ = gmsh.model.getAdjacencies(dim, s_tag)
     if len(up) == 1:
@@ -340,14 +343,15 @@ for dim, s_tag in all_surfs_3d:
         u_mid = 0.5 * (bounds[0][0] + bounds[0][1])
         v_mid = 0.5 * (bounds[1][0] + bounds[1][1])
         norm = gmsh.model.getNormal(s_tag, [u_mid, v_mid])
-        if abs(norm[1]) < 0.5 and norm[2] > 0.8:
+        if abs(norm[1]) < 0.5 and abs(norm[2]) > 0.8:
             bb = gmsh.model.getBoundingBox(dim, s_tag)
-            top_inlet_candidates.append((s_tag, bb))
+            # Must have a node on the center Z axis (X_min ~ 0) and be above fuel grain bottom (not the nozzle outlet)
+            if abs(bb[0]) < 1e-3 and bb[2] >= 50.0:
+                inlet_candidates.append((s_tag, bb))
 
-if top_inlet_candidates:
-    max_z_val = max(cand[1][5] for cand in top_inlet_candidates)
-    at_top = [cand for cand in top_inlet_candidates if abs(cand[1][5] - max_z_val) < 1.0]
-    injector_inlet_tag = min(at_top, key=lambda cand: cand[1][0])[0]
+if inlet_candidates:
+    # Closest to center Z axis: pick candidate with smallest radial extent (min X_max)
+    injector_inlet_tag = min(inlet_candidates, key=lambda cand: cand[1][3])[0]
 else:
     injector_inlet_tag = None
 
