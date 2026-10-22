@@ -84,12 +84,44 @@ compound_obj = doc.addObject("Part::Compound", "CFD_Compound")
 compound_obj.Links = solid_bodies
 doc.recompute()
 
+# Detect fuel grain bounds on the clipping plane to partition the fluid port box [0, R_in] x [Z_min, Z_max]
+fg_bodies = [b for b in solid_bodies if "fuel_grain" in b.Label]
+if fg_bodies:
+    fg_body = fg_bodies[0]
+    fg_common = clipping_face.Shape.common(fg_body.Shape)
+    fg_r_in = fg_common.BoundBox.XMin
+    fg_z_min = fg_common.BoundBox.ZMin
+    fg_z_max = fg_common.BoundBox.ZMax
+    print(f"\nFuel grain bore region detected: R_inner={fg_r_in:.2f} mm, Z=[{fg_z_min:.2f}, {fg_z_max:.2f}] mm")
+    
+    # Create 3D solid tool to partition the fluid port region [0, fg_r_in] x [-10, 10] x [fg_z_min, fg_z_max]
+    V = App.Vector
+    port_poly = Part.makePolygon([
+        V(0, 0, fg_z_min),
+        V(fg_r_in, 0, fg_z_min),
+        V(fg_r_in, 0, fg_z_max),
+        V(0, 0, fg_z_max),
+        V(0, 0, fg_z_min)
+    ])
+    port_face = Part.Face(port_poly)
+    port_solid = port_face.extrude(V(0, 20.0, 0))
+    port_solid.translate(V(0, -10.0, 0))
+    port_tool = doc.addObject("Part::Feature", "CFD_PortSolidTool")
+    port_tool.Shape = port_solid
+    
+    slice_compound = doc.addObject("Part::Compound", "CFD_SliceToolsCompound")
+    slice_compound.Links = [compound_obj, port_tool]
+    doc.recompute()
+    tools_for_slice = [slice_compound]
+else:
+    tools_for_slice = [compound_obj]
+
 # ---------------------------------------------------------------------------
 # #slice the compound using the plane created from the sketch and this new compound
 # ---------------------------------------------------------------------------
 slice_obj = BOPTools.SplitFeatures.makeSlice(name="CFD_Slice")
 slice_obj.Base = clipping_face
-slice_obj.Tools = [compound_obj]
+slice_obj.Tools = tools_for_slice
 slice_obj.Mode = "Split"
 doc.recompute()
 print(f"\nSliced compound with clipping plane: {len(slice_obj.Shape.Faces)} 2D faces produced.")
@@ -246,6 +278,24 @@ print("\n" + "=" * 80)
 print("DEFINING PHYSICAL VOLUMES & SURFACES")
 print("=" * 80)
 
+# Pre-identify fuel grain and fluid port box
+v_grain = [v_tag for v_dim, v_tag in gmsh.model.getEntities(3) if vol_to_part.get(v_tag) == "fuel_grain"][0]
+bb_grain = gmsh.model.getBoundingBox(3, v_grain)
+L_axial = bb_grain[5] - bb_grain[2]
+L_radial_grain = bb_grain[3] - bb_grain[0]
+r_inner_grain = bb_grain[0]
+
+v_port = None
+for v_dim, v_tag in gmsh.model.getEntities(3):
+    if vol_to_part.get(v_tag) == "fluid_domain":
+        bb = gmsh.model.getBoundingBox(3, v_tag)
+        if abs(bb[0]) < 1e-3 and abs(bb[3] - r_inner_grain) < 1.0 and abs(bb[2] - bb_grain[2]) < 1.0 and abs(bb[5] - bb_grain[5]) < 1.0:
+            v_port = v_tag
+            break
+
+bb_port = gmsh.model.getBoundingBox(3, v_port) if v_port else None
+L_radial_port = (bb_port[3] - bb_port[0]) if bb_port else r_inner_grain
+
 # General Rules:
 #     - For all volumes: Call them '{part_name}_volume'
 #     - Special Rule: Call the fluid domain 'fluid_domain'
@@ -262,6 +312,11 @@ for v_dim, v_tag in gmsh.model.getEntities(3):
         v_group_name = f"{pname}_volume"
         non_special_volumes.add(v_group_name)
     volumes_by_name.setdefault(v_group_name, []).append(v_tag)
+
+# Special Rule: Add dedicated 'fluid_port' physical volume containing only the port box
+if v_port is not None:
+    volumes_by_name["fluid_port"] = [v_port]
+    special_volumes.add("fluid_port")
 
 for vname, vtags in sorted(volumes_by_name.items()):
     phys_vtag = gmsh.model.addPhysicalGroup(3, vtags, name=vname)
@@ -393,87 +448,87 @@ for sname, stags in sorted(surface_groups.items()):
 #     - The phenolic liner is meshed regularly (no transfinite volume).
 # ---------------------------------------------------------------------------
 print("\n" + "=" * 80)
-print("CONFIGURING STRUCTURED TRANSFINITE MESHING (FUEL GRAIN)")
+print("CONFIGURING STRUCTURED TRANSFINITE MESHING (FUEL GRAIN & FLUID PORT)")
 print("=" * 80)
-
-# Dynamically locate fuel grain volume and determine its dimensions from CAD bounding box
-v_grain = [v_tag for v_dim, v_tag in gmsh.model.getEntities(3) if vol_to_part.get(v_tag) == "fuel_grain"][0]
-bb_grain = gmsh.model.getBoundingBox(3, v_grain)
-
-L_axial = bb_grain[5] - bb_grain[2]   # Z length from bounding box
-L_radial = bb_grain[3] - bb_grain[0]  # X radial thickness from bounding box
 
 print(f"  * Dynamically queried Fuel Grain dimensions:")
 print(f"      - Axial Length:     {L_axial:.2f} mm")
-print(f"      - Radial Thickness: {L_radial:.2f} mm")
+print(f"      - Radial Thickness: {L_radial_grain:.2f} mm (Fuel Grain) [Volume {v_grain}]")
+if v_port:
+    print(f"      - Radial Thickness: {L_radial_port:.2f} mm (Fluid Port) [Volume {v_port}]")
 
-# Query bounding surfaces and curves of the fuel grain
-surfs_grain = gmsh.model.getAdjacencies(3, v_grain)[1]
-grain_curves = set()
-for s_tag in surfs_grain:
-    grain_curves.update(gmsh.model.getAdjacencies(2, s_tag)[1])
+# Helper function to classify curves of a structured box volume
+def classify_box_curves(v_tag, L_ax):
+    surfs = gmsh.model.getAdjacencies(3, v_tag)[1]
+    curves = set()
+    for s_tag in surfs:
+        curves.update(gmsh.model.getAdjacencies(2, s_tag)[1])
+    ax_c, rad_c, th_c = [], [], []
+    for c_tag in curves:
+        bb = gmsh.model.getBoundingBox(1, c_tag)
+        dx = bb[3] - bb[0]
+        dy = bb[4] - bb[1]
+        dz = bb[5] - bb[2]
+        if abs(dz) > 0.8 * L_ax:
+            ax_c.append(c_tag)
+        elif abs(dy - 1.0) < 1e-3 and abs(dz) < 1e-3 and abs(dx) < 1e-3:
+            th_c.append(c_tag)
+        else:
+            rad_c.append(c_tag)
+    return surfs, ax_c, rad_c, th_c
 
-# Classify curves of fuel grain dynamically based on orientation
-axial_curves = []
-radial_curves = []
-thickness_curves = []
-
-for c_tag in grain_curves:
-    bb = gmsh.model.getBoundingBox(1, c_tag)
-    dx = bb[3] - bb[0]
-    dy = bb[4] - bb[1]
-    dz = bb[5] - bb[2]
-    length = (dx**2 + dy**2 + dz**2)**0.5
-    
-    # Axial curve aligned with rocket axis (Z):
-    if abs(dz) > 0.8 * L_axial:
-        axial_curves.append(c_tag)
-    # Extrusion thickness curve along Y:
-    elif abs(dy - 1.0) < 1e-3 and abs(dz) < 1e-3 and abs(dx) < 1e-3:
-        thickness_curves.append(c_tag)
-    # Cross-sectional radial curve:
-    else:
-        radial_curves.append(c_tag)
+surfs_grain, ax_curves_grain, rad_curves_grain, th_curves_grain = classify_box_curves(v_grain, L_axial)
+if v_port:
+    surfs_port, ax_curves_port, rad_curves_port, th_curves_port = classify_box_curves(v_port, L_axial)
+else:
+    surfs_port, ax_curves_port, rad_curves_port, th_curves_port = [], [], [], []
 
 # Perform 1D discretization pass to sample Gmsh's nominal element size based on GMSH_OPTIONS
 gmsh.model.mesh.generate(1)
-sampled_nodes = gmsh.model.mesh.getNodes(1, axial_curves[0])[0]
+sampled_nodes = gmsh.model.mesh.getNodes(1, ax_curves_grain[0])[0]
 num_elems_axial = max(1, len(sampled_nodes) - 1)
 h_mesh = L_axial / num_elems_axial
-num_elems_radial = max(1, int(round(L_radial / h_mesh)))
+num_elems_radial_grain = max(1, int(round(L_radial_grain / h_mesh)))
+num_elems_radial_port = max(1, int(round(L_radial_port / h_mesh)))
 
 N_THICKNESS = 2                  # 1 cell layer across 1.0 mm extrusion thickness (Y-axis)
-N_AXIAL_FUEL_GRAIN = num_elems_axial + 1
-N_RADIAL_FUEL_GRAIN = num_elems_radial + 1
+N_AXIAL = num_elems_axial + 1
+N_RADIAL_GRAIN = num_elems_radial_grain + 1
+N_RADIAL_PORT = num_elems_radial_port + 1
 
 print(f"  * Sampled Gmsh nominal element size h: {h_mesh:.2f} mm")
-print(f"  * Dynamically scaled N_AXIAL_FUEL_GRAIN:  {N_AXIAL_FUEL_GRAIN} nodes ({num_elems_axial} elements)")
-print(f"  * Dynamically scaled N_RADIAL_FUEL_GRAIN: {N_RADIAL_FUEL_GRAIN} nodes ({num_elems_radial} elements)")
+print(f"  * Dynamically scaled N_AXIAL:        {N_AXIAL} nodes ({num_elems_axial} elements)")
+print(f"  * Dynamically scaled N_RADIAL_GRAIN: {N_RADIAL_GRAIN} nodes ({num_elems_radial_grain} elements)")
+if v_port:
+    print(f"  * Dynamically scaled N_RADIAL_PORT:  {N_RADIAL_PORT} nodes ({num_elems_radial_port} elements)")
 
-# 1. Apply Transfinite Curve constraints ONLY to fuel grain edges
-for c_tag in thickness_curves:
-    gmsh.model.mesh.setTransfiniteCurve(c_tag, N_THICKNESS)
-for c_tag in axial_curves:
-    gmsh.model.mesh.setTransfiniteCurve(c_tag, N_AXIAL_FUEL_GRAIN)
-for c_tag in radial_curves:
-    gmsh.model.mesh.setTransfiniteCurve(c_tag, N_RADIAL_FUEL_GRAIN)
-
-# 2. Configure 2D surfaces and 3D volume of fuel grain as Transfinite
-# If Mesh.RecombineAll is enabled, recombine into pure Hexahedra.
-# If Mesh.RecombineAll is disabled (0), generate pure structured Tetrahedra to prevent mixed-element issues in FVMFramework.
 recombine_mesh = bool(GMSH_OPTIONS.get("Mesh.RecombineAll", 0))
 
-for s_tag in surfs_grain:
+# 1. Apply Transfinite Curve constraints
+for c_tag in set(th_curves_grain + th_curves_port):
+    gmsh.model.mesh.setTransfiniteCurve(c_tag, N_THICKNESS)
+for c_tag in set(ax_curves_grain + ax_curves_port):
+    gmsh.model.mesh.setTransfiniteCurve(c_tag, N_AXIAL)
+for c_tag in rad_curves_grain:
+    gmsh.model.mesh.setTransfiniteCurve(c_tag, N_RADIAL_GRAIN)
+for c_tag in rad_curves_port:
+    gmsh.model.mesh.setTransfiniteCurve(c_tag, N_RADIAL_PORT)
+
+# 2. Configure 2D surfaces and 3D volume of fuel grain and fluid port as Transfinite
+for s_tag in set(list(surfs_grain) + list(surfs_port)):
     gmsh.model.mesh.setTransfiniteSurface(s_tag)
     if recombine_mesh:
         gmsh.model.mesh.setRecombine(2, s_tag)
 
-gmsh.model.mesh.setTransfiniteVolume(v_grain)
-if recombine_mesh:
-    gmsh.model.mesh.setRecombine(3, v_grain)
-    print(f"  * Configured Transfinite Volume & Surfaces on 'fuel_grain' (Hexahedra) (Volume {v_grain})")
-else:
-    print(f"  * Configured Transfinite Volume & Surfaces on 'fuel_grain' (Tetrahedra) (Volume {v_grain})")
+for v_target, v_label in [(v_grain, "fuel_grain"), (v_port, "fluid_port")]:
+    if v_target is None:
+        continue
+    gmsh.model.mesh.setTransfiniteVolume(v_target)
+    if recombine_mesh:
+        gmsh.model.mesh.setRecombine(3, v_target)
+        print(f"  * Configured Transfinite Volume & Surfaces on '{v_label}' (Hexahedra) (Volume {v_target})")
+    else:
+        print(f"  * Configured Transfinite Volume & Surfaces on '{v_label}' (Tetrahedra) (Volume {v_target})")
 
 # ---------------------------------------------------------------------------
 # GENERATE MESH & COHERENCE MESH

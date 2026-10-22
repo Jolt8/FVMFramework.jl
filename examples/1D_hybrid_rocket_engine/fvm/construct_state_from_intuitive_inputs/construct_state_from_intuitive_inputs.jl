@@ -1,5 +1,6 @@
 
-function construct_fluid_initial_conditions_from_intuitive_inputs(u)
+function construct_fluid_initial_conditions_from_intuitive_inputs(compressible_solver_options, u)
+    u = upreferred.(u)
     momentum_density_u = u.density * u.vel_u
     momentum_density_v = u.density * u.vel_v
     momentum_density_w = u.density * u.vel_w
@@ -13,8 +14,14 @@ function construct_fluid_initial_conditions_from_intuitive_inputs(u)
     specific_dissipation_rate_density =
         u.density * u.specific_dissipation_rate
     species_densities = ComponentVector(
-        species_a = u.density * u.mass_fractions.species_a,
-        species_b = u.density * u.mass_fractions.species_b,
+        nitrous_oxide = u.density * u.mass_fractions.nitrous_oxide,
+        ethylene = u.density * u.mass_fractions.ethylene,
+        nitrogen = u.density * u.mass_fractions.nitrogen,
+        oxygen = u.density * u.mass_fractions.oxygen,
+        carbon_dioxide = u.density * u.mass_fractions.carbon_dioxide,
+        carbon_monoxide = u.density * u.mass_fractions.carbon_monoxide,
+        hydrogen = u.density * u.mass_fractions.hydrogen,
+        water = u.density * u.mass_fractions.water,
     )
     
     properties_comp_vec = ComponentVector(
@@ -25,11 +32,13 @@ function construct_fluid_initial_conditions_from_intuitive_inputs(u)
         mu = u.mu, 
         molecular_viscosity = u.mu,
         prandtl_number = u.prandtl_number,
-        diffusion_coefficients = u.diffusion_coefficients,
+        diffusion_coefficients_ambient = u.diffusion_coefficients_ambient,
+        diffusion_coefficients_ambient_temperature = u.diffusion_coefficients_ambient_temperature,
+        diffusion_coefficients_ambient_pressure = u.diffusion_coefficients_ambient_pressure
     )
 
-    if system.compressible_solver_options.use_sst_turbulence == true
-        return ComponentVector(
+    if compressible_solver_options.use_sst_turbulence == true
+        return ustrip.(upreferred.(ComponentVector(
             density = u.density,
             momentum_density_u = momentum_density_u,
             momentum_density_v = momentum_density_v,
@@ -38,16 +47,16 @@ function construct_fluid_initial_conditions_from_intuitive_inputs(u)
             turbulent_kinetic_energy_density = turbulent_kinetic_energy_density,
             specific_dissipation_rate_density = specific_dissipation_rate_density,
             species_densities = species_densities,
-        ), properties_comp_vec
+        ))), ustrip.(upreferred.(properties_comp_vec))
     else
-        return ComponentVector(
+        return ustrip.(upreferred.(ComponentVector(
             density = u.density,
             momentum_density_u = momentum_density_u,
             momentum_density_v = momentum_density_v,
             momentum_density_w = momentum_density_w,
             volumetric_energy = volumetric_energy,
             species_densities = species_densities,
-        ), properties_comp_vec
+        ))), ustrip.(upreferred.(properties_comp_vec))
     end
 end
 
@@ -56,9 +65,12 @@ function construct_solid_initial_conditions_from_intuitive_inputs(u)
     Requires:
     - density
     - temperature
-    - cv
     - cp
+    - cv
+    - k 
     """
+    u = upreferred.(u)
+    
     state_comp_vec = ComponentVector(
         density = u.density,
         momentum_density_u = 0.0,
@@ -69,8 +81,8 @@ function construct_solid_initial_conditions_from_intuitive_inputs(u)
 
     properties_comp_vec = ComponentVector(
         cp = u.cp,
-        cv = u.cv
+        k = u.k
     )
 
-    return state_comp_vec, properties_comp_vec
+    return ustrip.(upreferred.(state_comp_vec)), ustrip.(upreferred.(properties_comp_vec))
 end

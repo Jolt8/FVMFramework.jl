@@ -1,5 +1,5 @@
 
-function no_slip_adiabatic_wall_flux!(du, u, p, t, system, geo, cell_id, face_id; adiabatic)
+function no_slip_adiabatic_wall_flux!(du, u, p, t, system, geo, cell_id, face_id)
     face_area, face_normal, face_distance, vol = boundary_geometry(geo, cell_id, face_id)
 
     vel_u, vel_v, vel_w, pressure, speed_of_sound = primitive_from_conservative(

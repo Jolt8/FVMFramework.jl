@@ -17,7 +17,7 @@ using FVMFramework
 using Clapeyron
 
 mesh_path = joinpath(@__DIR__, "meshes/hybrid_rocket_cfd_3d.msh")
-grid = togrid(mesh_path)
+#grid = togrid(mesh_path)
 
 num_hex = count(c -> isa(c, Hexahedron), grid.cells)
 num_wedges = count(c -> isa(c, Wedge), grid.cells)
@@ -28,6 +28,7 @@ n_cells = length(grid.cells)
 
 compressible_solver_options = (
     use_sst_turbulence = true,
+    use_muscl_reconstruction = false,
 )
 
 u_proto = ComponentVector(
@@ -56,11 +57,14 @@ if compressible_solver_options.use_sst_turbulence == true
     ))
 end
 
+Revise.includet(joinpath(@__DIR__, "injector_delivery_train_scripts/injector_delivery_train_scripts.jl"))
+injector_u0 = get_injector_train_u_proto()
+
+u_proto = merge_properties(u_proto, injector_u0)
+
 config = create_fvm_config(grid, u_proto);
 
 Revise.includet(joinpath(@__DIR__, "geometry_editing/geometry_editing.jl"))
-
-config.geo.cell_neighbor_normals[6, 1]
 
 config.geo = correct_hybrid_geo(config.geo, grid)
 
@@ -85,25 +89,35 @@ add_setup_syms!(
         #specific_internal_energy = u"J/kg", #not cached right now, just a property
 
         mass_fractions = (
-            nitrous_oxide = zeros(n_cells)u"kg/kg",
-            ethylene = zeros(n_cells)u"kg/kg",
-            nitrogen = zeros(n_cells)u"kg/kg",
-            oxygen = zeros(n_cells)u"kg/kg",
-            carbon_dioxide = zeros(n_cells)u"kg/kg",
-            carbon_monoxide = zeros(n_cells)u"kg/kg",
-            hydrogen = zeros(n_cells)u"kg/kg",
-            water = zeros(n_cells)u"kg/kg",
+            nitrous_oxide = u"kg/kg",
+            ethylene = u"kg/kg",
+            nitrogen = u"kg/kg",
+            oxygen = u"kg/kg",
+            carbon_dioxide = u"kg/kg",
+            carbon_monoxide = u"kg/kg",
+            hydrogen = u"kg/kg",
+            water = u"kg/kg",
         ),
         species_density_flow = (
-            nitrous_oxide = zeros(n_cells)u"kg/s",
-            ethylene = zeros(n_cells)u"kg/s",
-            nitrogen = zeros(n_cells)u"kg/s",
-            oxygen = zeros(n_cells)u"kg/s",
-            carbon_dioxide = zeros(n_cells)u"kg/s",
-            carbon_monoxide = zeros(n_cells)u"kg/s",
-            hydrogen = zeros(n_cells)u"kg/s",
-            water = zeros(n_cells)u"kg/s",
+            nitrous_oxide = u"kg/s",
+            ethylene = u"kg/s",
+            nitrogen = u"kg/s",
+            oxygen = u"kg/s",
+            carbon_dioxide = u"kg/s",
+            carbon_monoxide = u"kg/s",
+            hydrogen = u"kg/s",
+            water = u"kg/s",
         ),
+        diffusion_coefficients = (
+            nitrous_oxide = u"kg/s",
+            ethylene = u"kg/s",
+            nitrogen = u"kg/s",
+            oxygen = u"kg/s",
+            carbon_dioxide = u"kg/s",
+            carbon_monoxide = u"kg/s",
+            hydrogen = u"kg/s",
+            water = u"kg/s",
+        )
     ),
     special_caches = ComponentVector(
         grad_density = zeros(n_cells, 3)u"kg/m^4",
@@ -148,10 +162,11 @@ if compressible_solver_options.use_sst_turbulence == true
     ))
 end
 
-path_to_navier_stokes_files = joinpath("..", "LLM_developed_CFD/navier_stokes_testing_grounds")
+path_to_navier_stokes_files = joinpath("..", "..", "LLM_developed_CFD/navier_stokes_testing_grounds")
 
 Revise.includet(joinpath(path_to_navier_stokes_files, "face_reconstructors/first_order_face_reconstruction.jl"))
 Revise.includet(joinpath(path_to_navier_stokes_files, "turbulence/sst_k_omega.jl"))
+Revise.includet(joinpath(path_to_navier_stokes_files, "turbulence/sst_k_omega_helper_functions.jl"))
 
 Revise.includet(joinpath(path_to_navier_stokes_files, "boundary_flux_helpers/boundary_flux_helpers.jl")) # Boundary flux helpers (`physical_flux` and `primitive_from_conservative`).
 Revise.includet(joinpath(path_to_navier_stokes_files, "boundary_conditions/boundary_condition_exports.jl")) # Boundary Conditions
@@ -170,54 +185,6 @@ Revise.includet(joinpath(path_to_navier_stokes_files, "navier_stokes_fluid_prope
 
 Revise.includet(joinpath(path_to_navier_stokes_files, "sum_and_cap_functions/cap_functions.jl"))
 
-"""
-# Mesh Physical Groups Summary
-
-## Special Volumes
-- fluid_domain
-
-## Non-Special Volumes
-- aluminum_housing_volume
-- fuel_grain_volume
-- injector_bulkhead_volume
-- injector_disk_volume
-- inner_graphite_nozzle_volume
-- outer_aluminum_nozzle_casing_volume
-- phenolic_liner_volume
-
-## Special Interfaces
-- fuel_wall_patch
-
-## Non-Special Interfaces
-- aluminum_housing_to_injector_bulkhead_interface
-- aluminum_housing_to_inner_graphite_nozzle_interface
-- aluminum_housing_to_outer_aluminum_nozzle_casing_interface
-- aluminum_housing_to_phenolic_liner_interface
-- fluid_domain_to_injector_bulkhead_interface
-- fluid_domain_to_injector_disk_interface
-- fluid_domain_to_inner_graphite_nozzle_interface
-- fluid_domain_to_outer_aluminum_nozzle_casing_interface
-- fluid_domain_to_phenolic_liner_interface
-- fuel_grain_to_phenolic_liner_interface
-- injector_bulkhead_to_injector_disk_interface
-- injector_bulkhead_to_phenolic_liner_interface
-- inner_graphite_nozzle_to_outer_aluminum_nozzle_casing_interface
-- inner_graphite_nozzle_to_phenolic_liner_interface
-
-## Special Wall Patches
-- far_field_patch
-- out_of_plane_patch
-- outlet_patch
-- symmetry_patch
-
-## Non-Special Wall Patches
-- aluminum_housing_wall_patch
-- fluid_domain_wall_patch
-- injector_bulkhead_wall_patch
-- injector_disk_wall_patch
-- outer_aluminum_nozzle_casing_wall_patch
-"""
-
 struct Fluid <: AbstractPhysics end
 struct Solid <: AbstractPhysics end
 struct FuelGrain <: AbstractPhysics end
@@ -228,7 +195,7 @@ function fluid_fluid_flux!(
     idx_b, face_b,
 )
     (
-        distance,
+        dist,
         face_area_a, face_normal_a, face_distance_a, volume_a,
         face_area_b, face_normal_b, face_distance_b, volume_b,
     ) = interface_geometry(geo, idx_a, face_a, idx_b, face_b)
@@ -250,14 +217,14 @@ function heat_diffusion!(
     idx_b, face_b
 )
     (
-        distance,
+        dist,
         face_area_a, face_normal_a, face_distance_a, volume_a,
         face_area_b, face_normal_b, face_distance_b, volume_b,
     ) = interface_geometry(geo, idx_a, face_a, idx_b, face_b)
 
     k_effective = 2 * u.k[idx_a] * u.k[idx_b] / (u.k[idx_a] + u.k[idx_b])
 
-    grad_T = (u.temp[idx_b] - u.temp[idx_a]) / distance
+    grad_T = (u.temperature[idx_b] - u.temperature[idx_a]) / dist
 
     heat_exchange = -k_effective * grad_T * face_area_a
 
@@ -303,7 +270,7 @@ end
 
 Revise.includet(joinpath(@__DIR__, "construct_state_from_intuitive_inputs/construct_state_from_intuitive_inputs.jl"))
 
-fluid_initial_conditions, fluid_properties = construct_initial_conditions_from_intuitive_inputs(
+fluid_initial_conditions, fluid_properties = construct_fluid_initial_conditions_from_intuitive_inputs(compressible_solver_options,
     #TODO: fill out properties of air
     ComponentVector(
         vel_u = 0.0u"m/s",
@@ -330,9 +297,30 @@ fluid_initial_conditions, fluid_properties = construct_initial_conditions_from_i
             carbon_monoxide = 0.0,
             hydrogen = 0.0,
             water = 0.0
-        )
+        ),
+        diffusion_coefficients_ambient = (
+            nitrous_oxide = 1.4e-5u"m^2/s",
+            ethylene = 1.4e-5u"m^2/s",
+            nitrogen = 1.8e-5u"m^2/s",
+            oxygen = 1.9e-5u"m^2/s",
+            carbon_dioxide = 1.6e-5u"m^2/s",
+            carbon_monoxide = 2.1e-5u"m^2/s",
+            hydrogen = 7.6e-5u"m^2/s",
+            water = 2.4e-5u"m^2/s",
+        ),
+        diffusion_coefficients_ambient_temperature = 21.13u"°C",
+        diffusion_coefficients_ambient_pressure = 1.0u"atm"
     )
 )
+
+function update_fluid_diffusion_coefficients!(du, u, p, t, system, geo, cell_id)
+    for_fields!(u.diffusion_coefficients_ambient, u.diffusion_coefficients) do species, u_diffusion_coefficients_ambient, u_diffusion_coefficients
+        u_diffusion_coefficients[species[cell_id]] = u_diffusion_coefficients_ambient[species[cell_id]] * (
+            u.temperature[cell_id] / u.diffusion_coefficients_ambient_temperature[cell_id]) ^ 1.8 * 
+            (u.diffusion_coefficients_ambient_pressure[cell_id] / u.pressure[cell_id]
+        )
+    end
+end
 
 add_region!(
     config, "fluid_domain";
@@ -343,6 +331,7 @@ add_region!(
     function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
         update_k_from_prandtl!(du, u, p, t, system, geo, cell_id)
         overall_navier_stokes_property_update!(du, u, p, t, system, geo, cell_id)
+        update_fluid_diffusion_coefficients!(du, u, p, t, system, geo, cell_id)
     end,
     region_function = 
     function fluid_physics!(du, u, p, t, system, geo, cell_id)
@@ -350,12 +339,12 @@ add_region!(
     end
 )
 
-
 fuel_grain_initial_conditions, fuel_grain_properties = construct_solid_initial_conditions_from_intuitive_inputs(
     ComponentVector(
         density = 950.0u"kg/m^3",
         temperature = 21.13u"°C",
         cp = 2000.0u"J/(kg*K)",
+        cv = 1500.0u"J/(kg*K)",
         k = 0.45u"W/(m*K)"
     )
 )
@@ -367,7 +356,7 @@ add_region!(
     properties = fuel_grain_properties,
     property_update_function = 
     function update_fuel_grain_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
+        #update_solid_properties!(du, u, p, t, system, geo, cell_id)
     end,
     region_function = 
     function fuel_grain_region!(du, u, p, t, system, geo, cell_id)
@@ -380,6 +369,7 @@ aluminum_initial_conditions, aluminum_properties = construct_solid_initial_condi
         density = 2700.0u"kg/m^3",
         temperature = 21.13u"°C",
         cp = 900.0u"J/(kg*K)",
+        cv = 880.0u"J/(kg*K)",
         k = 237.0u"W/(m*K)"
     )
 )
@@ -399,7 +389,7 @@ for name in aluminum_regions
         properties = aluminum_properties,
         property_update_function = 
         function update_aluminum_region!(du, u, p, t, system, geo, cell_id)
-            update_solid_properties!(du, u, p, t, system, geo, cell_id)
+            #update_solid_properties!(du, u, p, t, system, geo, cell_id)
         end,
         region_function = 
         function aluminum_region!(du, u, p, t, system, geo, cell_id)
@@ -412,13 +402,15 @@ graphite_initial_conditions, graphite_properties = construct_solid_initial_condi
         density = 1760.0u"kg/m^3",
         temperature = 21.13u"°C",
         cp = 710.0u"J/(kg*K)",
+        cv = 700.0u"J/(kg*K)",
         k = 130.0u"W/(m*K)"
     )
 )
 
 #NOTE: I'm making an assumption here
 #since we're using extruded graphite, the thermal conductivity in the axial and radial directions are different
-#I'm feeling lazy so I'm not going to model it and just go off of the thermal conductivity that the manufactuerers provided directly
+#I'm feeling lazy so I'm not going to model it and just go off of the thermal conductivity that the manufactuerers provided directly 130.0 [W/(m*K)]
+#The radial thermal conductivity is usually around 50-57 [W/(m*K)]
 add_region!(
     config, "inner_graphite_nozzle_volume";
     type = Solid(), 
@@ -426,7 +418,7 @@ add_region!(
     properties = graphite_properties,
     property_update_function = 
     function update_graphite_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
+        #update_solid_properties!(du, u, p, t, system, geo, cell_id)
     end,
     region_function = 
     function graphite_region!(du, u, p, t, system, geo, cell_id)
@@ -438,6 +430,7 @@ phenolic_liner_initial_conditions, phenolic_liner_properties = construct_solid_i
         density = 1250.0u"kg/m^3",
         temperature = 21.13u"°C",
         cp = 1400.0u"J/(kg*K)",
+        cv = 1350.0u"J/(kg*K)",
         k = 0.25u"W/(m*K)"
     )
 )
@@ -449,12 +442,39 @@ add_region!(
     properties = phenolic_liner_properties,
     property_update_function = 
     function update_phenolic_liner_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
+        #update_solid_properties!(du, u, p, t, system, geo, cell_id)
     end,
     region_function = 
     function phenolic_liner_region!(du, u, p, t, system, geo, cell_id)
     end
 )
+
+#TODO: these properties are not particularly accurate, but it doesn't really matter
+o_ring_initial_conditions, o_ring_properties = construct_solid_initial_conditions_from_intuitive_inputs(
+    ComponentVector(
+        density = 1000.0u"kg/m^3",
+        temperature = 21.13u"°C",
+        cp = 1400.0u"J/(kg*K)",
+        cv = 1830.0u"J/(kg*K)",
+        k = 0.15u"W/(m*K)"
+    )
+)
+
+for name in ["housing_o_ring_volume", "injector_disk_o_ring_volume"]
+    add_region!(
+        config, name;
+        type = Solid(),
+        initial_conditions = o_ring_initial_conditions,
+        properties = o_ring_properties,
+        property_update_function = 
+        function update_o_ring_region!(du, u, p, t, system, geo, cell_id)
+            #update_solid_properties!(du, u, p, t, system, geo, cell_id)
+        end,
+        region_function = 
+        function o_ring_region!(du, u, p, t, system, geo, cell_id)
+        end
+    )
+end
 
 #Special Interfaces
 add_patch!(
@@ -484,44 +504,20 @@ add_patch!(
     end,
 )
 
-#TODO: basically reimplement the nitrous oxide injection logic from the earlier design script 
-#bro, this is going to be so difficult, oh well...
-inlet_conditions = construct_inlet_conditions_from_intuitive_inputs(
-    ComponentVector(
-        vel_u = 0.0u"m/s",
-        vel_v = 0.0u"m/s",
-        vel_w = -50.0u"m/s", #we're going to have this vary with time
-        density = 1.225u"kg/m^3", #this is pretty hard to determine
-        temperature = 21.13u"°C", #also hard to determine
-        cp = 1.005e3u"J/(kg*K)",
-        cv = 718.0u"J/(kg*K)",
-        R_gas = 8.314u"J/(mol*K)",
-        mw = 28.97u"g/mol",
-        mu = 1e-5u"Pa*s",
-        turbulent_kinetic_energy = 0.1u"m^2/s^2",
-        specific_dissipation_rate = 100.0u"1/s",
-        #k = 0.026u"W/(m*K)",
-        prandtl_number = 0.705,
-
-        mass_fractions = (
-            nitrous_oxide = 0.0,
-            ethylene = 0.0,
-            nitrogen = 0.781,
-            oxygen = 0.211,
-            carbon_dioxide = 0.0003,
-            carbon_monoxide = 0.0,
-            hydrogen = 0.0,
-            water = 0.0
-        )
-    )
-)
-
 add_patch!(
     config, "injector_inlet_patch";
     patch_function = function injector_inlet_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b, 
     )
+        (
+            injector_mass_flow, 
+            post_injector_temperature, 
+            post_injector_pressure,
+            post_injector_density,
+            post_injector_specific_internal_energy
+        ) = update_injector_train!(du, u, p, t, system, geo)
+        
         subsonic_inlet_flux!(
             du, u, p, t, system, geo,
             idx_a, face_a, 
@@ -545,7 +541,7 @@ add_patch!(
 
 add_patch!(
     config, "outlet_patch";
-    patch_function = supersonic_outlet_flux! #I think this is appropriate here
+    patch_function = supersonic_outlet_flux! #I think this is appropriate here, someone please correct me if I'm wrong
 )
 
 add_patch!(
@@ -553,18 +549,48 @@ add_patch!(
     patch_function = symmetry_flux!
 )
 
+ambient_air_properties = ustrip.(upreferred.(ComponentVector(
+    gravity = 9.81u"m/s^2",
+    coefficient_of_thermal_expansion  = 3.41e-3u"1/K",
+    air_temperature = 21.13u"°C",
+    thermal_conductivity = 0.024u"W/(m*K)",
+    density = 1.29u"kg/m^3",
+    cp = 1006.0u"J/(kg*K)",
+    kinematic_viscosity = 1.506e-5u"m^2/s",
+    prandtl_number = 0.707
+)))
+
 function ambient_air_heat_exchange!(
     du, u, p, t, system, geo, 
     idx_a, face_a, 
     idx_b, face_b; 
-    ambient_conditions = fluid_initial_conditions
+    air = nothing
 )
-    #this is going to be more complex since we should probably use a heat_transfer_coefficient based method so this is somewhat accurate
+    face_area, face_normal, face_distance, vol = boundary_geometry(geo, cell_id, face_idx)
+
+    thermal_diffusivity = air.thermal_conductivity / (air.density / air.cp)
+
+    characteristic_length = sqrt(face_area)
+
+    rayleigh_number = (
+        ((air.gravity * air.coefficient_of_thermal_expansion * (u.temeperature[idx_a] - air.air_temperature)) * characteristic_length^3) /
+        (air.kinematic_viscosity * thermal_diffusivity)
+    )
+
+    nusselt_number = (
+        0.825 + (0.387 * (rayleigh_number)^(1/6)) /
+        (1 + (0.492 / air.prandtl_number)^(9/16))^(8/27)
+    )^2
+
+    convection_coefficient = nusselt_number * air.thermal_conductivity / characteristic_length
+
+    du.volumetric_energy[idx_a] -= (convection_coefficient * face_area * (u.temeperature[idx_a] - air.air_temperature)) / vol
+
+    #NOTE: this does not currently account for Radiation, but I don't think the alunimum would get hot enough for it to matter
 end
 
 for name in [
     "aluminum_housing_wall_patch",
-    "fluid_domain_wall_patch",
     "injector_bulkhead_wall_patch",
     "injector_disk_wall_patch",
     "outer_aluminum_nozzle_casing_wall_patch"
@@ -578,8 +604,97 @@ for name in [
             ambient_air_heat_exchange!(
                 du, u, p, t, system, geo,
                 idx_a, face_a, idx_b, face_b;
-                ambient_conditions = fluid_initial_conditions
+                air = ambient_air_properties
             )
         end
     )
 end
+
+sst_wall_distances = create_sst_wall_distances(grid, config.geo, 
+    [
+        "fuel_wall_patch",
+
+        "fluid_domain_to_injector_bulkhead_interface",
+        "fluid_domain_to_injector_disk_interface",
+        "fluid_domain_to_inner_graphite_nozzle_interface",
+        "fluid_domain_to_outer_aluminum_nozzle_casing_interface",
+        "fluid_domain_to_phenolic_liner_interface"
+    ]
+)
+
+nitrous_oxide_model = PR(["nitrous oxide"])
+
+injector_u0, injector_properties = get_injector_train_u0_and_properties(nitrous_oxide_model)
+
+valve_opening = 1.0
+
+getfacetset(grid, "injector_inlet_patch")
+
+additional_data = (
+    #Navier stokes data
+    compressible_solver_options = compressible_solver_options,
+    sst_wall_distances = sst_wall_distances,
+    
+    #Injector train properties
+    injector_train_properties = injector_properties,
+    valve_opening = valve_opening,
+    nitrous_oxide_model = nitrous_oxide_model
+)
+
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, additional_data, check_units = false);
+
+u_named = ComponentVector(u0_vec, system.state_axes);
+
+function solve_system!(du, u, p, t, system, geo)
+    update_region_groups!(du, u, p, t, system, geo)
+
+    #update_weighted_least_squares_gradients!(u, system.wls_stencil)
+    
+    if system.compressible_solver_options.use_sst_turbulence == true
+        update_sst_closure!(u, system.sst_wall_distances)
+    end
+    
+    #update_MUSCL_gradients!(u, wls_stencil)
+    solve_connection_groups!(du, u, p, t, system, geo)
+    solve_patch_groups!(du, u, p, t, system, geo)
+    solve_region_groups!(du, u, p, t, system, geo)
+end
+
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
+
+p_guess = 0.0
+
+detector = SparseConnectivityTracer.TracerLocalSparsityDetector()
+
+jac_sparsity = ADTypes.jacobian_sparsity(
+    (du, u) -> f_closure_implicit(du, u, p_guess, 0.0), du0_vec, u0_vec, detector
+)
+
+t0 = 0.0
+switch_time = 0.002
+tMax = 0.019
+
+ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
+startup_prob = ODEProblem(ode_func, u0_vec, (t0, switch_time), p_guess)
+
+callbacks = CallbackSet(
+    approximate_time_to_finish_cb,
+    #increase_dtmax_cb,
+)
+
+Revise.includet(joinpath(@__DIR__, "state_is_invalid/state_is_invalid.jl"))
+
+state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
+
+@time startup_sol = solve(
+    startup_prob,
+    Tsit5(),
+    #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
+    #FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()),
+    #AutoTsit5(FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff())),
+    #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoFiniteDiff()),
+    #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
+    #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
+    callback = callbacks,
+    isoutofdomain = state_is_invalid_closure,
+)

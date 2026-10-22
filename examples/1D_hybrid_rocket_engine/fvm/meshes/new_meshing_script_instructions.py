@@ -36,10 +36,10 @@ Extrude {0, -1.0, 0} {
 
 """
 Rules for meshing:
-    - Call the fluid domain 'fluid_domain'
+    - Call the main fluid domain 'fluid_domain'
 
 Special meshing instructions
-    - For the fuel grain and phenolic liner, do some resarch into how to use Transfinite Curves, Surfaces, and Volumes to 
+    - For the fuel grain and fluid_domain adjacent to the fuel_grain, do some resarch into how to use Transfinite Curves, Surfaces, and Volumes to 
     create a fully structured mesh for these rectancular primsm sections
 
     - For Planes that:
@@ -48,8 +48,10 @@ Special meshing instructions
         - Call them 'out_of_plane_patch'
 
     - For the plane that's
-        - Facing upwards at the highest z coordinate of the model
+        - Facing upwards ()
         - Closest to the center z axis
+        - Has a node that's on the center z axis
+
 
         - Call it the injector_inlet_patch
 

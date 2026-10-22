@@ -2,11 +2,14 @@
 
 ## Special Volumes
 - fluid_domain
+- fluid_port
 
 ## Non-Special Volumes
 - aluminum_housing_volume
 - fuel_grain_volume
+- housing_o_ring_volume
 - injector_bulkhead_volume
+- injector_disk_o_ring_volume
 - injector_disk_volume
 - inner_graphite_nozzle_volume
 - outer_aluminum_nozzle_casing_volume
@@ -16,6 +19,7 @@
 - fuel_wall_patch
 
 ## Non-Special Interfaces
+- aluminum_housing_to_housing_o_ring_interface
 - aluminum_housing_to_injector_bulkhead_interface
 - aluminum_housing_to_inner_graphite_nozzle_interface
 - aluminum_housing_to_outer_aluminum_nozzle_casing_interface
@@ -26,8 +30,11 @@
 - fluid_domain_to_outer_aluminum_nozzle_casing_interface
 - fluid_domain_to_phenolic_liner_interface
 - fuel_grain_to_phenolic_liner_interface
+- housing_o_ring_to_injector_bulkhead_interface
 - injector_bulkhead_to_injector_disk_interface
+- injector_bulkhead_to_injector_disk_o_ring_interface
 - injector_bulkhead_to_phenolic_liner_interface
+- injector_disk_to_injector_disk_o_ring_interface
 - inner_graphite_nozzle_to_outer_aluminum_nozzle_casing_interface
 - inner_graphite_nozzle_to_phenolic_liner_interface
 
