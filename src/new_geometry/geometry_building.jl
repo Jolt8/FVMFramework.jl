@@ -32,6 +32,7 @@ struct FVMGeometry{T, CoordType}
     cell_face_areas::CellFaceVector{T, Vector{T}}
     cell_face_normals::CellFaceVector{CoordType, Vector{CoordType}}
     cell_face_distances::CellFaceVector{T, Vector{T}}
+    cell_face_centroids::CellFaceVector{CoordType, Vector{CoordType}}
 end
 
 """
@@ -111,6 +112,7 @@ function generate_fvm_geometry(
         cell_face_layout_zeros(T, cell_face_layout),
         cell_face_layout_zeros(CoordType, cell_face_layout),
         cell_face_layout_zeros(T, cell_face_layout),
+        cell_face_layout_zeros(CoordType, cell_face_layout),
     )
 
     return geo
@@ -178,8 +180,7 @@ function _face_geometry(node_coordinates, face_node_ids, cell_centroid)
     for face_node_idx in 2:(length(face_node_ids) - 1)
         point_b = node_coordinates[face_node_ids[face_node_idx]]
         point_c = node_coordinates[face_node_ids[face_node_idx + 1]]
-        triangle_area_vector =
-            _cross_product(point_b - point_a, point_c - point_a) / 2
+        triangle_area_vector = _cross_product(point_b - point_a, point_c - point_a) / 2
         triangle_area = norm(triangle_area_vector)
 
         area_vector += triangle_area_vector
@@ -200,7 +201,7 @@ function _face_geometry(node_coordinates, face_node_ids, cell_centroid)
     face_normal = normalize(clean_normal)
     face_distance = abs(dot(distance_to_face, face_normal))
 
-    return face_area, face_normal, face_distance
+    return face_area, face_normal, face_distance, face_centroid
 end
 
 """
@@ -225,7 +226,7 @@ function update_fvm_geometry!(geo::FVMGeometry, node_coordinates)
         for face_idx in 1:geo.cell_n_faces[cell_id]
             packed_face_id = geo.cell_face_layout[cell_id, face_idx]
             face_node_ids = geo.cell_faces_node_ids[packed_face_id]
-            face_area, face_normal, face_distance = _face_geometry(
+            face_area, face_normal, face_distance, face_centroid = _face_geometry(
                 node_coordinates,
                 face_node_ids,
                 geo.cell_centroids[cell_id],
@@ -234,6 +235,7 @@ function update_fvm_geometry!(geo::FVMGeometry, node_coordinates)
             geo.cell_face_areas[cell_id, face_idx] = face_area
             geo.cell_face_normals[cell_id, face_idx] = face_normal
             geo.cell_face_distances[cell_id, face_idx] = face_distance
+            geo.cell_face_centroids[cell_id, face_idx] = face_centroid
         end
     end
 
