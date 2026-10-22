@@ -17,7 +17,7 @@ using FVMFramework
 using Clapeyron
 
 mesh_path = joinpath(@__DIR__, "meshes/hybrid_rocket_cfd_3d.msh")
-#grid = togrid(mesh_path)
+grid = togrid(mesh_path)
 
 num_hex = count(c -> isa(c, Hexahedron), grid.cells)
 num_wedges = count(c -> isa(c, Wedge), grid.cells)
@@ -286,7 +286,7 @@ function connection_map_function(phys_a, phys_b)
     typeof(phys_a) <: Fluid && typeof(phys_b) <: Solid && return fluid_solid_flux!
     typeof(phys_a) <: FuelGrain && typeof(phys_b) <: FuelGrain && return solid_solid_flux!
     typeof(phys_a) <: FuelGrain && typeof(phys_b) <: Solid && return solid_solid_flux!
-    typeof(phys_a) <: Fluid && typeof(phys_b) <: FuelGrain && return no_flux! #this one is special
+    typeof(phys_a) <: Fluid && typeof(phys_b) <: FuelGrain && return fluid_solid_flux! #this one is special
 end
 
 Revise.includet(joinpath(@__DIR__, "construct_state_from_intuitive_inputs/construct_state_from_intuitive_inputs.jl"))
@@ -637,7 +637,16 @@ add_patch!(
 
 add_patch!(
     config, "outlet_patch";
-    patch_function = supersonic_outlet_flux! #I think this is appropriate here, someone please correct me if I'm wrong
+    patch_function = function outlet_patch_flux!(
+        du, u, p, t, system, geo,
+        idx_a, face_a, idx_b, face_b, 
+    )
+        characteristic_farfield_flux!(
+            du, u, p, t, system, geo, 
+            idx_a, face_a, idx_b, face_b, 
+            farfield_conditions = fluid_initial_conditions
+        )
+    end
 )
 
 add_patch!(
@@ -804,8 +813,8 @@ jac_sparsity = ADTypes.jacobian_sparsity(
 )
 
 t0 = 0.0
-switch_time = 0.002
-tMax = 0.019
+switch_time = 0.006
+tMax = 10.0
 
 ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
 startup_prob = ODEProblem(ode_func, u0_vec, (t0, switch_time), p_guess)
@@ -832,12 +841,32 @@ state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
     isoutofdomain = state_is_invalid_closure,
 )
 
+steady_prob = remake(startup_prob; u0 = startup_sol.u[end], tspan = (switch_time, tMax))
+
+@time steady_sol = solve(
+    steady_prob,
+    #FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
+    #FBDF(linsolve = KrylovJL_GMRES()),
+    #Tsit5(),
+    #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
+    FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()),
+    #AutoTsit5(FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff())),
+    #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoFiniteDiff()),
+    #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
+    #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
+    callback = callbacks,
+    isoutofdomain = state_is_invalid_closure,
+)
+
+sol_combined = (u = startup_sol.u, t = startup_sol.t)
+#sol_combined = (u = [startup_sol.u..., steady_sol.u...], t = [startup_sol.t..., steady_sol.t...])
+
 desired_shown_steps = 250
-save_fraction = desired_shown_steps / length(startup_sol.t)
+save_fraction = desired_shown_steps / length(sol_combined.t)
 
 reduced_sol = (
-    u = [[startup_sol.u[i] for i in 1:(Int(ceil(1/save_fraction))):length(startup_sol.u)]..., startup_sol.u[end]],
-    t = [startup_sol.t[1:(Int(ceil(1/save_fraction))):length(startup_sol.t)]..., startup_sol.t[end]]
+    u = [[sol_combined.u[i] for i in 1:(Int(ceil(1/save_fraction))):length(sol_combined.u)]..., sol_combined.u[end]],
+    t = [sol_combined.t[1:(Int(ceil(1/save_fraction))):length(sol_combined.t)]..., sol_combined.t[end]]
 )
 
 du_named, u_named = regenerate_fvm_state(reduced_sol, system, solve_system!, geo, p_guess, save_properties_and_caches = true, track_progress = true);
