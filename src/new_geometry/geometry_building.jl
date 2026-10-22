@@ -267,5 +267,6 @@ Construct and populate both halves of the new geometry representation. Returns
 function build_fvm_geo_into_struct(grid, top)
     node_coordinates = get_node_coordinates(grid)
     geo = generate_fvm_geometry(grid, top; node_coordinates)
+    update_fvm_geometry!(geo, node_coordinates)
     return geo
 end
