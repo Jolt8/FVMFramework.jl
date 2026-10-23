@@ -16,6 +16,7 @@ using StaticArrays
 using FVMFramework
 using Clapeyron
 using PreallocationTools
+using DataInterpolations
 
 mesh_path = joinpath(@__DIR__, "meshes/hybrid_rocket_cfd_3d.msh")
 grid = togrid(mesh_path)
@@ -518,6 +519,27 @@ for name in ["housing_o_ring_volume", "injector_disk_o_ring_volume"]
     )
 end
 
+dominant_fuel_grain_cells, 
+fuel_grain_subsidiary_cell_ids_to_dominant_cell_id_map,
+fuel_grain_dominant_cell_id_to_subsidiaries_map,
+fluid_domain_subsidiary_cell_ids_to_dominant_cell_id_map,
+fluid_domain_dominant_cell_id_to_subsidiaries_map = 
+    get_dominant_fuel_grain_cells_and_subsidiaries(grid, config.geo)
+
+precompute_fuel_grain_regression_geometry_interpolations(
+    grid, geo,
+    dominant_fuel_grain_cells, 
+    fuel_grain_subsidiary_cell_ids_to_dominant_cell_id_map,
+    fuel_grain_dominant_cell_id_to_subsidiaries_map,
+    fluid_domain_subsidiary_cell_ids_to_dominant_cell_id_map,
+    fluid_domain_dominant_cell_id_to_subsidiaries_map
+)
+
+    
+
+    
+    
+#=
 #Special Interfaces
 add_patch!(
     config, "fuel_wall_patch";
@@ -595,8 +617,7 @@ add_patch!(
     patch_function = function injector_inlet_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b, 
-    )
-        
+    )  
         #=
         (
             injector_mass_flow, 
