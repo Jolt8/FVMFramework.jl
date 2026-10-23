@@ -15,6 +15,7 @@ using LinearAlgebra
 using StaticArrays
 using FVMFramework
 using Clapeyron
+using PreallocationTools
 
 mesh_path = joinpath(@__DIR__, "meshes/hybrid_rocket_cfd_3d.msh")
 grid = togrid(mesh_path)
@@ -57,6 +58,8 @@ if compressible_solver_options.use_sst_turbulence == true
     ))
 end
 
+
+Revise.includet(joinpath(@__DIR__, "..", "design_scripts/overloads/clapeyron_tracer_overloads.jl"))
 Revise.includet(joinpath(@__DIR__, "injector_delivery_train_scripts/injector_delivery_train_scripts.jl"))
 nitrous_oxide_model = PR(["nitrous oxide"])
 injector_u0, injector_properties = get_injector_train_u0_and_properties(nitrous_oxide_model)
@@ -171,6 +174,7 @@ Revise.includet(joinpath(path_to_navier_stokes_files, "turbulence/sst_k_omega_he
 
 Revise.includet(joinpath(path_to_navier_stokes_files, "boundary_flux_helpers/boundary_flux_helpers.jl")) # Boundary flux helpers (`physical_flux` and `primitive_from_conservative`).
 Revise.includet(joinpath(path_to_navier_stokes_files, "boundary_conditions/boundary_condition_exports.jl")) # Boundary Conditions
+Revise.includet(joinpath(@__DIR__, "boundary_condition_functions/subsonic_inlet_flux.jl"))
 
 Revise.includet(joinpath(path_to_navier_stokes_files, "riemann_solvers/HLLC_low_mach_correction.jl"))
 Revise.includet(joinpath(path_to_navier_stokes_files, "riemann_solvers/HLLC.jl"))
@@ -286,7 +290,8 @@ function connection_map_function(phys_a, phys_b)
     typeof(phys_a) <: Fluid && typeof(phys_b) <: Solid && return fluid_solid_flux!
     typeof(phys_a) <: FuelGrain && typeof(phys_b) <: FuelGrain && return solid_solid_flux!
     typeof(phys_a) <: FuelGrain && typeof(phys_b) <: Solid && return solid_solid_flux!
-    typeof(phys_a) <: Fluid && typeof(phys_b) <: FuelGrain && return fluid_solid_flux! #this one is special
+    typeof(phys_a) <: Fluid && typeof(phys_b) <: FuelGrain && return no_flux!
+    #fluid_solid_flux! #this one is special
 end
 
 Revise.includet(joinpath(@__DIR__, "construct_state_from_intuitive_inputs/construct_state_from_intuitive_inputs.jl"))
@@ -604,12 +609,14 @@ add_patch!(
         =#
         inlet_conditions = update_injector_train!(du, u, p, t, system, geo)
         
+        #=
         subsonic_inlet_flux!(
             du, u, p, t, system, geo,
             idx_a, face_a, 
             idx_b, face_b;
             inlet_conditions = inlet_conditions
         )
+            =#
         
         #=
         supersonic_inlet_flux!(
@@ -747,6 +754,10 @@ nitrous_oxide_model = PR(["nitrous oxide"])
 
 injector_u0, injector_properties = get_injector_train_u0_and_properties(nitrous_oxide_model)
 
+injector_train_properties_vec = Vector(deepcopy(injector_properties))
+injector_train_properties_cache = DiffCache(deepcopy(injector_train_properties_vec))
+injector_train_properties_axes = getaxes(injector_properties)
+
 valve_opening = 1.0
 
 post_injector_cell_ids = [face.idx[1] for face in getfacetset(grid, "injector_inlet_patch")]
@@ -758,7 +769,9 @@ additional_data = (
     sst_wall_distances = sst_wall_distances,
     
     #Injector train properties
-    injector_train_properties = injector_properties,
+    injector_train_properties_vec = injector_train_properties_vec,
+    injector_train_properties_cache = injector_train_properties_cache,
+    injector_train_properties_axes = injector_train_properties_axes,
     valve_opening = valve_opening,
     nitrous_oxide_model = nitrous_oxide_model,
     post_injector_cell_ids = post_injector_cell_ids
@@ -806,6 +819,10 @@ f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, so
 
 p_guess = 0.0
 
+Revise.includet(joinpath(@__DIR__, "state_is_invalid/state_is_invalid.jl"))
+
+state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
+
 detector = SparseConnectivityTracer.TracerLocalSparsityDetector()
 
 jac_sparsity = ADTypes.jacobian_sparsity(
@@ -813,7 +830,7 @@ jac_sparsity = ADTypes.jacobian_sparsity(
 )
 
 t0 = 0.0
-switch_time = 0.006
+switch_time = 0.02
 tMax = 10.0
 
 ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
@@ -852,6 +869,7 @@ steady_prob = remake(startup_prob; u0 = startup_sol.u[end], tspan = (switch_time
     FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()),
     #AutoTsit5(FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff())),
     #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoFiniteDiff()),
+    #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoForwardDiff()),
     #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
     #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
     callback = callbacks,
@@ -870,6 +888,8 @@ reduced_sol = (
 )
 
 du_named, u_named = regenerate_fvm_state(reduced_sol, system, solve_system!, geo, p_guess, save_properties_and_caches = true, track_progress = true);
+
+du_named[end].density[2421]
 
 add_xyz_vec_to_u_named!(u_named, :velocity, :vel_u, :vel_v, :vel_w)
 
