@@ -140,9 +140,6 @@ function precompute_fuel_grain_regression_geometry_interpolations(
     #this might actually be the most efficient way to do this since it's really easy and probably quite fast
     #yep, we're going with this
 
-    #update_fvm_geometry!(geo, node_coordinates)
-    #correct_hybrid_geo(geo, grid)
-
     #interpolations we need (for all cells)
     n_cells = geo.n_cells
     cell_volumes_interps = Vector{DataInterpolations.LinearInterpolation}(undef, n_cells)
@@ -188,11 +185,11 @@ function precompute_fuel_grain_regression_geometry_interpolations(
             max_x_fuel_grain_bound,
             n_steps,
         )
-
-    working_geo = deepcopy(geo)
+    
     for node_coordinates_at_step in node_coordinates_over_steps
-        update_fvm_geometry!(working_geo, node_coordinates_at_step)
-        step_geo = correct_hybrid_geo(working_geo, grid)
+        step_geo = deepcopy(geo)
+        update_fvm_geometry!(step_geo, node_coordinates_at_step)
+        correct_hybrid_geo!(step_geo, grid)
 
         push!(cell_volumes_over_steps, deepcopy(step_geo.cell_volumes))
         push!(cell_centroids_over_steps, deepcopy(step_geo.cell_centroids))

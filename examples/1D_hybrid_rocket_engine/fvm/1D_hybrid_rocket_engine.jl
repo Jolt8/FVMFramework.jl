@@ -71,7 +71,7 @@ config = create_fvm_config(grid, u_proto);
 
 Revise.includet(joinpath(@__DIR__, "geometry_editing/geometry_editing.jl"))
 
-config.geo = correct_hybrid_geo(config.geo, grid)
+correct_hybrid_geo!(config.geo, grid)
 
 add_setup_syms!(
     config;
