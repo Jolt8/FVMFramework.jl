@@ -536,12 +536,16 @@ fuel_grain_regression_geometry_interpolations = precompute_fuel_grain_regression
     fuel_grain_dominant_cell_id_to_subsidiaries_map,
     fluid_domain_subsidiary_cell_ids_to_dominant_cell_id_map,
     fluid_domain_dominant_cell_id_to_subsidiaries_map
-)
+);
 
-    
+function test_udpate_geo_speed(geo)
+    update_fvm_geometry!(geo, node_coordinates)
+end
 
-    
-    
+original_node_coordinates = config.geo.node_coordinates
+
+config.geo.node_coordinates
+
 #=
 #Special Interfaces
 add_patch!(

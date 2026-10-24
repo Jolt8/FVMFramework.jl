@@ -33,6 +33,9 @@ struct FVMGeometry{T, CoordType}
     cell_face_normals::CellFaceVector{CoordType, Vector{CoordType}}
     cell_face_distances::CellFaceVector{T, Vector{T}}
     cell_face_centroids::CellFaceVector{CoordType, Vector{CoordType}}
+
+    # Node information
+    node_coordinates::Vector{SVector{3, Float64}}
 end
 
 """
@@ -113,6 +116,7 @@ function generate_fvm_geometry(
         cell_face_layout_zeros(CoordType, cell_face_layout),
         cell_face_layout_zeros(T, cell_face_layout),
         cell_face_layout_zeros(CoordType, cell_face_layout),
+        node_coordinates
     )
 
     return geo
