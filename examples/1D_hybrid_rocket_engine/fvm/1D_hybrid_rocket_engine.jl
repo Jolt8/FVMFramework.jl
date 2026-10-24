@@ -519,15 +519,18 @@ for name in ["housing_o_ring_volume", "injector_disk_o_ring_volume"]
     )
 end
 
-dominant_fuel_grain_cells, 
+Revise.includet(joinpath(@__DIR__, "fuel_grain_regression_physics/get_dominant_fuel_grain_cells_and_subsidiaries.jl"))
+Revise.includet(joinpath(@__DIR__, "fuel_grain_regression_physics/geometry_interpolations.jl"))
+
+dominant_fuel_grain_cells,
 fuel_grain_subsidiary_cell_ids_to_dominant_cell_id_map,
 fuel_grain_dominant_cell_id_to_subsidiaries_map,
 fluid_domain_subsidiary_cell_ids_to_dominant_cell_id_map,
 fluid_domain_dominant_cell_id_to_subsidiaries_map = 
     get_dominant_fuel_grain_cells_and_subsidiaries(grid, config.geo)
 
-precompute_fuel_grain_regression_geometry_interpolations(
-    grid, geo,
+fuel_grain_regression_geometry_interpolations = precompute_fuel_grain_regression_geometry_interpolations(
+    grid, config.geo,
     dominant_fuel_grain_cells, 
     fuel_grain_subsidiary_cell_ids_to_dominant_cell_id_map,
     fuel_grain_dominant_cell_id_to_subsidiaries_map,
