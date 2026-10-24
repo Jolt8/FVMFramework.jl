@@ -538,13 +538,21 @@ fuel_grain_regression_geometry_interpolations = precompute_fuel_grain_regression
     fluid_domain_dominant_cell_id_to_subsidiaries_map
 );
 
-function test_udpate_geo_speed(geo)
+function test_udpate_geo_speed(geo, node_coordinates)
     update_fvm_geometry!(geo, node_coordinates)
 end
 
 original_node_coordinates = config.geo.node_coordinates
 
 config.geo.node_coordinates
+
+edited_node_coords = [Vector(node_coords) .+= 0.0001 for node_coords in config.geo.node_coordinates]
+
+using BenchmarkTools
+
+@btime update_fvm_geometry!(config.geo, config.geo.node_coordinates);
+
+@time correct_hybrid_geo!(config.geo, grid)
 
 #=
 #Special Interfaces

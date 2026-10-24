@@ -260,8 +260,6 @@ function update_fvm_geometry!(geo::FVMGeometry, node_coordinates)
             geo.cell_neighbor_distances[cell_id, face_idx] = norm(neighbor_direction)
         end
     end
-
-    return geo
 end
 
 """
