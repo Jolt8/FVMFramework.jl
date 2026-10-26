@@ -92,7 +92,7 @@ add_setup_syms!(
         k = u"W/(m*K)",
         gamma = u"1",
         #specific_internal_energy = u"J/kg", #not cached right now, just a property
-
+        
         mass_fractions = (
             nitrous_oxide = u"kg/kg",
             ethylene = u"kg/kg",
@@ -102,6 +102,16 @@ add_setup_syms!(
             carbon_monoxide = u"kg/kg",
             hydrogen = u"kg/kg",
             water = u"kg/kg",
+        ),
+        molar_concentrations = (
+            nitrous_oxide = u"mol/m^3",
+            ethylene = u"mol/m^3",
+            nitrogen = u"mol/m^3",
+            oxygen = u"mol/m^3",
+            carbon_dioxide = u"mol/m^3",
+            carbon_monoxide = u"mol/m^3",
+            hydrogen = u"mol/m^3",
+            water = u"mol/m^3",
         ),
         species_density_flow = (
             nitrous_oxide = u"kg/s",
@@ -141,8 +151,72 @@ add_setup_syms!(
         grad_specific_dissipation_rate = zeros(n_cells, 3)u"1/(m*s)",
     ),
     second_order_syms = [],
-    optimized_parameters = ComponentVector(),
+    optimized_parameters = ComponentVector(
+        # Westbrook kinetics:
+        westbrook_dryer_step_1_pre_exponential_factor = 7.5895e7u"m^2.25 * mol^-0.75 * s^-1",
+        westbrook_dryer_step_1_activation_energy = 125_520u"J/mol",
+        westbrook_dryer_step_1_heat_of_reaction = -757_120u"J/mol",
+
+        westbrook_dryer_step_2_forward_pre_exponential_factor = 1.2589e10u"m^2.25 * mol^-0.75 * s^-1",
+        westbrook_dryer_step_2_forward_activation_energy = 167_360u"J/mol",
+        westbrook_dryer_step_2_forward_heat_of_reaction = -282_980u"J/mol",
+
+        westbrook_dryer_step_2_reverse_pre_exponential_factor = 5.0000e8u"s^-1",
+        westbrook_dryer_step_2_reverse_activation_energy = 167_360u"J/mol",
+        westbrook_dryer_step_2_reverse_heat_of_reaction = 282_980u"J/mol",
+
+        # Simple kinetics:
+        simple_arrhenius_reaction_model_pre_exponential_factor = 6.3245e7u"m^2.25 * mol^-0.75 * s^-1",
+        simple_arrhenius_reaction_model_activation_energy = 125_520u"J/mol",
+        simple_arrhenius_reaction_model_heat_of_reaction = -1_323_000u"J/mol",
+
+        # Turbulence constants: (ranges from around 1.0 to 4.0, usually closer from 1.0 to 2.0)
+        turbulence_limited_reaction_rate_mix_parameter = 1.5,
+        
+        # Regression Parameters:
+        regression_coefficient_a = 1.1573e-4, #units are m^(2n+1) * kg^(-n) * s^(-1)
+        regression_exponent_n = 0.331,
+        fuel_heat_of_pyrolysis = 2.3u"MJ/kg"
+    ),
 )
+
+"""
+# Reaction Kinetics:
+"Simplified Reaction Mechanisms for the Oxidation of Hydrocarbon Fuels in Flames (Westbrook et al.)" 
+
+http://ronney.usc.edu/AME513b/Lecture4/References/WestbrookDryerCST1981.pdf (this is a free version of the article I found)
+http://dx.doi.org/10.1080/00102208108946970
+
+Westbrook-Dryer mechanism:
+
+C2H4 + O2 --> 2CO + 2H2
+westbrook_dryer_step_1_pre_exponential_factor = 7.5895e7 [m^2.25 * mol^-0.75 * s^-1]
+westbrook_dryer_step_1_activation_energy = 125520 [J/mol]
+
+CO + 0.5O2 --> CO2
+westbrook_dryer_step_2_forward_pre_exponential_factor = 1.2589e10 [m^2.25 * mol^-0.75 * s^-1]
+westbrook_dryer_step_2_forward_activation_energy = 167360 [J/mol]
+
+CO2 --> CO + 0.5O2
+westbrook_dryer_step_2_reverse_pre_exponential_factor = 5.0000e8 [s^-1]
+westbrook_dryer_step_2_reverse_activation_energy = 167360 [J/mol]
+
+Simpler Mechanism Based on the 1-step version of the Westbrook-Dryer mechanism
+C2H4 + 3O2 --> 2CO2 + 2H2O
+simple_arrhenius_reaction_model_pre_exponential_factor = 6.3245e7 [m^3/(mol*s)]
+simple_arrhenius_reaction_model_activation_energy = 125_520 [J/mol]
+simple_arrhenius_reaction_model_heat_of_reaction = -1.323e6 [J/mol]
+
+
+# Regression Parameters:
+"Nitrous Oxide Hybrid Rocket Motor Fuel Regression Rate Characterization (Doran et al.)"
+
+https://doi.org/10.2514/6.2007-5352
+
+#The units are pretty complicated here, I converted to base SI so the paper's values will be different
+regression_coefficient_a = 1.1573e-4 [m^(2n+1) * kg^(-n) * s^(-1), n = 0.331]
+regression_exponent_n = 0.331,
+"""
 
 if compressible_solver_options.use_sst_turbulence == true
     config.cache_syms_and_units = merge(config.cache_syms_and_units, (
@@ -316,6 +390,16 @@ fluid_initial_conditions, fluid_properties = construct_fluid_initial_conditions_
         #k = 0.026u"W/(m*K)",
         prandtl_number = 0.705,
 
+        molar_masses = (
+            nitrous_oxide = 44.01u"g/mol", 
+            ethylene = 28.05u"g/mol", 
+            nitrogen = 28.01u"g/mol", 
+            oxygen = 32.00u"g/mol", 
+            carbon_dioxide = 44.01u"g/mol", 
+            carbon_monoxide = 28.01u"g/mol", 
+            hydrogen = 2.02u"g/mol", 
+            water = 18.02u"g/mol"
+        ),
         mass_fractions = (
             nitrous_oxide = 0.0,
             ethylene = 0.0,
@@ -362,6 +446,14 @@ function add_axisymmetric_inviscid_source!(
     return nothing
 end
 
+Revise.includet(joinpath(@__DIR__, "fuel_oxidizer_reaction_physics/fuel_oxidizer_reaction_physics.jl"))
+
+function overall_combustion_model!(du, u, p, t, system, geo, cell_id)
+    decompose_nitrous_oxide!(du, u, p, t, system, geo, cell_id)
+    combust_ethylene_and_oxygen_westbrook_dryer!(du, u, p, t, system, geo, cell_id) 
+    #combust_ethylene_and_oxygen_simple!(du, u, p, t, system, geo, cell_id) #is also an option
+end
+
 add_region!(
     config, "fluid_domain";
     type = Fluid(),
@@ -375,6 +467,8 @@ add_region!(
     end,
     region_function = 
     function fluid_physics!(du, u, p, t, system, geo, cell_id)
+        update_species_molar_concentrations!(du, u, p, t, system, geo, cell_id)
+        overall_combustion_model!(du, u, p, t, system, geo, cell_id)
         cap_navier_stokes_flow!(du, u, p, t, system, geo, cell_id)
         add_axisymmetric_inviscid_source!(du, u, p, t, system, geo, cell_id)
     end
@@ -519,42 +613,14 @@ for name in ["housing_o_ring_volume", "injector_disk_o_ring_volume"]
     )
 end
 
-Revise.includet(joinpath(@__DIR__, "fuel_grain_regression_physics/get_dominant_fuel_grain_cells_and_subsidiaries.jl"))
-Revise.includet(joinpath(@__DIR__, "fuel_grain_regression_physics/geometry_interpolations.jl"))
+Revise.includet(joinpath(@__DIR__, "fuel_grain_regression_physics/fuel_regression.jl"))
 
-dominant_fuel_grain_cells,
-fuel_grain_subsidiary_cell_ids_to_dominant_cell_id_map,
-fuel_grain_dominant_cell_id_to_subsidiaries_map,
-fluid_domain_subsidiary_cell_ids_to_dominant_cell_id_map,
-fluid_domain_dominant_cell_id_to_subsidiaries_map = 
-    get_dominant_fuel_grain_cells_and_subsidiaries(grid, config.geo)
+fuel_regression_model = create_fuel_regression_model(grid, config.geo)
+initialize_fuel_grain_thickness!(
+    config.u_proto.fuel_grain_thickness,
+    fuel_regression_model,
+)
 
-fuel_grain_regression_geometry_interpolations = precompute_fuel_grain_regression_geometry_interpolations(
-    grid, config.geo,
-    dominant_fuel_grain_cells, 
-    fuel_grain_subsidiary_cell_ids_to_dominant_cell_id_map,
-    fuel_grain_dominant_cell_id_to_subsidiaries_map,
-    fluid_domain_subsidiary_cell_ids_to_dominant_cell_id_map,
-    fluid_domain_dominant_cell_id_to_subsidiaries_map
-);
-
-function test_udpate_geo_speed(geo, node_coordinates)
-    update_fvm_geometry!(geo, node_coordinates)
-end
-
-original_node_coordinates = config.geo.node_coordinates
-
-config.geo.node_coordinates
-
-edited_node_coords = [Vector(node_coords) .+= 0.0001 for node_coords in config.geo.node_coordinates]
-
-using BenchmarkTools
-
-@btime update_fvm_geometry!(config.geo, config.geo.node_coordinates);
-
-@time correct_hybrid_geo!(config.geo, grid)
-
-#=
 #Special Interfaces
 add_patch!(
     config, "fuel_wall_patch";
@@ -603,9 +669,9 @@ supersonic_inlet_initial_conditions, supersonic_inlet_properties = construct_flu
         mass_fractions = (
             nitrous_oxide = 0.0,
             ethylene = 0.0,
-            nitrogen = 0.781,
-            oxygen = 0.211,
-            carbon_dioxide = 0.0003,
+            nitrogen = 0.7551,
+            oxygen = 0.2314,
+            carbon_dioxide = 0.0006,
             carbon_monoxide = 0.0,
             hydrogen = 0.0,
             water = 0.0
@@ -644,15 +710,13 @@ add_patch!(
         )
         =#
         inlet_conditions = update_injector_train!(du, u, p, t, system, geo)
-        
-        #=
+
         subsonic_inlet_flux!(
             du, u, p, t, system, geo,
             idx_a, face_a, 
             idx_b, face_b;
             inlet_conditions = inlet_conditions
         )
-            =#
         
         #=
         supersonic_inlet_flux!(
@@ -810,7 +874,11 @@ additional_data = (
     injector_train_properties_axes = injector_train_properties_axes,
     valve_opening = valve_opening,
     nitrous_oxide_model = nitrous_oxide_model,
-    post_injector_cell_ids = post_injector_cell_ids
+    post_injector_cell_ids = post_injector_cell_ids,
+
+    #Fuel regression
+    fuel_regression_model = fuel_regression_model,
+    fuel_regression_grid = grid
 )
 
 du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, additional_data, check_units = false);
@@ -818,9 +886,10 @@ du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function
 u_named = ComponentVector(u0_vec, system.state_axes);
 
 function solve_system!(du, u, p, t, system, geo)
+    update_fuel_regression_geometry!(u, system.fuel_regression_model, geo, system.fuel_regression_grid)
     update_region_groups!(du, u, p, t, system, geo)
 
-    #update_weighted_least_squares_gradients!(u, system.wls_stencil)
+    update_weighted_least_squares_gradients!(u, system.wls_stencil)
     
     if system.compressible_solver_options.use_sst_turbulence == true
         update_sst_closure!(u, system.sst_wall_distances)
@@ -829,6 +898,7 @@ function solve_system!(du, u, p, t, system, geo)
     #update_MUSCL_gradients!(u, wls_stencil)
     solve_connection_groups!(du, u, p, t, system, geo)
     solve_patch_groups!(du, u, p, t, system, geo)
+    regress_fuel_layers!(du, u, p, t, system, geo)
     solve_region_groups!(du, u, p, t, system, geo)
 
     #=
@@ -932,3 +1002,4 @@ add_xyz_vec_to_u_named!(u_named, :velocity, :vel_u, :vel_v, :vel_w)
 root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
 
 sol_to_vtk(reduced_sol, du_named, u_named, grid, geo, @__FILE__, root_dir, include_zeros_fields = false, track_progress = true)
+"
