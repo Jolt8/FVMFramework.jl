@@ -35,7 +35,7 @@ struct FVMGeometry{T, CoordType}
     cell_face_centroids::CellFaceVector{CoordType, Vector{CoordType}}
 
     # Node information
-    node_coordinates::Vector{SVector{3, Float64}}
+    node_coordinates::Vector{CoordType}
 end
 
 """
@@ -47,11 +47,7 @@ entries, preserving Ferrite's local face numbering on both sides.
 
 Returns `geo`.
 """
-function generate_fvm_geometry(
-        grid,
-        top;
-        node_coordinates = get_node_coordinates(grid),
-    )
+function generate_fvm_geometry(grid, top; node_coordinates = get_node_coordinates(grid))
     n_cells = length(grid.cells)
     cell_node_ids = [collect(cell.nodes) for cell in grid.cells]
     cell_n_faces = [nfacets(cell) for cell in grid.cells]
@@ -118,7 +114,7 @@ function generate_fvm_geometry(
         cell_face_layout_zeros(CoordType, cell_face_layout),
         node_coordinates
     )
-
+    
     return geo
 end
 
@@ -269,8 +265,15 @@ Construct and populate both halves of the new geometry representation. Returns
 `geo`.
 """
 function build_fvm_geo_into_struct(grid, top)
-    node_coordinates = get_node_coordinates(grid)
-    geo = generate_fvm_geometry(grid, top; node_coordinates)
+    #I'm actually avoiding this because SVectors are mutable if you mutate the entire vector at once.
+    #=
+    if make_geometry_mutable == false
+        node_coordinates = get_node_coordinates(grid)
+    else
+        node_coordinates = get_mutable_node_coordinates(grid)
+    end
+    =#
+    geo = generate_fvm_geometry(grid, top; get_node_coordinates(grid)) # Since the eltype of the node_coordinates determines the type of everything else, we don't even have to pass a make_mutable argument
     update_fvm_geometry!(geo, node_coordinates)
     return geo
 end
