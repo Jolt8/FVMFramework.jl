@@ -13,6 +13,14 @@ function construct_fluid_initial_conditions_from_intuitive_inputs(compressible_s
         u.density * u.turbulent_kinetic_energy
     specific_dissipation_rate_density =
         u.density * u.specific_dissipation_rate
+
+    
+    total_mass_fractions = sum(u.mass_fractions)
+
+    for_fields!(u.species_mass_fractions) do species, u_mass_fractions
+        u_mass_fractions[species] = u.mass_fractions[species] / total_mass_fractions
+    end
+    
     species_densities = ComponentVector(
         nitrous_oxide = u.density * u.mass_fractions.nitrous_oxide,
         ethylene = u.density * u.mass_fractions.ethylene,
@@ -34,7 +42,8 @@ function construct_fluid_initial_conditions_from_intuitive_inputs(compressible_s
         prandtl_number = u.prandtl_number,
         diffusion_coefficients_ambient = u.diffusion_coefficients_ambient,
         diffusion_coefficients_ambient_temperature = u.diffusion_coefficients_ambient_temperature,
-        diffusion_coefficients_ambient_pressure = u.diffusion_coefficients_ambient_pressure
+        diffusion_coefficients_ambient_pressure = u.diffusion_coefficients_ambient_pressure,
+        molar_masses = u.molar_masses
     )
 
     if compressible_solver_options.use_sst_turbulence == true
