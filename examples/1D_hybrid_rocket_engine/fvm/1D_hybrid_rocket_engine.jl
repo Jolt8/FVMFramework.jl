@@ -49,7 +49,8 @@ u_proto = ComponentVector(
         hydrogen = zeros(n_cells)u"kg/m^3",
         water = zeros(n_cells)u"kg/m^3",
     ),
-    fuel_grain_thickness = zeros(n_cells)u"m"
+    fuel_grain_thickness = zeros(n_cells)u"m",
+    igniter_mass = [0.0u"kg"]
 )
 
 if compressible_solver_options.use_sst_turbulence == true
@@ -58,7 +59,6 @@ if compressible_solver_options.use_sst_turbulence == true
         specific_dissipation_rate_density = zeros(n_cells)u"kg/(m^3*s)",
     ))
 end
-
 
 Revise.includet(joinpath(@__DIR__, "..", "design_scripts/overloads/clapeyron_tracer_overloads.jl"))
 Revise.includet(joinpath(@__DIR__, "injector_delivery_train_scripts/injector_delivery_train_scripts.jl"))
@@ -268,6 +268,7 @@ Revise.includet(joinpath(path_to_navier_stokes_files, "sum_and_cap_functions/cap
 struct Fluid <: AbstractPhysics end
 struct Solid <: AbstractPhysics end
 struct FuelGrain <: AbstractPhysics end
+struct IgniterPuck <: AbstractPhysics end
 
 function fluid_fluid_flux!(
     du, u, p, t, system, geo,
@@ -366,6 +367,7 @@ function connection_map_function(phys_a, phys_b)
     typeof(phys_a) <: FuelGrain && typeof(phys_b) <: FuelGrain && return solid_solid_flux!
     typeof(phys_a) <: FuelGrain && typeof(phys_b) <: Solid && return solid_solid_flux!
     typeof(phys_a) <: Fluid && typeof(phys_b) <: FuelGrain && return no_flux!
+    typeof(phys_a) <: Fluid && typeof(phys_b) <: IgniterPuck && return no_flux!
     #fluid_solid_flux! #this one is special
 end
 
@@ -454,6 +456,18 @@ function overall_combustion_model!(du, u, p, t, system, geo, cell_id)
     #combust_ethylene_and_oxygen_simple!(du, u, p, t, system, geo, cell_id) #is also an option
 end
 
+function fluid_domain_update_function(du, u, p, t, system, geo, cell_id)
+    update_k_from_prandtl!(du, u, p, t, system, geo, cell_id)
+    overall_navier_stokes_property_update!(du, u, p, t, system, geo, cell_id)
+    update_fluid_diffusion_coefficients!(du, u, p, t, system, geo, cell_id)
+end
+
+function fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
+    update_species_molar_concentrations!(du, u, p, t, system, geo, cell_id)
+    overall_combustion_model!(du, u, p, t, system, geo, cell_id)
+    add_axisymmetric_inviscid_source!(du, u, p, t, system, geo, cell_id)
+end
+
 add_region!(
     config, "fluid_domain";
     type = Fluid(),
@@ -461,9 +475,42 @@ add_region!(
     properties = fluid_properties,
     property_update_function = 
     function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
-        update_k_from_prandtl!(du, u, p, t, system, geo, cell_id)
-        overall_navier_stokes_property_update!(du, u, p, t, system, geo, cell_id)
-        update_fluid_diffusion_coefficients!(du, u, p, t, system, geo, cell_id)
+        fluid_domain_update_function(du, u, p, t, system, geo, cell_id)
+    end,
+    region_function = 
+    function fluid_physics!(du, u, p, t, system, geo, cell_id)
+        fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
+    end
+)
+
+Revise.includet(joinpath(@__DIR__, "igniter_scripts/igniter_scripts.jl"))
+
+input_igniter_properties = (
+    burn_time = 0.5u"s",
+    density = 1.90u"g/cm^3" #based on the density of the sugar rocket recipe
+)
+
+igniter_puck_initial_conditions, igniter_puck_properties, igniter_system_properties = setup_igniter_properties!(fluid_initial_conditions, fluid_properties, config, input_igniter_properties)
+#remember to add igniter_system_properties to system.additional_data
+
+add_region!(
+    config, "igniter_puck_volume";
+    initial_conditions = igniter_puck_initial_conditions,
+    properties = igniter_puck_properties,
+    property_update_function = 
+    function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
+        igniter_density = u.igniter_mass[1] / u.igniter_volume[cell_id]
+        first_neighbor_cell_id = geo.cell_neighbors[cell_id][1]
+
+        if igniter_density < 5 * u.density[first_neighbor_cell_id]
+            update_igniter_combustion!(du, u, p, t, system, geo, cell_id)
+        else
+            update_k_from_prandtl!(du, u, p, t, system, geo, cell_id)
+            overall_navier_stokes_property_update!(du, u, p, t, system, geo, cell_id)
+            update_fluid_diffusion_coefficients!(du, u, p, t, system, geo, cell_id)
+
+
+        
     end,
     region_function = 
     function fluid_physics!(du, u, p, t, system, geo, cell_id)
@@ -487,7 +534,12 @@ fuel_grain_initial_conditions, fuel_grain_properties = construct_solid_initial_c
 add_region!(
     config, "fuel_grain_volume";
     type = FuelGrain(), #we're going to have a special flux between this and the fluid defined in an add_patch!() call
-    initial_conditions = fuel_grain_initial_conditions,
+    initial_conditions = merge_properties!(
+        fuel_grain_initial_conditions,
+        ComponentVector(
+            min_fuel_regression_temperature = 800.0u"K"
+        )
+    ),
     properties = fuel_grain_properties,
     property_update_function = 
     function update_fuel_grain_region!(du, u, p, t, system, geo, cell_id)
@@ -676,6 +728,16 @@ supersonic_inlet_initial_conditions, supersonic_inlet_properties = construct_flu
             hydrogen = 0.0,
             water = 0.0
         ),
+        molar_masses = (
+            nitrous_oxide = 44.01u"g/mol", 
+            ethylene = 28.05u"g/mol", 
+            nitrogen = 28.01u"g/mol", 
+            oxygen = 32.00u"g/mol", 
+            carbon_dioxide = 44.01u"g/mol", 
+            carbon_monoxide = 28.01u"g/mol", 
+            hydrogen = 2.02u"g/mol", 
+            water = 18.02u"g/mol"
+        ),
         diffusion_coefficients_ambient = (
             nitrous_oxide = 1.4e-5u"m^2/s",
             ethylene = 1.4e-5u"m^2/s",
@@ -862,6 +924,10 @@ valve_opening = 1.0
 
 post_injector_cell_ids = [face.idx[1] for face in getfacetset(grid, "injector_inlet_patch")]
 
+Revise.includet(joinpath(@__DIR__, "ad_compatible_mesh/new_ad_compatible_mesh.jl"))
+
+ad_geometry_cache = create_ad_geometry_cache(config.geo)
+
 additional_data = (
     #Navier stokes data
     compressible_solver_options = compressible_solver_options,
@@ -878,7 +944,10 @@ additional_data = (
 
     #Fuel regression
     fuel_regression_model = fuel_regression_model,
-    fuel_regression_grid = grid
+    fuel_regression_grid = grid,
+
+    #Igniter 
+    igniter = igniter_system_properties
 )
 
 du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, additional_data, check_units = false);
@@ -921,9 +990,9 @@ function solve_system!(du, u, p, t, system, geo)
     @show u.mid_section=#
 end
 
-f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, ad_geometry_cache, solve_system!)
 
-p_guess = 0.0
+p_guess = ustrip.(upreferred.(deepcopy(config.optimized_parameters)))
 
 Revise.includet(joinpath(@__DIR__, "state_is_invalid/state_is_invalid.jl"))
 
@@ -1002,4 +1071,3 @@ add_xyz_vec_to_u_named!(u_named, :velocity, :vel_u, :vel_v, :vel_w)
 root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
 
 sol_to_vtk(reduced_sol, du_named, u_named, grid, geo, @__FILE__, root_dir, include_zeros_fields = false, track_progress = true)
-"
