@@ -140,6 +140,7 @@ function identify_radial_faces(geo, cell_id, material_region::Symbol)
 
     for face_idx in 1:geo.cell_n_faces[cell_id]
         outward_face_normal = geo.cell_face_normals[cell_id, face_idx]
+
         if abs(outward_face_normal[1]) > 0.5
             push!(radial_face_indices, face_idx)
         end
@@ -150,6 +151,7 @@ function identify_radial_faces(geo, cell_id, material_region::Symbol)
     end
 
     sort!(radial_face_indices; by = face_idx -> geo.cell_face_centroids[cell_id, face_idx][1])
+
     inner_radial_face_idx = first(radial_face_indices)
     outer_radial_face_idx = last(radial_face_indices)
 
@@ -177,14 +179,7 @@ function describe_cell_face_on_cross_section(geo, cell_id, axial_face_idx, mater
     )
 end
 
-function collect_cells_touching_cross_section(
-        geo,
-        candidate_cell_ids,
-        axial_coordinate,
-        side_of_cross_section::Symbol,
-        material_region::Symbol;
-        absolute_tolerance,
-    )
+function collect_cells_touching_cross_section(geo, candidate_cell_ids, axial_coordinate, side_of_cross_section::Symbol, material_region::Symbol; absolute_tolerance)
     cells_on_cross_section = CellFaceOnAxialCrossSection[]
 
     for cell_id in candidate_cell_ids
@@ -203,6 +198,7 @@ function collect_cells_touching_cross_section(
         end
 
         axial_face_idx = find_cell_face_on_axial_plane(geo, cell_id, axial_coordinate; absolute_tolerance)
+
         if isnothing(axial_face_idx)
             continue
         end
@@ -343,18 +339,13 @@ function create_fuel_regression_model(grid, geo; absolute_tolerance = 1e-10)
         fixed_fuel_outer_radius = maximum(node_id -> geo.node_coordinates[node_id][1], solid_fuel_node_ids_at_this_station)
         initial_fuel_thickness = fixed_fuel_outer_radius - initial_port_radius
 
-        upstream_fluid_cross_section = collect_cells_touching_cross_section(
-            geo, port_fluid_cell_ids, axial_coordinate, :upstream, :port_fluid; absolute_tolerance,
-        )
-        downstream_fluid_cross_section = collect_cells_touching_cross_section(
-            geo, port_fluid_cell_ids, axial_coordinate, :downstream, :port_fluid; absolute_tolerance,
-        )
-        upstream_fuel_cross_section = collect_cells_touching_cross_section(
-            geo, solid_fuel_cell_ids, axial_coordinate, :upstream, :solid_fuel; absolute_tolerance,
-        )
-        downstream_fuel_cross_section = collect_cells_touching_cross_section(
-            geo, solid_fuel_cell_ids, axial_coordinate, :downstream, :solid_fuel; absolute_tolerance,
-        )
+        upstream_fluid_cross_section = collect_cells_touching_cross_section(geo, port_fluid_cell_ids, axial_coordinate, :upstream, :port_fluid; absolute_tolerance,)
+
+        downstream_fluid_cross_section = collect_cells_touching_cross_section(geo, port_fluid_cell_ids, axial_coordinate, :downstream, :port_fluid; absolute_tolerance,)
+
+        upstream_fuel_cross_section = collect_cells_touching_cross_section(geo, solid_fuel_cell_ids, axial_coordinate, :upstream, :solid_fuel; absolute_tolerance,)
+
+        downstream_fuel_cross_section = collect_cells_touching_cross_section(geo, solid_fuel_cell_ids, axial_coordinate, :downstream, :solid_fuel; absolute_tolerance,)
 
         push!(fuel_port_stations, FuelPortStation(
             axial_coordinate,
@@ -393,6 +384,7 @@ function create_fuel_regression_model(grid, geo; absolute_tolerance = 1e-10)
     end
 
     moving_node_ids = Set{Int}()
+
     for mesh_node in moving_mesh_nodes
         if abs(mesh_node.fraction_of_wall_displacement) > absolute_tolerance
             push!(moving_node_ids, mesh_node.node_id)
@@ -400,6 +392,7 @@ function create_fuel_regression_model(grid, geo; absolute_tolerance = 1e-10)
     end
 
     fluid_cells_affected_by_wall_motion = Int[]
+
     for fluid_cell_id in all_fluid_cell_ids
         cell_moves = false
         for node_id in geo.cell_node_ids[fluid_cell_id]
@@ -491,10 +484,7 @@ function update_fuel_regression_geometry!(u, fuel_regression_model::FuelRegressi
     # The hybrid-motor mesh needs its axisymmetric geometric corrections
     # reapplied after every wall movement.
     correct_hybrid_geo!(geo, grid)
-
-    return nothing
 end
-
 
 # -----------------------------------------------------------------------------
 # Evaluate the local regression law at every axial fuel-port station
@@ -635,6 +625,7 @@ function calculate_face_mesh_velocity(workspace, geo, cell_id, face_idx)
     end
 
     face_mesh_velocity /= length(face_node_ids)
+
     return face_mesh_velocity
 end
 
@@ -643,14 +634,7 @@ end
 # Conserve fluid quantities while the computational cells change volume
 # -----------------------------------------------------------------------------
 
-function calculate_moving_mesh_flux_for_conserved_quantity(
-        conserved_quantity,
-        fuel_regression_model,
-        workspace,
-        geo,
-        fluid_cell_id,
-        cell_volume_rate,
-    )
+function calculate_moving_mesh_flux_for_conserved_quantity(conserved_quantity, fuel_regression_model, workspace, geo, fluid_cell_id, cell_volume_rate)
     moving_mesh_flux = zero(conserved_quantity[fluid_cell_id] * cell_volume_rate)
 
     for face_idx in 1:geo.cell_n_faces[fluid_cell_id]
@@ -692,15 +676,15 @@ function apply_moving_mesh_conservation!(du, u, fuel_regression_model::FuelRegre
         inverse_cell_volume = inv(geo.cell_volumes[fluid_cell_id])
 
         density_mesh_flux = calculate_moving_mesh_flux_for_conserved_quantity(u.density, fuel_regression_model, workspace, geo, fluid_cell_id, cell_volume_rate)
-        radial_momentum_mesh_flux = calculate_moving_mesh_flux_for_conserved_quantity(u.momentum_density_u, fuel_regression_model, workspace, geo, fluid_cell_id, cell_volume_rate)
-        transverse_momentum_mesh_flux = calculate_moving_mesh_flux_for_conserved_quantity(u.momentum_density_v, fuel_regression_model, workspace, geo, fluid_cell_id, cell_volume_rate)
-        axial_momentum_mesh_flux = calculate_moving_mesh_flux_for_conserved_quantity(u.momentum_density_w, fuel_regression_model, workspace, geo, fluid_cell_id, cell_volume_rate)
+        u_momentum_mesh_flux = calculate_moving_mesh_flux_for_conserved_quantity(u.momentum_density_u, fuel_regression_model, workspace, geo, fluid_cell_id, cell_volume_rate)
+        v_momentum_mesh_flux = calculate_moving_mesh_flux_for_conserved_quantity(u.momentum_density_v, fuel_regression_model, workspace, geo, fluid_cell_id, cell_volume_rate)
+        w_momentum_mesh_flux = calculate_moving_mesh_flux_for_conserved_quantity(u.momentum_density_w, fuel_regression_model, workspace, geo, fluid_cell_id, cell_volume_rate)
         total_energy_mesh_flux = calculate_moving_mesh_flux_for_conserved_quantity(u.volumetric_energy, fuel_regression_model, workspace, geo, fluid_cell_id, cell_volume_rate)
 
         du.density[fluid_cell_id] += density_mesh_flux * inverse_cell_volume
-        du.momentum_density_u[fluid_cell_id] += radial_momentum_mesh_flux * inverse_cell_volume
-        du.momentum_density_v[fluid_cell_id] += transverse_momentum_mesh_flux * inverse_cell_volume
-        du.momentum_density_w[fluid_cell_id] += axial_momentum_mesh_flux * inverse_cell_volume
+        du.momentum_density_u[fluid_cell_id] += u_momentum_mesh_flux * inverse_cell_volume
+        du.momentum_density_v[fluid_cell_id] += v_momentum_mesh_flux * inverse_cell_volume
+        du.momentum_density_w[fluid_cell_id] += w_momentum_mesh_flux * inverse_cell_volume
         du.volumetric_energy[fluid_cell_id] += total_energy_mesh_flux * inverse_cell_volume
 
         for species_name in propertynames(u.species_densities)
@@ -747,7 +731,9 @@ function inject_pyrolyzed_fuel_into_port!(du, u, p, fuel_regression_model::FuelR
         # The injected momentum follows the receding surface velocity; a more
         # complete model could prescribe a separate wall-normal blowing speed.
         du.density_flow[port_fluid_cell_id] += pyrolyzed_fuel_mass_flow
+
         du.species_density_flow.ethylene[port_fluid_cell_id] += pyrolyzed_fuel_mass_flow
+        
         du.momentum_density_u_flow[port_fluid_cell_id] += pyrolyzed_fuel_mass_flow * fuel_surface_velocity[1]
         du.momentum_density_v_flow[port_fluid_cell_id] += pyrolyzed_fuel_mass_flow * fuel_surface_velocity[2]
         du.momentum_density_w_flow[port_fluid_cell_id] += pyrolyzed_fuel_mass_flow * fuel_surface_velocity[3]
