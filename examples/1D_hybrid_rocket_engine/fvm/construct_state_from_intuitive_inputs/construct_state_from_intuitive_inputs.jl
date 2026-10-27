@@ -17,7 +17,7 @@ function construct_fluid_initial_conditions_from_intuitive_inputs(compressible_s
     
     total_mass_fractions = sum(u.mass_fractions)
 
-    for_fields!(u.species_mass_fractions) do species, u_mass_fractions
+    for_fields!(u.mass_fractions) do species, u_mass_fractions
         u_mass_fractions[species] = u.mass_fractions[species] / total_mass_fractions
     end
     
