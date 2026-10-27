@@ -80,13 +80,58 @@ print("\nSolid bodies included in CFD compound:")
 for b in solid_bodies:
     print(f"  * {b.Label} ({b.Name})")
 
-compound_obj = doc.addObject("Part::Compound", "CFD_Compound")
-compound_obj.Links = solid_bodies
+# ---------------------------------------------------------------------------
+# Slicing Step 1: Slice clipping face against solid CAD bodies only.
+# (Passing port_tool simultaneously with solid_bodies caused OpenCASCADE BOPAlgo_Splitter
+#  to drop the boundary edge along the phenolic liner, merging the pre-chamber into the liner.)
+# ---------------------------------------------------------------------------
+slice_obj = BOPTools.SplitFeatures.makeSlice(name="CFD_Slice_Primary")
+slice_obj.Base = clipping_face
+slice_obj.Tools = solid_bodies
+slice_obj.Mode = "Split"
+doc.recompute()
+print(f"\nSliced clipping plane by solid bodies: {len(slice_obj.Shape.Faces)} 2D faces produced.")
+
+# Explode primary sliced compound into individual topological faces
+exploded_res = CompoundTools.Explode.explodeCompound(slice_obj)
+exploded_children = exploded_res[1]
 doc.recompute()
 
-# Detect fuel grain bounds on the clipping plane to partition the fluid port box [0, R_in] x [Z_min, Z_max]
+solid_children = []
+fluid_children = []
+for child in exploded_children:
+    face = child.Shape
+    if face.Area < 1e-3:
+        continue
+    matched_name = None
+    for body in solid_bodies:
+        try:
+            overlap = face.common(body.Shape).Area
+            if overlap > 0.5 * face.Area:
+                matched_name = body.Label
+                break
+        except Exception:
+            pass
+    if matched_name is not None:
+        child.Label = matched_name
+        solid_children.append(child)
+        print(f"  Child {child.Name:<14} (Area = {face.Area:>8.2f} mm^2) -> '{matched_name}'")
+    else:
+        fluid_children.append(child)
+
+main_fluid_child = max(fluid_children, key=lambda c: c.Shape.Area) if fluid_children else None
+other_fluid_children = [c for c in fluid_children if c != main_fluid_child]
+for c in other_fluid_children:
+    c.Label = "fluid_domain"
+
+# ---------------------------------------------------------------------------
+# Slicing Step 2: Partition the main fluid domain to isolate the fuel port box
+# [0, R_inner] x [Z_min, Z_max] without affecting surrounding solid bodies.
+# ---------------------------------------------------------------------------
 fg_bodies = [b for b in solid_bodies if "fuel_grain" in b.Label]
-if fg_bodies:
+final_children = list(solid_children) + other_fluid_children
+
+if fg_bodies and main_fluid_child is not None:
     fg_body = fg_bodies[0]
     fg_common = clipping_face.Shape.common(fg_body.Shape)
     fg_r_in = fg_common.BoundBox.XMin
@@ -94,7 +139,6 @@ if fg_bodies:
     fg_z_max = fg_common.BoundBox.ZMax
     print(f"\nFuel grain bore region detected: R_inner={fg_r_in:.2f} mm, Z=[{fg_z_min:.2f}, {fg_z_max:.2f}] mm")
     
-    # Create 3D solid tool to partition the fluid port region [0, fg_r_in] x [-10, 10] x [fg_z_min, fg_z_max]
     V = App.Vector
     port_poly = Part.makePolygon([
         V(0, 0, fg_z_min),
@@ -108,64 +152,32 @@ if fg_bodies:
     port_solid.translate(V(0, -10.0, 0))
     port_tool = doc.addObject("Part::Feature", "CFD_PortSolidTool")
     port_tool.Shape = port_solid
-    
-    slice_compound = doc.addObject("Part::Compound", "CFD_SliceToolsCompound")
-    slice_compound.Links = [compound_obj, port_tool]
+
+    feat_fluid = doc.addObject("Part::Feature", "CFD_MainFluidFace")
+    feat_fluid.Shape = main_fluid_child.Shape
     doc.recompute()
-    tools_for_slice = [slice_compound]
-else:
-    tools_for_slice = [compound_obj]
 
-# ---------------------------------------------------------------------------
-# #slice the compound using the plane created from the sketch and this new compound
-# ---------------------------------------------------------------------------
-slice_obj = BOPTools.SplitFeatures.makeSlice(name="CFD_Slice")
-slice_obj.Base = clipping_face
-slice_obj.Tools = tools_for_slice
-slice_obj.Mode = "Split"
-doc.recompute()
-print(f"\nSliced compound with clipping plane: {len(slice_obj.Shape.Faces)} 2D faces produced.")
+    port_slice = BOPTools.SplitFeatures.makeSlice(name="CFD_PortSlice")
+    port_slice.Base = feat_fluid
+    port_slice.Tools = [port_tool]
+    port_slice.Mode = "Split"
+    doc.recompute()
 
-# ---------------------------------------------------------------------------
-# #Import.export the resulting 'Exploded Slice'
-# ---------------------------------------------------------------------------
-# Explode the sliced compound into individual topological faces
-exploded_res = CompoundTools.Explode.explodeCompound(slice_obj)
-exploded_group = exploded_res[0]
-exploded_children = exploded_res[1]
-doc.recompute()
+    port_exploded = CompoundTools.Explode.explodeCompound(port_slice)[1]
+    doc.recompute()
 
-# Match each sliced child face to its corresponding solid body (or fluid domain)
-slice_face_body_names = {}
-for child in exploded_children:
-    face = child.Shape
-    matched_name = "fluid_domain"
-    
-    for body in solid_bodies:
-        try:
-            overlap = face.common(body.Shape).Area
-            if overlap > 0.5 * face.Area:
-                matched_name = body.Label
-                break
-        except Exception:
-            pass
-            
-    slice_face_body_names[child.Name] = matched_name
-    print(f"  Child {child.Name:<14} (Area = {face.Area:>8.2f} mm^2) -> '{matched_name}'")
-
-# Temporarily assign descriptive labels so FreeCAD's Import.export writes them into STEP AP214/AP242 XDE
-orig_labels = {c.Name: c.Label for c in exploded_children}
-for c in exploded_children:
-    c.Label = slice_face_body_names[c.Name]
+    for child in port_exploded:
+        child.Label = "fluid_domain"
+        final_children.append(child)
+        print(f"  Child {child.Name:<14} (Area = {child.Shape.Area:>8.2f} mm^2) -> 'fluid_domain'")
+elif main_fluid_child is not None:
+    main_fluid_child.Label = "fluid_domain"
+    final_children.append(main_fluid_child)
 
 mesh_output_dir = os.path.dirname(os.path.abspath(__file__))
 step_export_path = os.path.join(mesh_output_dir, "exploded_slice.step")
-Import.export(exploded_children, step_export_path)
+Import.export(final_children, step_export_path)
 print(f"\nExported Exploded Slice to STEP with labels: '{step_export_path}'")
-
-# Restore original FreeCAD labels
-for c in exploded_children:
-    c.Label = orig_labels[c.Name]
 
 # ===========================================================================
 # GMSH 3D EXTRUSION & STRUCTURED TRANSFINITE MESHING PIPELINE
@@ -404,14 +416,14 @@ for dim, s_tag in all_surfs_3d:
             surface_groups.setdefault("injector_inlet_patch", []).append(s_tag)
             special_wall_patches.add("injector_inlet_patch")
             
+        # Special Rule: Essentially defines the z axis -> symmetry_patch
+        elif abs(bb[0]) < 1e-3 and abs(bb[3]) < 1e-3:
+            surface_groups.setdefault("symmetry_patch", []).append(s_tag)
+            special_wall_patches.add("symmetry_patch")
+            
         elif vname == "fluid_domain":
-            # Special Rule: Essentially defines the z axis -> symmetry_patch
-            if abs(bb[0]) < 1e-3 and abs(bb[3]) < 1e-3:
-                surface_groups.setdefault("symmetry_patch", []).append(s_tag)
-                special_wall_patches.add("symmetry_patch")
-                
             # Special Rule: Lower than the face that defines the bottom of the fuel grain (Z < 50 mm)
-            elif bb[5] < 50.0:
+            if bb[5] < 50.0:
                 # Face normal parallel to z axis (flat horizontal bottom at Z = -35 mm) -> outlet_patch
                 if abs(bb[2] - bb[5]) < 1e-3:
                     surface_groups.setdefault("outlet_patch", []).append(s_tag)

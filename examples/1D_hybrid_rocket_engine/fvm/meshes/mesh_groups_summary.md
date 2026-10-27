@@ -10,6 +10,7 @@
 - flange_fasteners_top_volume
 - fuel_grain_volume
 - housing_o_ring_volume
+- igniter_puck_volume
 - injector_bulkhead_volume
 - injector_disk_o_ring_volume
 - injector_disk_volume
@@ -31,6 +32,7 @@
 - flange_fasteners_bottom_to_fluid_domain_interface
 - flange_fasteners_bottom_to_outer_aluminum_nozzle_casing_interface
 - flange_fasteners_top_to_injector_bulkhead_interface
+- fluid_domain_to_igniter_puck_interface
 - fluid_domain_to_injector_bulkhead_interface
 - fluid_domain_to_injector_disk_interface
 - fluid_domain_to_inner_graphite_nozzle_interface

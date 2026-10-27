@@ -99,3 +99,15 @@ Other notes:
 
     - After doing the 3D mesh, make sure to call the API equivalent of Coherence Mesh;
 """
+
+
+"""
+I'm making a change to the CAD so this doesn't happen:
+
+Oh, one more thing, it appears that because the fluid domain has the injector_inlet face on it, the fluid's 
+tranfinite mesh is slanted slightly because the injector inlet is smaller than the cells on the other side 
+of the fluid domain, this causes issues because my current regression model cannot handle titled meshes. 
+Can you fix this. I think you have to make it so that the fluid domain receives a set of smaller cells 
+directly adjacent to the z_axis that are the same width as the injector radius/the radial length of the face 
+that defines the injector_inlet. 
+"""
