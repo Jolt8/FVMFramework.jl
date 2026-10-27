@@ -125,6 +125,7 @@ function get_injector_train_u0_and_properties(nitrous_oxide_model)
             specific_internal_energy = 0.0u"J/kg",
             specific_enthalpy = 0.0u"J/kg",
             vapor_fraction = 0.0u"kg/kg",
+            temperature = 298.0u"K"
         ),
         mid_section = (
             volume = 474.05u"mm^3",
@@ -143,6 +144,8 @@ function get_injector_train_u0_and_properties(nitrous_oxide_model)
         valve_flow_capacity_factor = 10.0u"mm^2",
     )
 
+    #NOTE: Updated 
+
     u0_mid_section_mass = mass_density(nitrous_oxide_model, 1.0u"atm", 298.0u"K", [1.0]) * properties.mid_section.volume |> u"kg"
 
     injector_u0 = ComponentVector(
@@ -152,7 +155,6 @@ function get_injector_train_u0_and_properties(nitrous_oxide_model)
         ),
         mid_section = (
             mass = u0_mid_section_mass,
-            temperature = 298.0u"K"
         )
     )
 
@@ -199,7 +201,7 @@ function update_injector_train_properties!(du, u, p, t, system, geo, props)
     mid_section_flash = pure_component_vt_flash(
         model,
         props.mid_section.volume,
-        u.mid_section.temperature,
+        props.mid_section.temperature,
         mid_section_n_moles,
     )
     props.mid_section.pressure = pressure(mid_section_flash)
@@ -234,6 +236,13 @@ function injector_valve_flow(du, u, p, t, system, geo, props)
     post_injector_cell_ids = system.post_injector_cell_ids
     chamber_pressure = sum([u.pressure[cell_id] for cell_id in post_injector_cell_ids]) / length(post_injector_cell_ids)
 
+    #=
+    println("")
+    @show props.tank.pressure
+    @show props.mid_section.pressure
+    @show chamber_pressure
+    =#
+
     if props.mid_section.pressure - chamber_pressure <= 0
         return 0.0
     end
@@ -261,7 +270,11 @@ end
 function update_injector_train!(du, u, p, t, system, geo)
     props = unpack_props_cache(u, system)
 
-    u.mid_section.temperature = 300.0
+    #u.mid_section.temperature = 300.0
+    #@show u.mid_section.temperature
+    #u.mid_section.temperature = 300.0
+    #du.mid_section.temperature = 1e10 * (300 - u.mid_section.temperature)
+    #@show du.mid_section.temperature
 
     #pressure(oxidizer_model, 100000, 300, [1.0])
     #vt_flash(oxidizer_model, 1.0, 300, 1.0)
@@ -285,14 +298,41 @@ function update_injector_train!(du, u, p, t, system, geo)
     #Mid Section
     mid_section_mass_rate =
         tank_to_mid_section_mass_flow - injector_mass_flow
-    mid_section_internal_energy_rate =
+    
+    #=
+    @show tank_to_mid_section_mass_flow
+    @show props.tank.specific_enthalpy
+    @show tank_to_mid_section_mass_flow * props.tank.specific_enthalpy
+    @show injector_mass_flow 
+    @show props.mid_section.specific_enthalpy
+    @show injector_mass_flow * props.mid_section.specific_enthalpy
+    =#
+    
+        mid_section_internal_energy_rate =
         tank_to_mid_section_mass_flow * props.tank.specific_enthalpy -
         injector_mass_flow * props.mid_section.specific_enthalpy
     du.mid_section.mass = mid_section_mass_rate
-    du.mid_section.temperature =
+
+    #=
+    @show mid_section_internal_energy_rate
+    @show props.mid_section.specific_internal_energy
+    @show mid_section_mass_rate
+    @show u.mid_section.mass
+    @show props.mid_section.cv
+    =#
+    
+    #=
+    du.mid_section.temperature +=
         (mid_section_internal_energy_rate -
          props.mid_section.specific_internal_energy * mid_section_mass_rate) /
         (u.mid_section.mass * props.mid_section.cv)
+    =#
+    #@show du.mid_section.temperature
+
+    #=
+    @show u.mid_section.temperature
+    =#
+    
 
     injector_velocity = injector_mass_flow / (props.mid_section.density * props.injector_orifice_area)
 
