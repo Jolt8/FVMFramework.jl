@@ -303,6 +303,7 @@ function update_injector_train!(du, u, p, t, system, geo)
         mid_section_density = props.mid_section.density,
         mid_section_specific_internal_energy = props.mid_section.specific_internal_energy,
         injector_velocity = injector_velocity,
+        injector_area = props.injector_orifice_area,
     )
 end
 
