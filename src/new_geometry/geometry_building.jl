@@ -273,7 +273,8 @@ function build_fvm_geo_into_struct(grid, top)
         node_coordinates = get_mutable_node_coordinates(grid)
     end
     =#
-    geo = generate_fvm_geometry(grid, top; get_node_coordinates(grid)) # Since the eltype of the node_coordinates determines the type of everything else, we don't even have to pass a make_mutable argument
+    node_coordinates = get_node_coordinates(grid)
+    geo = generate_fvm_geometry(grid, top; node_coordinates = node_coordinates)
     update_fvm_geometry!(geo, node_coordinates)
     return geo
 end
