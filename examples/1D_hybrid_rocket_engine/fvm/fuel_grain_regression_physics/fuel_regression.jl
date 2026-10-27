@@ -36,7 +36,12 @@ struct FuelWallFace
     fuel_face_idx::Int
 end
 
-struct FuelRegressionModel
+struct FuelRegressionWorkspace{NV, PR}
+    node_velocities::NV
+    port_radius_rates::PR
+end
+
+struct FuelRegressionModel{W}
     axial_positions::Vector{AxialPosition}
     regression_nodes::Vector{FuelRegressionNode}
     wall_faces::Vector{FuelWallFace}
@@ -44,8 +49,7 @@ struct FuelRegressionModel
     fluid_cell_mask::BitVector
     neighbor_cell_by_face::Vector{Vector{Int}}
     initial_node_coordinates::Vector{SVector{3, Float64}}
-    node_velocities::Vector{SVector{3, Float64}}
-    port_radius_rates::Vector{Float64}
+    workspaces::W
 end
 
 function _unique_sorted_with_tolerance(values; atol)
@@ -291,6 +295,17 @@ function create_fuel_regression_model(grid, geo; atol = 1e-10)
     fluid_cell_mask[all_fluid_cell_ids] .= true
 
     initial_node_coordinates = SVector{3, Float64}.(geo.node_coordinates)
+    n_nodes = length(geo.node_coordinates)
+    n_axial_positions = length(axial_positions)
+    workspaces = GeneralLazyBufferCache() do seed
+        zero_value = zero(seed)
+        zero_velocity = SVector(zero_value, zero_value, zero_value)
+        FuelRegressionWorkspace(
+            fill(zero_velocity, n_nodes),
+            fill(zero_value, n_axial_positions),
+        )
+    end
+
     return FuelRegressionModel(
         axial_positions,
         regression_nodes,
@@ -299,16 +314,17 @@ function create_fuel_regression_model(grid, geo; atol = 1e-10)
         fluid_cell_mask,
         _build_neighbor_cell_by_face(geo),
         initial_node_coordinates,
-        fill(zero(SVector{3, Float64}), length(geo.node_coordinates)),
-        zeros(length(axial_positions)),
+        workspaces,
     )
 end
 
 function initialize_fuel_grain_thickness!(fuel_grain_thickness, model::FuelRegressionModel)
+    thickness_unit = oneunit(first(fuel_grain_thickness))
     for axial_position in model.axial_positions
-        fuel_grain_thickness[axial_position.thickness_state_idx] = axial_position.initial_fuel_grain_thickness * u"m"
+        fuel_grain_thickness[axial_position.thickness_state_idx] =
+            axial_position.initial_fuel_grain_thickness * thickness_unit
     end
-    #return fuel_grain_thickness
+    return fuel_grain_thickness
 end
 
 function move_fuel_wall!(u, model::FuelRegressionModel, geo)
@@ -319,8 +335,8 @@ function move_fuel_wall!(u, model::FuelRegressionModel, geo)
                             u.fuel_grain_thickness[axial_position.thickness_state_idx]
         new_x = regression_node.initial_x +
                 regression_node.port_radius_multiplier * wall_displacement
-        initial_coordinate = model.initial_node_coordinates[regression_node.node_id]
-        geo.node_coordinates[regression_node.node_id] = setindex(initial_coordinate, new_x, 1)
+        coordinate = geo.node_coordinates[regression_node.node_id]
+        geo.node_coordinates[regression_node.node_id] = setindex(coordinate, new_x, 1)
     end
     return nothing
 end
@@ -332,11 +348,16 @@ function update_fuel_regression_geometry!(u, model::FuelRegressionModel, geo, gr
     return nothing
 end
 
-function get_axial_oxidizer_mass_flux(u, geo, axial_position::AxialPosition)
-    face_entries = isempty(axial_position.sorted_upstream_fluid_cell_entries) ?
+function get_axial_oxidizer_mass_flux_and_fuel_grain_face_temperature(u, geo, axial_position::AxialPosition)
+    use_downstream_entries = isempty(axial_position.sorted_upstream_fluid_cell_entries)
+    face_entries = use_downstream_entries ?
         axial_position.sorted_downstream_fluid_cell_entries :
         axial_position.sorted_upstream_fluid_cell_entries
-    isempty(face_entries) && return 0.0
+    fuel_entries = use_downstream_entries ?
+        axial_position.sorted_downstream_fuel_cell_entries :
+        axial_position.sorted_upstream_fuel_cell_entries
+    isempty(face_entries) && return 0.0, 0.0
+    isempty(fuel_entries) && return 0.0, 0.0
 
     oxidizer_mass_flow = 0.0
     cross_sectional_area = 0.0
@@ -346,48 +367,73 @@ function get_axial_oxidizer_mass_flux(u, geo, axial_position::AxialPosition)
         density = u.density[cell_id]
         axial_velocity = iszero(density) ? zero(density) : u.momentum_density_w[cell_id] / density
         face_area = geo.cell_face_areas[cell_id, face_idx]
-        oxidizer_mass_flow += abs(axial_velocity) *
-                              u.species_densities.nitrous_oxide[cell_id] * face_area
+        oxidizer_mass_flow += abs(axial_velocity) * u.species_densities.nitrous_oxide[cell_id] * face_area
         cross_sectional_area += face_area
     end
-    return iszero(cross_sectional_area) ? 0.0 : oxidizer_mass_flow / cross_sectional_area
+
+    fluid_entry = last(face_entries)
+    fuel_entry = first(fuel_entries)
+    fluid_cell_id = fluid_entry.cell_id
+    fuel_cell_id = fuel_entry.cell_id
+    fluid_face_distance = geo.cell_face_distances[
+        fluid_cell_id, fluid_entry.face_idx_facing_toward_fuel_wall,
+    ]
+    fuel_face_distance = geo.cell_face_distances[
+        fuel_cell_id, fuel_entry.face_idx_facing_toward_fuel_wall,
+    ]
+    fluid_conductance = u.k[fluid_cell_id] / fluid_face_distance
+    fuel_conductance = u.k[fuel_cell_id] / fuel_face_distance
+    total_conductance = fluid_conductance + fuel_conductance
+    fuel_grain_face_temperature = iszero(total_conductance) ?
+        (u.temperature[fluid_cell_id] + u.temperature[fuel_cell_id]) / 2 :
+        (fluid_conductance * u.temperature[fluid_cell_id] +
+         fuel_conductance * u.temperature[fuel_cell_id]) / total_conductance
+
+    oxidizer_mass_flux = iszero(cross_sectional_area) ?
+        zero(oxidizer_mass_flow) : oxidizer_mass_flow / cross_sectional_area
+    return oxidizer_mass_flux, fuel_grain_face_temperature
 end
 
-function calculate_fuel_regression_rates!(du, u, p, t, system, model::FuelRegressionModel, geo)
+function calculate_fuel_regression_rates!(du, u, p, t, system, model::FuelRegressionModel, workspace, geo)
     for (position_id, axial_position) in enumerate(model.axial_positions)
-        oxidizer_mass_flux = get_axial_oxidizer_mass_flux(u, geo, axial_position)
-        regression_rate = p.regression_coefficient_a *
-                          max(oxidizer_mass_flux, zero(oxidizer_mass_flux)) ^
-                          p.regression_exponent_n
-        du.fuel_grain_thickness[axial_position.thickness_state_idx] = -regression_rate
-        model.port_radius_rates[position_id] = regression_rate
+        oxidizer_mass_flux, fuel_grain_face_temperature =
+            get_axial_oxidizer_mass_flux_and_fuel_grain_face_temperature(u, geo, axial_position)
+        if fuel_grain_face_temperature > p.min_fuel_regression_temperature
+            regression_rate = p.regression_coefficient_a * max(oxidizer_mass_flux, zero(oxidizer_mass_flux)) ^ p.regression_exponent_n
+            du.fuel_grain_thickness[axial_position.thickness_state_idx] = -regression_rate
+            workspace.port_radius_rates[position_id] = regression_rate
+        end
     end
     return nothing
 end
 
-function _update_node_velocities!(model::FuelRegressionModel)
-    fill!(model.node_velocities, zero(eltype(model.node_velocities)))
+function _update_node_velocities!(model::FuelRegressionModel, workspace)
+    fill!(workspace.node_velocities, zero(eltype(workspace.node_velocities)))
     for regression_node in model.regression_nodes
         radial_velocity = regression_node.port_radius_multiplier *
-                          model.port_radius_rates[regression_node.axial_position_id]
-        model.node_velocities[regression_node.node_id] = SVector(radial_velocity, 0.0, 0.0)
+                          workspace.port_radius_rates[regression_node.axial_position_id]
+        workspace.node_velocities[regression_node.node_id] = SVector(
+            radial_velocity,
+            zero(radial_velocity),
+            zero(radial_velocity),
+        )
     end
     return nothing
 end
 
-@inline function _face_mesh_velocity(model::FuelRegressionModel, geo, cell_id, face_idx)
+@inline function _face_mesh_velocity(model::FuelRegressionModel, workspace, geo, cell_id, face_idx)
     face_node_ids = _face_node_ids(geo, cell_id, face_idx)
-    velocity = zero(eltype(model.node_velocities))
+    velocity = zero(eltype(workspace.node_velocities))
     for node_id in face_node_ids
-        velocity += model.node_velocities[node_id]
+        velocity += workspace.node_velocities[node_id]
     end
     return velocity / length(face_node_ids)
 end
 
-function _mesh_flux_for_scalar(u_values, model, geo, cell_id, volume_rate)
+function _mesh_flux_for_scalar(u_values, model, workspace, geo, cell_id, volume_rate)
     mesh_flux = zero(u_values[cell_id] * volume_rate)
     for face_idx in 1:geo.cell_n_faces[cell_id]
-        face_velocity = _face_mesh_velocity(model, geo, cell_id, face_idx)
+        face_velocity = _face_mesh_velocity(model, workspace, geo, cell_id, face_idx)
         swept_volume_rate = dot(face_velocity, geo.cell_face_normals[cell_id, face_idx]) *
                             geo.cell_face_areas[cell_id, face_idx]
         neighbor_cell_id = model.neighbor_cell_by_face[cell_id][face_idx]
@@ -399,56 +445,58 @@ function _mesh_flux_for_scalar(u_values, model, geo, cell_id, volume_rate)
     return mesh_flux - u_values[cell_id] * volume_rate
 end
 
-function apply_fuel_regression_ale!(du, u, model::FuelRegressionModel, geo)
+function apply_fuel_regression_ale!(du, u, model::FuelRegressionModel, workspace, geo)
     for cell_id in model.affected_fluid_cell_ids
         volume_rate = 0.0
         for face_idx in 1:geo.cell_n_faces[cell_id]
-            face_velocity = _face_mesh_velocity(model, geo, cell_id, face_idx)
+            face_velocity = _face_mesh_velocity(model, workspace, geo, cell_id, face_idx)
             volume_rate += dot(face_velocity, geo.cell_face_normals[cell_id, face_idx]) *
                            geo.cell_face_areas[cell_id, face_idx]
         end
         inverse_volume = inv(geo.cell_volumes[cell_id])
 
         du.density[cell_id] += _mesh_flux_for_scalar(
-            u.density, model, geo, cell_id, volume_rate,
+            u.density, model, workspace, geo, cell_id, volume_rate,
         ) * inverse_volume
         du.momentum_density_u[cell_id] += _mesh_flux_for_scalar(
-            u.momentum_density_u, model, geo, cell_id, volume_rate,
+            u.momentum_density_u, model, workspace, geo, cell_id, volume_rate,
         ) * inverse_volume
         du.momentum_density_v[cell_id] += _mesh_flux_for_scalar(
-            u.momentum_density_v, model, geo, cell_id, volume_rate,
+            u.momentum_density_v, model, workspace, geo, cell_id, volume_rate,
         ) * inverse_volume
         du.momentum_density_w[cell_id] += _mesh_flux_for_scalar(
-            u.momentum_density_w, model, geo, cell_id, volume_rate,
+            u.momentum_density_w, model, workspace, geo, cell_id, volume_rate,
         ) * inverse_volume
         du.volumetric_energy[cell_id] += _mesh_flux_for_scalar(
-            u.volumetric_energy, model, geo, cell_id, volume_rate,
+            u.volumetric_energy, model, workspace, geo, cell_id, volume_rate,
         ) * inverse_volume
 
         for_fields!(du.species_densities, u.species_densities) do species, du_species, u_species
             du_species[species[cell_id]] += _mesh_flux_for_scalar(
-                u_species[species], model, geo, cell_id, volume_rate,
+                u_species[species], model, workspace, geo, cell_id, volume_rate,
             ) * inverse_volume
         end
 
         if hasproperty(u, :turbulent_kinetic_energy_density)
             du.turbulent_kinetic_energy_density[cell_id] += _mesh_flux_for_scalar(
-                u.turbulent_kinetic_energy_density, model, geo, cell_id, volume_rate,
+                u.turbulent_kinetic_energy_density, model, workspace, geo, cell_id, volume_rate,
             ) * inverse_volume
             du.specific_dissipation_rate_density[cell_id] += _mesh_flux_for_scalar(
-                u.specific_dissipation_rate_density, model, geo, cell_id, volume_rate,
+                u.specific_dissipation_rate_density, model, workspace, geo, cell_id, volume_rate,
             ) * inverse_volume
         end
     end
     return nothing
 end
 
-function apply_fuel_regression_sources!(du, u, p, t, system, model::FuelRegressionModel, geo)
+function apply_fuel_regression_sources!(
+        du, u, p, t, system, model::FuelRegressionModel, workspace, geo,
+    )
     for wall_face in model.wall_faces
         fluid_cell_id = wall_face.fluid_cell_id
         fuel_cell_id = wall_face.fuel_cell_id
         face_idx = wall_face.fluid_face_idx
-        face_velocity = _face_mesh_velocity(model, geo, fluid_cell_id, face_idx)
+        face_velocity = _face_mesh_velocity(model, workspace, geo, fluid_cell_id, face_idx)
         swept_volume_rate = dot(face_velocity, geo.cell_face_normals[fluid_cell_id, face_idx]) *
                             geo.cell_face_areas[fluid_cell_id, face_idx]
         fuel_mass_flow = u.density[fuel_cell_id] * max(swept_volume_rate, 0.0)
@@ -468,9 +516,11 @@ end
 
 function regress_fuel_layers!(du, u, p, t, system, geo)
     model = system.fuel_regression_model
-    calculate_fuel_regression_rates!(du, u, p, t, system, model, geo)
-    _update_node_velocities!(model)
-    apply_fuel_regression_ale!(du, u, model, geo)
-    apply_fuel_regression_sources!(du, u, p, t, system, model, geo)
+    seed = u.fuel_grain_thickness[first(model.axial_positions).thickness_state_idx]
+    workspace = get_tmp(model.workspaces, seed)
+    calculate_fuel_regression_rates!(du, u, p, t, system, model, workspace, geo)
+    _update_node_velocities!(model, workspace)
+    apply_fuel_regression_ale!(du, u, model, workspace, geo)
+    apply_fuel_regression_sources!(du, u, p, t, system, model, workspace, geo)
     return nothing
 end
