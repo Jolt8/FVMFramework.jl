@@ -33,7 +33,7 @@ function subsonic_inlet_flux!(
         inlet_conditions.mid_section_specific_internal_energy
     mass_flow = inlet_conditions.mass_flow
     injector_velocity = inlet_conditions.injector_velocity
-    injector_area = system.injector_train_properties.injector_orifice_area
+    injector_area = inlet_conditions.injector_area
 
     density > zero(density) || throw(DomainError(
         density,
