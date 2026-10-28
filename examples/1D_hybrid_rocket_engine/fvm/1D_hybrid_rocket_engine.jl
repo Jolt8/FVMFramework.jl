@@ -302,14 +302,17 @@ function heat_diffusion!(
         face_area_b, face_normal_b, face_distance_b, volume_b,
     ) = interface_geometry(geo, idx_a, face_a, idx_b, face_b)
 
-    k_effective = 2 * u.k[idx_a] * u.k[idx_b] / (u.k[idx_a] + u.k[idx_b])
+    # Treat the portions of cells A and B between their centroids and the
+    # shared face as thermal resistances in series. This remains correct when
+    # the fluid and solid centroid-to-face distances are unequal.
+    thermal_resistance_a = face_distance_a / u.k[idx_a]
+    thermal_resistance_b = face_distance_b / u.k[idx_b]
+    total_interface_thermal_resistance = thermal_resistance_a + thermal_resistance_b
 
-    grad_T = (u.temperature[idx_b] - u.temperature[idx_a]) / dist
+    heat_flow_from_a_to_b = face_area_a * (u.temperature[idx_a] - u.temperature[idx_b]) / total_interface_thermal_resistance
 
-    heat_exchange = -k_effective * grad_T * face_area_a
-
-    du.volumetric_energy[idx_a] -= heat_exchange / volume_a
-    du.volumetric_energy[idx_b] += heat_exchange / volume_b
+    du.volumetric_energy[idx_a] -= heat_flow_from_a_to_b / volume_a
+    du.volumetric_energy[idx_b] += heat_flow_from_a_to_b / volume_b
 
     #=
     if idx_a == 443
@@ -337,9 +340,10 @@ function fluid_solid_flux!(
     idx_a, face_a, 
     idx_b, face_b,
 )
-    heat_diffusion!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b) #Don't think this is the most accurate because it neglects convection and radiation
-        #TODO: implement convection here
-        #Radiation can be saved for later if it's discovered that it's actually needed
+    # Fluid advection resolves the convective transport to the wall, while
+    # this conjugate interface supplies the wall-normal conductive heat flow.
+    # Radiation is omitted because it is not currently part of the model.
+    heat_diffusion!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     no_slip_adiabatic_wall_flux!(du, u, p, t, system, geo, idx_a, face_a)
 end
 
@@ -436,14 +440,40 @@ function update_fluid_diffusion_coefficients!(du, u, p, t, system, geo, cell_id)
     end
 end
 
-function add_axisymmetric_inviscid_source!(
+function add_axisymmetric_momentum_sources!(
     du, u, p, t, system, geo, cell_id
 )
-    r = geo.cell_centroids[cell_id][1]
+    radius = geo.cell_centroids[cell_id][1]
+    radius > zero(radius) || throw(ArgumentError(
+        "axisymmetric momentum sources require a positive cell radius",
+    ))
 
-    # Radial momentum source for axisymmetric Euler flow without swirl.
-    du.momentum_density_u[cell_id] += u.pressure[cell_id] / r
-    #Note, this must be (p + ρ u_θ² - τ_θθ) / r in the future
+    radial_velocity = u.vel_u[cell_id]
+    azimuthal_velocity = u.vel_v[cell_id]
+    velocity_divergence = u.grad_vel_u[cell_id, 1] + radial_velocity / radius + u.grad_vel_w[cell_id, 3]
+
+    dynamic_viscosity = hasproperty(u, :effective_dynamic_viscosity) ?
+        u.effective_dynamic_viscosity[cell_id] : u.mu[cell_id]
+    isotropic_viscous_stress = (2 / 3) * dynamic_viscosity * velocity_divergence
+
+    turbulent_normal_stress = hasproperty(u, :turbulent_kinetic_energy) ?
+        (2 / 3) * u.density[cell_id] * u.turbulent_kinetic_energy[cell_id] : zero(isotropic_viscous_stress)
+
+    azimuthal_normal_stress = 2 * dynamic_viscosity * radial_velocity / radius - isotropic_viscous_stress - turbulent_normal_stress
+    radial_azimuthal_stress = dynamic_viscosity * (u.grad_vel_v[cell_id, 1] - azimuthal_velocity / radius)
+
+    radial_momentum_source = (
+        u.pressure[cell_id] +
+        u.density[cell_id] * azimuthal_velocity^2 -
+        azimuthal_normal_stress
+    ) / radius
+    azimuthal_momentum_source = (
+        radial_azimuthal_stress -
+        u.density[cell_id] * radial_velocity * azimuthal_velocity
+    ) / radius
+
+    du.momentum_density_u[cell_id] += radial_momentum_source
+    du.momentum_density_v[cell_id] += azimuthal_momentum_source
 
     return nothing
 end
@@ -465,7 +495,7 @@ end
 function fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
     update_species_molar_concentrations!(du, u, p, t, system, geo, cell_id)
     overall_combustion_model!(du, u, p, t, system, geo, cell_id)
-    add_axisymmetric_inviscid_source!(du, u, p, t, system, geo, cell_id)
+    add_axisymmetric_momentum_sources!(du, u, p, t, system, geo, cell_id)
 end
 
 add_region!(
@@ -514,7 +544,7 @@ add_region!(
             update_species_molar_concentrations!(du, u, p, t, system, geo, cell_id)
             overall_combustion_model!(du, u, p, t, system, geo, cell_id)
             cap_navier_stokes_flow!(du, u, p, t, system, geo, cell_id)
-            add_axisymmetric_inviscid_source!(du, u, p, t, system, geo, cell_id)
+            add_axisymmetric_momentum_sources!(du, u, p, t, system, geo, cell_id)
         else
             update_igniter_puck_combustion_source!(du, u, p, t, system, geo, cell_id)
         end
@@ -676,9 +706,9 @@ add_patch!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
     )
-        heat_diffusion!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b) #Don't think this is the most accurate because it neglects convection and radiation
-        #TODO: implement convection here
-        #Radiation can be saved for later if it's discovered that it's actually needed
+        # The resolved fluid advection and interface conduction together form
+        # the conjugate convective heat-transfer model. Radiation is omitted.
+        heat_diffusion!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
         no_slip_adiabatic_wall_flux!(du, u, p, t, system, geo, idx_a, face_a)
 
         #TODO: put in the regression logic here
@@ -919,7 +949,7 @@ for name in [
 end
 
 wls_stencil = build_weighted_least_squares_stencil(config.geo)
-sst_wall_distances = create_sst_wall_distances(grid, config.geo, 
+sst_wall_distances = create_sst_wall_distances(grid, config.geo,
     [
         "fuel_wall_patch",
 

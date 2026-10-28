@@ -396,8 +396,10 @@ end
 
 function calculate_fuel_regression_rates!(du, u, p, t, system, model::FuelRegressionModel, workspace, geo)
     for (position_id, axial_position) in enumerate(model.axial_positions)
-        oxidizer_mass_flux, fuel_grain_face_temperature =
-            get_axial_oxidizer_mass_flux_and_fuel_grain_face_temperature(u, geo, axial_position)
+        oxidizer_mass_flux, fuel_grain_face_temperature = get_axial_oxidizer_mass_flux_and_fuel_grain_face_temperature(u, geo, axial_position)
+        
+        workspace.port_radius_rates[position_id] = 0.0
+
         if fuel_grain_face_temperature > p.min_fuel_regression_temperature
             regression_rate = p.regression_coefficient_a * max(oxidizer_mass_flux, zero(oxidizer_mass_flux)) ^ p.regression_exponent_n
             du.fuel_grain_thickness[axial_position.thickness_state_idx] = -regression_rate

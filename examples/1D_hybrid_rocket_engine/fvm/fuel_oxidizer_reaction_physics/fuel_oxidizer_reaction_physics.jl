@@ -18,12 +18,19 @@ function decompose_nitrous_oxide!(du, u, p, t, system, geo, cell_id)
     du.species_densities.nitrogen[cell_id] += 2 * rate * u.molar_masses.nitrogen[cell_id]
 end
 
-function turbulence_limited_reaction_rate(du, u, p, t, system, geo, cell_id, limiting_species_term)
+"""
+Calculate the turbulence-limited consumption rate of a reactant-equivalent mass.
+
+`limiting_reactant_mass_density` is expressed as the mass density of the reference
+reactant for the reaction. The returned rate therefore has units of kg/(m^3*s);
+each reaction converts it to mol/(m^3*s) with that reference reactant's molar mass.
+"""
+function turbulence_limited_reactant_mass_rate_density(u, p, cell_id, limiting_reactant_mass_density)
     turbulence_mixing_timescale = u.density[cell_id] / u.specific_dissipation_rate_density[cell_id]
 
-    turbulence_preducted_reaction_rate = p.turbulence_limited_reaction_rate_mix_parameter * (u.density[cell_id] / turbulence_mixing_timescale) * limiting_species_term
+    turbulence_limited_mass_rate_density = p.turbulence_limited_reaction_rate_mix_parameter * limiting_reactant_mass_density / turbulence_mixing_timescale
 
-    return turbulence_preducted_reaction_rate
+    return turbulence_limited_mass_rate_density
 end
 
 Revise.includet("combustion_reaction_model/simple_arrhenius_reaction_model.jl")

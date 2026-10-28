@@ -8,10 +8,12 @@ function westbrook_dryer_step_1!(du, u, p, t, system, geo, cell_id)
 
     chemical_rate = rate_constant * u.molar_concentrations.ethylene[cell_id]^0.1 * u.molar_concentrations.oxygen[cell_id]^1.65
 
-    oxygen_to_ethylene_mass_ratio = 2 * u.molar_masses.oxygen[cell_id] / u.molar_masses.ethylene[cell_id]
+    oxygen_mass_required_per_ethylene_mass = 2 * u.molar_masses.oxygen[cell_id] / u.molar_masses.ethylene[cell_id]
+    oxygen_as_ethylene_equivalent_mass_density = u.species_densities.oxygen[cell_id] / oxygen_mass_required_per_ethylene_mass
+    limiting_ethylene_equivalent_mass_density = min(u.species_densities.ethylene[cell_id], oxygen_as_ethylene_equivalent_mass_density)
 
-    limiting_species_term = min(u.species_densities.ethylene[cell_id], u.species_densities.oxygen[cell_id] * oxygen_to_ethylene_mass_ratio)
-    turbulence_limited_rate = turbulence_limited_reaction_rate(du, u, p, t, system, geo, cell_id, limiting_species_term)
+    turbulence_limited_ethylene_mass_rate_density = turbulence_limited_reactant_mass_rate_density(u, p, cell_id, limiting_ethylene_equivalent_mass_density)
+    turbulence_limited_rate = turbulence_limited_ethylene_mass_rate_density / u.molar_masses.ethylene[cell_id]
 
     rate = min(chemical_rate, turbulence_limited_rate) #[mol/(m^3*s)]
 
@@ -35,12 +37,14 @@ function westbrook_dryer_step_2_forward!(du, u, p, t, system, geo, cell_id)
 
     chemical_rate = rate_constant * u.molar_concentrations.carbon_monoxide[cell_id] * u.molar_concentrations.water[cell_id]^0.5 * u.molar_concentrations.oxygen[cell_id]^0.25
 
-    oxygen_to_carbon_monoxide_mass_ratio = 0.5 * u.molar_masses.oxygen[cell_id] / u.molar_masses.carbon_monoxide[cell_id]
+    oxygen_mass_required_per_carbon_monoxide_mass = 0.5 * u.molar_masses.oxygen[cell_id] / u.molar_masses.carbon_monoxide[cell_id]
+    oxygen_as_carbon_monoxide_equivalent_mass_density = u.species_densities.oxygen[cell_id] / oxygen_mass_required_per_carbon_monoxide_mass
+    limiting_carbon_monoxide_equivalent_mass_density = min(u.species_densities.carbon_monoxide[cell_id], oxygen_as_carbon_monoxide_equivalent_mass_density)
 
-    limiting_species_term = min(u.species_densities.carbon_monoxide[cell_id], u.species_densities.oxygen[cell_id] * oxygen_to_carbon_monoxide_mass_ratio) 
-    turbulence_limited_rate = turbulence_limited_reaction_rate(du, u, p, t, system, geo, cell_id, limiting_species_term)
+    turbulence_limited_carbon_monoxide_mass_rate_density = turbulence_limited_reactant_mass_rate_density(u, p, cell_id, limiting_carbon_monoxide_equivalent_mass_density)
+    turbulence_limited_rate = turbulence_limited_carbon_monoxide_mass_rate_density / u.molar_masses.carbon_monoxide[cell_id]
 
-    rate = min(chemical_rate, turbulence_limited_rate)
+    rate = min(chemical_rate, turbulence_limited_rate) #[mol/(m^3*s)]
 
     du.species_densities.carbon_monoxide[cell_id] -= rate * u.molar_masses.carbon_monoxide[cell_id]
     du.species_densities.oxygen[cell_id] -= 0.5 * rate * u.molar_masses.oxygen[cell_id]
@@ -61,7 +65,9 @@ function westbrook_dryer_step_2_reverse!(du, u, p, t, system, geo, cell_id)
 
     chemical_rate = rate_constant * u.molar_concentrations.carbon_dioxide[cell_id]
 
-    rate = chemical_rate #since this is first order, it's not dependent on mixing!
+    # CO2 dissociation is a homogeneous unimolecular step. It does not require
+    # two reactants to mix, so the chemical rate is not turbulence-limited.
+    rate = chemical_rate #[mol/(m^3*s)]
 
     du.species_densities.carbon_dioxide[cell_id] -= rate * u.molar_masses.carbon_dioxide[cell_id]
     du.species_densities.carbon_monoxide[cell_id] += rate * u.molar_masses.carbon_monoxide[cell_id]

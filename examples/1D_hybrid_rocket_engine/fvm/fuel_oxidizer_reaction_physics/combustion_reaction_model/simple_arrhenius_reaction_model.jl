@@ -11,7 +11,12 @@ function combust_ethylene_and_oxygen_simple!(du, u, p, t, system, geo, cell_id)
 
     arrhenius_predicted_reaction_rate = rate_constant * u.molar_concentrations.ethylene[cell_id]^0.1 * u.molar_concentrations.oxygen[cell_id]^1.65
 
-    turbulence_limited_reaction_rate = turbulence_limited_reaction_rate(du, u, p, t, system, geo, cell_id)
+    oxygen_mass_required_per_ethylene_mass = 3 * u.molar_masses.oxygen[cell_id] / u.molar_masses.ethylene[cell_id]
+    oxygen_as_ethylene_equivalent_mass_density = u.species_densities.oxygen[cell_id] / oxygen_mass_required_per_ethylene_mass
+    limiting_ethylene_equivalent_mass_density = min(u.species_densities.ethylene[cell_id], oxygen_as_ethylene_equivalent_mass_density)
+
+    turbulence_limited_ethylene_mass_rate_density = turbulence_limited_reactant_mass_rate_density(u, p, cell_id, limiting_ethylene_equivalent_mass_density)
+    turbulence_limited_reaction_rate = turbulence_limited_ethylene_mass_rate_density / u.molar_masses.ethylene[cell_id]
     
     reaction_rate = min(arrhenius_predicted_reaction_rate, turbulence_limited_reaction_rate) #[mol/(m^3*s)]
     
