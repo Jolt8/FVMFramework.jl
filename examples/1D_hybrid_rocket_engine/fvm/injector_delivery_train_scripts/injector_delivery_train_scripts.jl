@@ -125,9 +125,9 @@ function get_injector_train_u0_and_properties(nitrous_oxide_model)
             specific_internal_energy = 0.0u"J/kg",
             specific_enthalpy = 0.0u"J/kg",
             vapor_fraction = 0.0u"kg/kg",
-            temperature = 298.0u"K"
         ),
         mid_section = (
+            temperature = 298.0u"K",
             volume = 474.05u"mm^3",
             density = 0.0u"kg/m^3",
             pressure = 0.0u"bar",
@@ -338,7 +338,7 @@ function update_injector_train!(du, u, p, t, system, geo)
 
     return ComponentVector(
         mass_flow = injector_mass_flow,
-        mid_section_temperature = u.mid_section.temperature,
+        mid_section_temperature = props.mid_section.temperature,
         mid_section_pressure = props.mid_section.pressure,
         mid_section_density = props.mid_section.density,
         mid_section_specific_internal_energy = props.mid_section.specific_internal_energy,
