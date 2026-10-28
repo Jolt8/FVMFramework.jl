@@ -140,4 +140,16 @@ function characteristic_farfield_flux!(
             )
         end
     end
+
+    if hasproperty(du, :species_density_flow)
+        if F_density >= 0.0
+            # Outflow: composition comes from the interior.
+            add_boundary_species_advection_flux!(du, u, idx_a, face_area, F_density)
+        else
+            # Inflow: composition comes from the farfield.
+            farfield_mass_fractions = farfield_conditions.species_densities ./ farfield_conditions.density
+    
+            add_prescribed_boundary_species_advection_flux!(du, u, idx_a, face_area, F_density, farfield_mass_fractions)
+        end
+    end
 end
