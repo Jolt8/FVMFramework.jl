@@ -147,6 +147,9 @@ export iluzero, algebraicmultigrid
 include("solvers/callbacks/progress_callbacks.jl")
 export show_t_progress, approximate_time_to_finish_cb
 
+include("solvers/callbacks/plot_approximate_time_to_finish_cb.jl")
+export plot_approximate_time_to_finish_cb
+
 #   ---- Common Operator Methods ----
 include("solvers/common_operator_methods/unpack_fvm_state.jl")
 export unpack_fvm_state

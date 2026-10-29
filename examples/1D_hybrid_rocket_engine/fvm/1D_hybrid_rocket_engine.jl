@@ -946,7 +946,7 @@ for name in [
     )
 end
 
-wls_stencil = build_weighted_least_squares_stencil(config.geo)
+wls_stencil = build_weighted_least_squares_stencil(config.geo);
 sst_wall_distances = create_sst_wall_distances(grid, config.geo,
     [
         "fuel_wall_patch",
@@ -958,7 +958,7 @@ sst_wall_distances = create_sst_wall_distances(grid, config.geo,
         "fluid_domain_to_phenolic_liner_interface",
         "flange_fasteners_bottom_to_fluid_domain_interface"
     ]
-)
+);
 
 nitrous_oxide_model = PR(["nitrous oxide"])
 
@@ -996,7 +996,7 @@ additional_data = (
 
     #Igniter 
     igniter = igniter_system_properties
-)
+);
 
 du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, additional_data, check_units = false);
 
@@ -1064,13 +1064,16 @@ ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
 startup_prob = ODEProblem(ode_func, u0_vec, (t0, switch_time), p_guess)
 
 callbacks = CallbackSet(
-    approximate_time_to_finish_cb,
+    #approximate_time_to_finish_cb,
+    plot_approximate_time_to_finish_cb
     #increase_dtmax_cb,
 )
 
 Revise.includet(joinpath(@__DIR__, "state_is_invalid/state_is_invalid.jl"))
 
 state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
+
+using Plots
 
 @time startup_sol = solve(
     startup_prob,
@@ -1084,6 +1087,12 @@ state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
     callback = callbacks,
     isoutofdomain = state_is_invalid_closure,
 )
+
+function plot_global_logged_times()
+    plot(FVMFramework.real_time_FVMFramework_plot_approx_time_to_finish_cb, FVMFramework.sim_time_FVMFramework_plot_approx_time_to_finish_cb)
+end
+
+plot_global_logged_times()
 
 steady_prob = remake(startup_prob; u0 = startup_sol.u[end], tspan = (switch_time, tMax))
 
