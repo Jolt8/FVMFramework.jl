@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.6"
+julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "535a6abb1f278d4c49f2ad8dcb53f81d995d60b5"
+project_hash = "76e6ca359ea4b0268639e7eeedea8541e31469c0"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -842,7 +842,7 @@ uuid = "4fce6fc7-ba6a-5f4c-898f-77e99806d6f8"
 version = "1.3.8+0"
 
 [[deps.FVMFramework]]
-deps = ["ADTypes", "AlgebraicMultigrid", "Clapeyron", "ComponentArrays", "DSP", "DataInterpolations", "Dates", "DiffEqFlux", "Enzyme", "Ferrite", "ForwardDiff", "ILUZero", "LinearAlgebra", "LinearSolve", "Logging", "Lux", "NonlinearSolve", "Optimization", "OptimizationBBO", "OptimizationOptimJL", "OptimizationPolyalgorithms", "OrdinaryDiffEq", "Polyester", "PreallocationTools", "ProfileView", "RecursiveArrayTools", "Roots", "SciMLSensitivity", "SparseArrays", "SparseConnectivityTracer", "StaticArrays", "SymbolicRegression", "TOML", "Unitful", "WriteVTK", "Zygote"]
+deps = ["ADTypes", "AlgebraicMultigrid", "Clapeyron", "ComponentArrays", "DSP", "DataInterpolations", "Dates", "DiffEqFlux", "Enzyme", "Ferrite", "FerriteGmsh", "ForwardDiff", "ILUZero", "LinearAlgebra", "LinearSolve", "Logging", "Lux", "NonlinearSolve", "Optimization", "OptimizationBBO", "OptimizationOptimJL", "OptimizationPolyalgorithms", "OrderedCollections", "OrdinaryDiffEq", "Polyester", "PreallocationTools", "ProfileView", "RecursiveArrayTools", "Roots", "SciMLSensitivity", "SparseArrays", "SparseConnectivityTracer", "StaticArrays", "SymbolicRegression", "TOML", "Unitful", "WriteVTK", "Zygote"]
 path = "."
 uuid = "3bea8ca0-a952-4872-be97-bc38a725671f"
 version = "0.1.0"
