@@ -20,10 +20,10 @@ function combust_ethylene_and_oxygen_simple!(du, u, p, t, system, geo, cell_id)
     
     reaction_rate = min(arrhenius_predicted_reaction_rate, turbulence_limited_reaction_rate) #[mol/(m^3*s)]
     
-    du.species_densities.ethylene[cell_id] += -1 * reaction_rate * u.species_molar_masses.ethylene[cell_id]
-    du.species_densities.oxygen[cell_id] += -3 * reaction_rate * u.species_molar_masses.oxygen[cell_id]
-    du.species_densities.carbon_dioxide[cell_id] += 2 * reaction_rate * u.species_molar_masses.carbon_dioxide[cell_id]
-    du.species_densities.water[cell_id] += 2 * reaction_rate * u.species_molar_masses.water[cell_id]
+    du.species_densities.ethylene[cell_id] += -1 * reaction_rate * u.molar_masses.ethylene[cell_id]
+    du.species_densities.oxygen[cell_id] += -3 * reaction_rate * u.molar_masses.oxygen[cell_id]
+    du.species_densities.carbon_dioxide[cell_id] += 2 * reaction_rate * u.molar_masses.carbon_dioxide[cell_id]
+    du.species_densities.water[cell_id] += 2 * reaction_rate * u.molar_masses.water[cell_id]
 
     du.volumetric_energy[cell_id] += reaction_rate * -p.simple_arrhenius_reaction_model_heat_of_reaction
 end

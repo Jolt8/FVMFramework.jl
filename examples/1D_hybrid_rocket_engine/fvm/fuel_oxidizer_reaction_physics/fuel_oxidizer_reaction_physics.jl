@@ -7,6 +7,10 @@ function update_species_molar_concentrations!(du, u, p, t, system, geo, cell_id)
 end
 
 function decompose_nitrous_oxide!(du, u, p, t, system, geo, cell_id)
+    if u.species_densities.nitrous_oxide[cell_id] <= 1e-10
+        return
+    end
+
     rate_constant = p.nitrous_oxide_decomposition_pre_exponential_factor * exp(-p.nitrous_oxide_decomposition_activation_energy / (u.R_gas[cell_id] * u.temperature[cell_id]))
 
     nitrous_oxide_molar_concentration = u.species_densities.nitrous_oxide[cell_id] / u.molar_masses.nitrous_oxide[cell_id]
@@ -16,6 +20,10 @@ function decompose_nitrous_oxide!(du, u, p, t, system, geo, cell_id)
     du.species_densities.nitrous_oxide[cell_id] += -2 * rate * u.molar_masses.nitrous_oxide[cell_id]
     du.species_densities.oxygen[cell_id] += rate * u.molar_masses.oxygen[cell_id]
     du.species_densities.nitrogen[cell_id] += 2 * rate * u.molar_masses.nitrogen[cell_id]
+
+    mol_per_s = rate * geo.cell_volumes[cell_id]
+    
+    du.volumetric_energy[cell_id] -= (mol_per_s * p.nitrous_oxide_decomposition_heat_of_reaction) / geo.cell_volumes[cell_id]
 end
 
 """
