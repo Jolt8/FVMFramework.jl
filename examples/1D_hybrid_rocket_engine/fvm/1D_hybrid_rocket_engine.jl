@@ -155,6 +155,7 @@ add_setup_syms!(
         # Nitrous Oxide Decomposition kinetics:
         nitrous_oxide_decomposition_pre_exponential_factor = 4.2e9u"s^-1",
         nitrous_oxide_decomposition_activation_energy = 222_000u"J/mol",
+        nitrous_oxide_decomposition_heat_of_reaction = -82_000u"J/mol",
 
         # Westbrook kinetics:
         westbrook_dryer_step_1_pre_exponential_factor = 7.5895e7u"m^2.25 * mol^-0.75 * s^-1",
@@ -246,7 +247,7 @@ if compressible_solver_options.use_sst_turbulence == true
     ))
 end
 
-path_to_navier_stokes_files = joinpath("..", "..", "LLM_developed_CFD/navier_stokes_testing_grounds")
+path_to_navier_stokes_files = joinpath(@__DIR__, "..", "..", "LLM_developed_CFD/navier_stokes_testing_grounds")
 
 Revise.includet(joinpath(path_to_navier_stokes_files, "face_reconstructors/first_order_face_reconstruction.jl"))
 Revise.includet(joinpath(path_to_navier_stokes_files, "turbulence/sst_k_omega.jl"))
@@ -269,6 +270,8 @@ Revise.includet(joinpath(path_to_navier_stokes_files, "navier_stokes_fluid_prope
 Revise.includet(joinpath(path_to_navier_stokes_files, "navier_stokes_fluid_property_update_functions/fluid_property_update_functions.jl"))
 
 Revise.includet(joinpath(path_to_navier_stokes_files, "sum_and_cap_functions/cap_functions.jl"))
+
+Revise.includet(joinpath(path_to_navier_stokes_files, "species_transport/conservative_species_transport.jl"))
 
 struct Fluid <: AbstractPhysics end
 struct Solid <: AbstractPhysics end
@@ -414,7 +417,7 @@ fluid_initial_conditions, fluid_properties = construct_fluid_initial_conditions_
             carbon_dioxide = 0.0003,
             carbon_monoxide = 0.0,
             hydrogen = 0.0,
-            water = 0.0
+            water = 1e-8
         ),
         diffusion_coefficients_ambient = (
             nitrous_oxide = 1.4e-5u"m^2/s",
@@ -433,10 +436,14 @@ fluid_initial_conditions, fluid_properties = construct_fluid_initial_conditions_
 
 function update_fluid_diffusion_coefficients!(du, u, p, t, system, geo, cell_id)
     for_fields!(u.diffusion_coefficients_ambient, u.diffusion_coefficients) do species, u_diffusion_coefficients_ambient, u_diffusion_coefficients
+        #=
         u_diffusion_coefficients[species[cell_id]] = u_diffusion_coefficients_ambient[species[cell_id]] * (
             u.temperature[cell_id] / u.diffusion_coefficients_ambient_temperature[cell_id]) ^ 1.8 * 
             (u.diffusion_coefficients_ambient_pressure[cell_id] / u.pressure[cell_id]
         )
+        =#
+
+        u_diffusion_coefficients[species[cell_id]] = u_diffusion_coefficients_ambient[species[cell_id]]
     end
 end
 
@@ -489,12 +496,18 @@ end
 function fluid_domain_update_function(du, u, p, t, system, geo, cell_id)
     update_k_from_prandtl!(du, u, p, t, system, geo, cell_id)
     overall_navier_stokes_property_update!(du, u, p, t, system, geo, cell_id)
+    #=
+    for_fields!(u.mass_fractions) do species, u_mass_fractions
+        @show u_mass_fractions[species[getcellset(grid, "fluid_domain")[1]]]
+    end
+    =#
+    update_species_molar_concentrations!(du, u, p, t, system, geo, cell_id)
     update_fluid_diffusion_coefficients!(du, u, p, t, system, geo, cell_id)
 end
 
 function fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
-    update_species_molar_concentrations!(du, u, p, t, system, geo, cell_id)
     overall_combustion_model!(du, u, p, t, system, geo, cell_id)
+    cap_navier_stokes_flow!(du, u, p, t, system, geo, cell_id)
     add_axisymmetric_momentum_sources!(du, u, p, t, system, geo, cell_id)
 end
 
@@ -796,28 +809,13 @@ add_patch!(
             injector_velocity,
         )
         =#
-        inlet_conditions = update_injector_train!(du, u, p, t, system, geo)
+        #inlet_conditions = update_injector_train!(du, u, p, t, system, geo)
 
-        subsonic_inlet_flux!(
-            du, u, p, t, system, geo,
-            idx_a, face_a, 
-            idx_b, face_b;
-            inlet_conditions = inlet_conditions
-        )
-        
-        #=
-        supersonic_inlet_flux!(
-            du, u, p, t, system, geo,
-            idx_a, face_a,
-            idx_b, face_b,
-            inlet_conditions = supersonic_inlet_initial_conditions_stripped,
-        )
-        =#
-        
-        #TODO: we need a new subsonic inlet boundary condition function
+        no_slip_adiabatic_wall_flux!(du, u, p, t, system, geo, idx_a, face_a)
+
+        #subsonic_inlet_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b; inlet_conditions = inlet_conditions)
     end,
 )
-
 
 add_patch!(
     config, "out_of_plane_patch";
@@ -1059,7 +1057,7 @@ jac_sparsity = ADTypes.jacobian_sparsity(
 )
 
 t0 = 0.0
-switch_time = 6e-5
+switch_time = 0.01
 tMax = 10.0
 
 ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
@@ -1089,6 +1087,13 @@ state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
 
 steady_prob = remake(startup_prob; u0 = startup_sol.u[end], tspan = (switch_time, tMax))
 
+#=
+function continue_solve(old_sol, new_tspan)
+    new_prob = remake(old_prob; u0 = old_sol.u[end], tspan = new_tspan)
+    return solve(new_prob, Tsit5(), callback = callbacks, isoutofdomain = state_is_invalid_closure)
+end
+=#
+
 @time steady_sol = solve(
     steady_prob,
     #FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true),
@@ -1107,7 +1112,7 @@ steady_prob = remake(startup_prob; u0 = startup_sol.u[end], tspan = (switch_time
 )
 
 sol_combined = (u = startup_sol.u, t = startup_sol.t)
-#sol_combined = (u = [startup_sol.u..., steady_sol.u...], t = [startup_sol.t..., steady_sol.t...])
+#sol_combined = (u = [startup_sol.u..., steady_sol.u...], t = [startup_sol.t..., steady_sol.t...]) #this is commented out just because I usually test with the startup_sol
 
 desired_shown_steps = 250
 save_fraction = desired_shown_steps / length(sol_combined.t)
@@ -1123,6 +1128,9 @@ du_named, u_named = regenerate_fvm_state(reduced_sol, system, solve_system!, ad_
 
 add_xyz_vec_to_u_named!(u_named, :velocity, :vel_u, :vel_v, :vel_w)
 
-root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
+#root_dir = "C:\\Users\\wille\\OneDrive\\Desktop\\julia_cfd_output_files"
+root_dir = "C:\\Users\\wille\\Desktop\\julia_cfd_output_files"
+
+#Revise.includet(joinpath(@__DIR__, "plots/plot_other_variables.jl"))
 
 sol_to_vtk(reduced_sol, du_named, u_named, grid, geo, @__FILE__, root_dir, include_zeros_fields = false, track_progress = true)
