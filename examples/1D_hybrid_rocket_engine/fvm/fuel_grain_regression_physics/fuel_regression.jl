@@ -367,7 +367,7 @@ function get_axial_oxidizer_mass_flux_and_fuel_grain_face_temperature(u, geo, ax
         density = u.density[cell_id]
         axial_velocity = iszero(density) ? zero(density) : u.momentum_density_w[cell_id] / density
         face_area = geo.cell_face_areas[cell_id, face_idx]
-        oxidizer_mass_flow += abs(axial_velocity) * u.species_densities.nitrous_oxide[cell_id] * face_area
+        oxidizer_mass_flow += abs(axial_velocity) * u.species_densities.nitrous_oxide[cell_id] * face_area #this line needs some scrutiny
         cross_sectional_area += face_area
     end
 
@@ -432,21 +432,6 @@ end
     return velocity / length(face_node_ids)
 end
 
-function _mesh_flux_for_scalar(u_values, model, workspace, geo, cell_id, volume_rate)
-    mesh_flux = zero(u_values[cell_id] * volume_rate)
-    for face_idx in 1:geo.cell_n_faces[cell_id]
-        face_velocity = _face_mesh_velocity(model, workspace, geo, cell_id, face_idx)
-        swept_volume_rate = dot(face_velocity, geo.cell_face_normals[cell_id, face_idx]) *
-                            geo.cell_face_areas[cell_id, face_idx]
-        neighbor_cell_id = model.neighbor_cell_by_face[cell_id][face_idx]
-        if neighbor_cell_id != 0 && model.fluid_cell_mask[neighbor_cell_id]
-            face_value = (u_values[cell_id] + u_values[neighbor_cell_id]) / 2
-            mesh_flux += face_value * swept_volume_rate
-        end
-    end
-    return mesh_flux - u_values[cell_id] * volume_rate
-end
-
 function apply_fuel_regression_ale!(du, u, model::FuelRegressionModel, workspace, geo)
     for cell_id in model.affected_fluid_cell_ids
         volume_rate = 0.0
@@ -457,35 +442,136 @@ function apply_fuel_regression_ale!(du, u, model::FuelRegressionModel, workspace
         end
         inverse_volume = inv(geo.cell_volumes[cell_id])
 
-        du.density[cell_id] += _mesh_flux_for_scalar(
-            u.density, model, workspace, geo, cell_id, volume_rate,
-        ) * inverse_volume
-        du.momentum_density_u[cell_id] += _mesh_flux_for_scalar(
-            u.momentum_density_u, model, workspace, geo, cell_id, volume_rate,
-        ) * inverse_volume
-        du.momentum_density_v[cell_id] += _mesh_flux_for_scalar(
-            u.momentum_density_v, model, workspace, geo, cell_id, volume_rate,
-        ) * inverse_volume
-        du.momentum_density_w[cell_id] += _mesh_flux_for_scalar(
-            u.momentum_density_w, model, workspace, geo, cell_id, volume_rate,
-        ) * inverse_volume
-        du.volumetric_energy[cell_id] += _mesh_flux_for_scalar(
-            u.volumetric_energy, model, workspace, geo, cell_id, volume_rate,
-        ) * inverse_volume
+        density_mesh_flux = zero(u.density[cell_id] * volume_rate)
+        for face_idx in 1:geo.cell_n_faces[cell_id]
+            face_velocity = _face_mesh_velocity(model, workspace, geo, cell_id, face_idx)
+            swept_volume_rate = dot(face_velocity, geo.cell_face_normals[cell_id, face_idx]) *
+                                geo.cell_face_areas[cell_id, face_idx]
+            neighbor_cell_id = model.neighbor_cell_by_face[cell_id][face_idx]
+            if neighbor_cell_id != 0 && model.fluid_cell_mask[neighbor_cell_id]
+                face_value = (u.density[cell_id] + u.density[neighbor_cell_id]) / 2
+                density_mesh_flux += face_value * swept_volume_rate
+            end
+        end
+        density_mesh_flux -= u.density[cell_id] * volume_rate
+        du.density[cell_id] += density_mesh_flux * inverse_volume
+
+        momentum_density_u_mesh_flux = zero(u.momentum_density_u[cell_id] * volume_rate)
+        for face_idx in 1:geo.cell_n_faces[cell_id]
+            face_velocity = _face_mesh_velocity(model, workspace, geo, cell_id, face_idx)
+            swept_volume_rate = dot(face_velocity, geo.cell_face_normals[cell_id, face_idx]) *
+                                geo.cell_face_areas[cell_id, face_idx]
+            neighbor_cell_id = model.neighbor_cell_by_face[cell_id][face_idx]
+            if neighbor_cell_id != 0 && model.fluid_cell_mask[neighbor_cell_id]
+                face_value = (u.momentum_density_u[cell_id] +
+                              u.momentum_density_u[neighbor_cell_id]) / 2
+                momentum_density_u_mesh_flux += face_value * swept_volume_rate
+            end
+        end
+        momentum_density_u_mesh_flux -= u.momentum_density_u[cell_id] * volume_rate
+        du.momentum_density_u[cell_id] += momentum_density_u_mesh_flux * inverse_volume
+
+        momentum_density_v_mesh_flux = zero(u.momentum_density_v[cell_id] * volume_rate)
+        for face_idx in 1:geo.cell_n_faces[cell_id]
+            face_velocity = _face_mesh_velocity(model, workspace, geo, cell_id, face_idx)
+            swept_volume_rate = dot(face_velocity, geo.cell_face_normals[cell_id, face_idx]) *
+                                geo.cell_face_areas[cell_id, face_idx]
+            neighbor_cell_id = model.neighbor_cell_by_face[cell_id][face_idx]
+            if neighbor_cell_id != 0 && model.fluid_cell_mask[neighbor_cell_id]
+                face_value = (u.momentum_density_v[cell_id] +
+                              u.momentum_density_v[neighbor_cell_id]) / 2
+                momentum_density_v_mesh_flux += face_value * swept_volume_rate
+            end
+        end
+        momentum_density_v_mesh_flux -= u.momentum_density_v[cell_id] * volume_rate
+        du.momentum_density_v[cell_id] += momentum_density_v_mesh_flux * inverse_volume
+
+        momentum_density_w_mesh_flux = zero(u.momentum_density_w[cell_id] * volume_rate)
+        for face_idx in 1:geo.cell_n_faces[cell_id]
+            face_velocity = _face_mesh_velocity(model, workspace, geo, cell_id, face_idx)
+            swept_volume_rate = dot(face_velocity, geo.cell_face_normals[cell_id, face_idx]) *
+                                geo.cell_face_areas[cell_id, face_idx]
+            neighbor_cell_id = model.neighbor_cell_by_face[cell_id][face_idx]
+            if neighbor_cell_id != 0 && model.fluid_cell_mask[neighbor_cell_id]
+                face_value = (u.momentum_density_w[cell_id] +
+                              u.momentum_density_w[neighbor_cell_id]) / 2
+                momentum_density_w_mesh_flux += face_value * swept_volume_rate
+            end
+        end
+        momentum_density_w_mesh_flux -= u.momentum_density_w[cell_id] * volume_rate
+        du.momentum_density_w[cell_id] += momentum_density_w_mesh_flux * inverse_volume
+
+        volumetric_energy_mesh_flux = zero(u.volumetric_energy[cell_id] * volume_rate)
+        for face_idx in 1:geo.cell_n_faces[cell_id]
+            face_velocity = _face_mesh_velocity(model, workspace, geo, cell_id, face_idx)
+            swept_volume_rate = dot(face_velocity, geo.cell_face_normals[cell_id, face_idx]) *
+                                geo.cell_face_areas[cell_id, face_idx]
+            neighbor_cell_id = model.neighbor_cell_by_face[cell_id][face_idx]
+            if neighbor_cell_id != 0 && model.fluid_cell_mask[neighbor_cell_id]
+                face_value = (u.volumetric_energy[cell_id] +
+                              u.volumetric_energy[neighbor_cell_id]) / 2
+                volumetric_energy_mesh_flux += face_value * swept_volume_rate
+            end
+        end
+        volumetric_energy_mesh_flux -= u.volumetric_energy[cell_id] * volume_rate
+        du.volumetric_energy[cell_id] += volumetric_energy_mesh_flux * inverse_volume
 
         for_fields!(du.species_densities, u.species_densities) do species, du_species, u_species
-            du_species[species[cell_id]] += _mesh_flux_for_scalar(
-                u_species[species], model, workspace, geo, cell_id, volume_rate,
-            ) * inverse_volume
+            species_mesh_flux = zero(u_species[species[cell_id]] * volume_rate)
+            for face_idx in 1:geo.cell_n_faces[cell_id]
+                face_velocity = _face_mesh_velocity(model, workspace, geo, cell_id, face_idx)
+                swept_volume_rate =
+                    dot(face_velocity, geo.cell_face_normals[cell_id, face_idx]) *
+                    geo.cell_face_areas[cell_id, face_idx]
+                neighbor_cell_id = model.neighbor_cell_by_face[cell_id][face_idx]
+                if neighbor_cell_id != 0 && model.fluid_cell_mask[neighbor_cell_id]
+                    face_value = (u_species[species[cell_id]] +
+                                  u_species[species[neighbor_cell_id]]) / 2
+                    species_mesh_flux += face_value * swept_volume_rate
+                end
+            end
+            species_mesh_flux -= u_species[species[cell_id]] * volume_rate
+            du_species[species[cell_id]] += species_mesh_flux * inverse_volume
         end
 
         if hasproperty(u, :turbulent_kinetic_energy_density)
-            du.turbulent_kinetic_energy_density[cell_id] += _mesh_flux_for_scalar(
-                u.turbulent_kinetic_energy_density, model, workspace, geo, cell_id, volume_rate,
-            ) * inverse_volume
-            du.specific_dissipation_rate_density[cell_id] += _mesh_flux_for_scalar(
-                u.specific_dissipation_rate_density, model, workspace, geo, cell_id, volume_rate,
-            ) * inverse_volume
+            turbulent_kinetic_energy_mesh_flux =
+                zero(u.turbulent_kinetic_energy_density[cell_id] * volume_rate)
+            for face_idx in 1:geo.cell_n_faces[cell_id]
+                face_velocity = _face_mesh_velocity(model, workspace, geo, cell_id, face_idx)
+                swept_volume_rate =
+                    dot(face_velocity, geo.cell_face_normals[cell_id, face_idx]) *
+                    geo.cell_face_areas[cell_id, face_idx]
+                neighbor_cell_id = model.neighbor_cell_by_face[cell_id][face_idx]
+                if neighbor_cell_id != 0 && model.fluid_cell_mask[neighbor_cell_id]
+                    face_value = (u.turbulent_kinetic_energy_density[cell_id] +
+                                  u.turbulent_kinetic_energy_density[neighbor_cell_id]) / 2
+                    turbulent_kinetic_energy_mesh_flux += face_value * swept_volume_rate
+                end
+            end
+            turbulent_kinetic_energy_mesh_flux -=
+                u.turbulent_kinetic_energy_density[cell_id] * volume_rate
+            du.turbulent_kinetic_energy_density[cell_id] +=
+                turbulent_kinetic_energy_mesh_flux * inverse_volume
+
+            specific_dissipation_rate_mesh_flux =
+                zero(u.specific_dissipation_rate_density[cell_id] * volume_rate)
+            for face_idx in 1:geo.cell_n_faces[cell_id]
+                face_velocity = _face_mesh_velocity(model, workspace, geo, cell_id, face_idx)
+                swept_volume_rate =
+                    dot(face_velocity, geo.cell_face_normals[cell_id, face_idx]) *
+                    geo.cell_face_areas[cell_id, face_idx]
+                neighbor_cell_id = model.neighbor_cell_by_face[cell_id][face_idx]
+                if neighbor_cell_id != 0 && model.fluid_cell_mask[neighbor_cell_id]
+                    face_value = (u.specific_dissipation_rate_density[cell_id] +
+                                  u.specific_dissipation_rate_density[neighbor_cell_id]) / 2
+                    specific_dissipation_rate_mesh_flux += face_value * swept_volume_rate
+                end
+            end
+            specific_dissipation_rate_mesh_flux -=
+                u.specific_dissipation_rate_density[cell_id] * volume_rate
+            du.specific_dissipation_rate_density[cell_id] +=
+                specific_dissipation_rate_mesh_flux * inverse_volume
         end
     end
     return nothing
