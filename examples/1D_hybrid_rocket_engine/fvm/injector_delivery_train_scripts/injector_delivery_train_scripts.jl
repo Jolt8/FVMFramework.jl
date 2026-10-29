@@ -308,9 +308,11 @@ function update_injector_train!(du, u, p, t, system, geo)
     @show injector_mass_flow * props.mid_section.specific_enthalpy
     =#
     
+    #=
         mid_section_internal_energy_rate =
         tank_to_mid_section_mass_flow * props.tank.specific_enthalpy -
         injector_mass_flow * props.mid_section.specific_enthalpy
+    =#
     du.mid_section.mass = mid_section_mass_rate
 
     #=
