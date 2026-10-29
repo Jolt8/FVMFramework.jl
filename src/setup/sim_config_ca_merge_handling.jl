@@ -3,7 +3,7 @@ function _build_blank_dict!(current_dict, properties, n_cells)
         value = getproperty(properties, property_name)
         if value isa ComponentArray || value isa NamedTuple
             if !haskey(current_dict, property_name)
-                current_dict[property_name] = Dict{Symbol, Any}()
+                current_dict[property_name] = OrderedDict{Symbol, Any}()
             end
             _build_blank_dict!(current_dict[property_name], value, n_cells)
         else
@@ -68,15 +68,15 @@ function _drill_down_and_fill_patch_properties!(merged_properties, properties, c
 end
 #I don't think this is actually necessary, in fact, it's causing a lot of problems
 
-function _dict_to_namedtuple(dict::Dict{Symbol, Any})
-    NamedTuple(k => (v isa Dict{Symbol, Any} ? _dict_to_namedtuple(v) : v) for (k, v) in dict)
+function _dict_to_namedtuple(dict::OrderedDict{Symbol, Any})
+    NamedTuple(k => (v isa OrderedDict{Symbol, Any} ? _dict_to_namedtuple(v) : v) for (k, v) in dict)
 end
 
 
 function merge_region_properties(config)
     n_cells = length(config.geo.cell_volumes)
 
-    prop_dict = Dict{Symbol, Any}()
+    prop_dict = OrderedDict{Symbol, Any}()
 
     #convert component arrays to named tuples
     for region in config.regions
@@ -86,7 +86,7 @@ function merge_region_properties(config)
     for patch in config.patches
         _build_blank_dict!(prop_dict, patch.properties, n_cells)
     end
-
+    
     merged_properties = ComponentVector(_dict_to_namedtuple(prop_dict)) #dict to named tuple seems to be required here, but it breaks caches
 
     for region in config.regions
@@ -139,7 +139,7 @@ function _build_blank_cache_dict!(current_dict, cache_syms_and_units, special_ca
             end
         elseif !haskey(current_dict, cache_name)
             if cache_unit isa ComponentArray || cache_unit isa NamedTuple
-                current_dict[cache_name] = Dict{Symbol, Any}()
+                current_dict[cache_name] = OrderedDict{Symbol, Any}()
                 _build_blank_cache_dict!(current_dict[cache_name], cache_unit, special_caches, n_cells)
             else
                 current_dict[cache_name] = zeros(n_cells) .* upreferred(cache_unit)
@@ -151,7 +151,7 @@ end
 function merge_region_caches(config, merged_properties)
     n_cells = length(config.geo.cell_volumes)
 
-    cache_dict = Dict{Symbol, Any}()
+    cache_dict = OrderedDict{Symbol, Any}()
 
     for region in config.regions
         _build_blank_cache_dict!(cache_dict, config.cache_syms_and_units, config.special_caches, n_cells)

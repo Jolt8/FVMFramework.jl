@@ -22,6 +22,7 @@ using WriteVTK
 using PreallocationTools
 using Polyester
 using Unitful
+using OrderedCollections
 
 import AlgebraicMultigrid
 import SparseConnectivityTracer
