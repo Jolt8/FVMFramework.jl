@@ -18,6 +18,8 @@ using Clapeyron
 using PreallocationTools
 using DataInterpolations
 
+using Plots
+
 mesh_path = joinpath(@__DIR__, "meshes/hybrid_rocket_cfd_3d.msh")
 #grid = togrid(mesh_path)
 
@@ -705,11 +707,11 @@ end
 
 Revise.includet(joinpath(@__DIR__, "fuel_grain_regression_physics/fuel_regression.jl"))
 
-fuel_regression_model = create_fuel_regression_model(grid, config.geo)
+fuel_regression_model = create_fuel_regression_model(grid, config.geo);
 initialize_fuel_grain_thickness!(
     config.u_proto.fuel_grain_thickness,
     fuel_regression_model,
-)
+);
 
 #Special Interfaces
 add_patch!(
@@ -1089,7 +1091,27 @@ using Plots
 )
 
 function plot_global_logged_times()
-    plot(FVMFramework.real_time_FVMFramework_plot_approx_time_to_finish_cb, FVMFramework.sim_time_FVMFramework_plot_approx_time_to_finish_cb)
+    display(plot(FVMFramework.real_time_FVMFramework_plot_approx_time_to_finish_cb, FVMFramework.sim_time_FVMFramework_plot_approx_time_to_finish_cb))
+end
+
+function estimate_time_to_finish_from_logged(end_time)
+    #This needs work if it's ever going to be used
+    #curve_fit_f(t, p) = p[1] + p[2] * t^p[3] + p[4] * log(t)
+    #time_to_finish_plotting_interp = CurveFit.Curvefit(FVMFramework.real_time_FVMFramework_plot_approx_time_to_finish_cb, FVMFramework.sim_time_FVMFramework_plot_approx_time_to_finish_cb, curve_fit_f, ones(4))
+    
+    time_to_finish_plotting_interp = PCHIPInterpolation(
+        FVMFramework.real_time_FVMFramework_plot_approx_time_to_finish_cb,
+        FVMFramework.sim_time_FVMFramework_plot_approx_time_to_finish_cb;
+        extrapolation = ExtrapolationType.Extension
+    )
+
+    estimated_time = time_to_finish_plotting_interp(end_time)
+    println("Estimated time to finish: ", estimated_time)
+
+    #sim_times = range(0, switch_time, length = 500)
+    #real_times = [time_to_finish_plotting_interp(t) for t in sim_times]
+
+    #plot(sim_times, real_times)
 end
 
 plot_global_logged_times()
