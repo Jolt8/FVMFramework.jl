@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.6"
+julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "76e6ca359ea4b0268639e7eeedea8541e31469c0"
+project_hash = "66acce8fa341a118889e1fdb5083183f4c5978d5"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -842,7 +842,7 @@ uuid = "4fce6fc7-ba6a-5f4c-898f-77e99806d6f8"
 version = "1.3.8+0"
 
 [[deps.FVMFramework]]
-deps = ["ADTypes", "AlgebraicMultigrid", "Clapeyron", "ComponentArrays", "DSP", "DataInterpolations", "Dates", "DiffEqFlux", "Enzyme", "Ferrite", "FerriteGmsh", "ForwardDiff", "ILUZero", "LinearAlgebra", "LinearSolve", "Logging", "Lux", "NonlinearSolve", "Optimization", "OptimizationBBO", "OptimizationOptimJL", "OptimizationPolyalgorithms", "OrderedCollections", "OrdinaryDiffEq", "Polyester", "PreallocationTools", "ProfileView", "RecursiveArrayTools", "Roots", "SciMLSensitivity", "SparseArrays", "SparseConnectivityTracer", "StaticArrays", "SymbolicRegression", "TOML", "Unitful", "WriteVTK", "Zygote"]
+deps = ["ADTypes", "AlgebraicMultigrid", "Clapeyron", "ComponentArrays", "DSP", "Dates", "DiffEqFlux", "Enzyme", "Ferrite", "FerriteGmsh", "ForwardDiff", "ILUZero", "LinearAlgebra", "LinearSolve", "Logging", "Lux", "NonlinearSolve", "Optim", "Optimization", "OptimizationBBO", "OptimizationOptimJL", "OptimizationPolyalgorithms", "OrderedCollections", "OrdinaryDiffEq", "Polyester", "PreallocationTools", "ProfileView", "RecursiveArrayTools", "Roots", "SciMLSensitivity", "SparseArrays", "SparseConnectivityTracer", "StaticArrays", "SymbolicRegression", "TOML", "Unitful", "WriteVTK", "Zygote"]
 path = "."
 uuid = "3bea8ca0-a952-4872-be97-bc38a725671f"
 version = "0.1.0"
@@ -2066,9 +2066,9 @@ version = "0.5.6+0"
 
 [[deps.Optim]]
 deps = ["ADTypes", "EnumX", "FillArrays", "LineSearches", "LinearAlgebra", "NLSolversBase", "NaNMath", "PositiveFactorizations", "Printf", "SparseArrays", "Statistics"]
-git-tree-sha1 = "7ecee58b8bd88cc8bbdb90d056d1c6546322eebd"
+git-tree-sha1 = "cbcf335fd6f959897a6ff38149736b0b5ac11264"
 uuid = "429524aa-4258-5aef-a3af-852621145aeb"
-version = "2.1.0"
+version = "2.2.2"
 
     [deps.Optim.extensions]
     OptimMOIExt = "MathOptInterface"

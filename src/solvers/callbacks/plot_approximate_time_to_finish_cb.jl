@@ -1,8 +1,8 @@
 #really long variable names so these never gets interacted with 
 global last_print_time_FVMFramework_approx_time_to_finish_cb = time()
 global solver_start_time_FVMFramework_plot_approx_time_to_finish_cb = 0.0
-global sim_time_FVMFramework_plot_approx_time_to_finish_cb = []
-global real_time_FVMFramework_plot_approx_time_to_finish_cb = []
+global sim_time_FVMFramework_plot_approx_time_to_finish_cb = Float64[]
+global real_time_FVMFramework_plot_approx_time_to_finish_cb = Float64[]
 
 #we have to add an average of the previous n real times left 
 function plot_approx_time_left_affect!(integrator)
