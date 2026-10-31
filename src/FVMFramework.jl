@@ -34,22 +34,22 @@ import Logging
 #] instantiate
 
 # ----- Geometry -----
-include("new_geometry/geometry_helper_functions.jl")
+include("geometry/geometry_helper_functions.jl")
 export get_node_coordinates, get_cell_topology, get_nodes_of_cells, get_face_nodes
 export get_cell_neighbors, get_unconnected_map, get_cell_face_map, cross_product
 
-include("new_geometry/cell_face_layout.jl")
+include("geometry/cell_face_layout.jl")
 export CellFaceLayout
 
-include("new_geometry/get_x_geometry_functions/interface_geometry.jl")
-include("new_geometry/get_x_geometry_functions/boundary_geometry.jl")
-include("new_geometry/get_x_geometry_functions/cell_geometry.jl")
+include("geometry/get_x_geometry_functions/interface_geometry.jl")
+include("geometry/get_x_geometry_functions/boundary_geometry.jl")
+include("geometry/get_x_geometry_functions/cell_geometry.jl")
 export interface_geometry, boundary_geometry, cell_geometry
 
-include("new_geometry/geometry_building.jl")
+include("geometry/geometry_building.jl")
 export build_fvm_geo_into_struct, update_fvm_geometry!, FVMGeometry, FVMTopology
 
-include("new_geometry/frontend_geo_helper_functions.jl")
+include("geometry/frontend_geo_helper_functions.jl")
 export face_zeros, face_fill
 
 # ----- ComponentArray Addons -----

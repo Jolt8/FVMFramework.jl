@@ -6,7 +6,6 @@ function add_region!(
     property_update_function,
     region_function
 )
-
     region_cells = collect(getcellset(config.grid, name))
 
     for cell_id in region_cells
