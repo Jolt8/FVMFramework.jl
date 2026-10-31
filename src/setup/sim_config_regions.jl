@@ -6,7 +6,7 @@ function add_region!(
     property_update_function,
     region_function
 )
-    region_cells = collect(getcellset(config.grid, name))
+    region_cells = collect(get_cellset(config.geo, name))
 
     for cell_id in region_cells
         for property_name in propertynames(initial_conditions)
@@ -43,7 +43,7 @@ function update_region!(config, name)
     
     region = config.regions[existing_region_idx]
 
-    region_cells = collect(getcellset(config.grid, name))
+    region_cells = collect(get_cellset(config.geo, name))
 
     for cell_id in region_cells
         for property_name in propertynames(region.initial_conditions)

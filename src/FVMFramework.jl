@@ -28,6 +28,7 @@ import AlgebraicMultigrid
 import SparseConnectivityTracer
 import ADTypes
 import Logging
+import JSON
 
 #for future me, if you use this project on a new computer, in the FVMFramework environment just do:
 #] activate .
@@ -48,6 +49,12 @@ export interface_geometry, boundary_geometry, cell_geometry
 
 include("geometry/geometry_building.jl")
 export build_fvm_geo_into_struct, update_fvm_geometry!, FVMGeometry, FVMTopology
+
+include("geometry/geometry_sets.jl")
+export get_cellset, get_facetset, build_named_facetset
+
+include("geometry/rom_geometry_loading.jl")
+export read_rom_geometry_json, add_virtual_cell!, rom_cell_count, build_rom_fvm_geometry, create_fvm_config_from_rom
 
 include("geometry/frontend_geo_helper_functions.jl")
 export face_zeros, face_fill
@@ -79,7 +86,7 @@ include("physics/flux_physics/diffusion.jl")
 export species_numerical_flux, mass_fraction_diffusion!
 
 include("physics/flux_physics/heat_transfer.jl")
-export get_k_effective, numerical_flux, heat_diffusion!
+export get_k_effective, numerical_flux, heat_diffusion!, heat_diffusion_series_resistance!
 
 #   ---- Internal Methods ----
 #       --- Internal Capacities ---
@@ -104,7 +111,7 @@ export get_cellset_volume, get_facetset_area, get_facetset_area_per_cell
 
 # ---- Main Setup Methods ----
 include("setup/sim_config_base.jl")
-export create_fvm_config, RegionSetupInfo, PatchSetupInfo, ControllerSetupInfo, SimulationConfigInfo
+export create_fvm_config, create_fvm_config_from_geo, RegionSetupInfo, PatchSetupInfo, ControllerSetupInfo, SimulationConfigInfo
 
 include("setup/sim_config_ca_merge_handling.jl")
 export merge_region_properties, merge_region_caches

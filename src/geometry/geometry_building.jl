@@ -36,6 +36,14 @@ struct FVMGeometry{T, CoordType}
 
     # Node information
     node_coordinates::Vector{CoordType}
+
+    # Named sets
+    #   `cellsets[name]` lists the cell ids of a region (or any named cell set).
+    cellsets::OrderedDict{String, Vector{Int}}
+    #   `facetsets[name]` uses the same layout as `cell_neighbors`:
+    #   [(idx_a, [(idx_b, face_idx_a, face_idx_b), ...]), ...]. Boundary faces
+    #   have idx_b = face_idx_b = 0. Only cells with faces in the set appear.
+    facetsets::OrderedDict{String, Vector{Tuple{Int, Vector{NTuple{3, Int}}}}}
 end
 
 """
@@ -89,6 +97,19 @@ function generate_fvm_geometry(grid, top; node_coordinates = get_node_coordinate
         end
     end
 
+    # Named sets, copied from the grid so that nothing after this point needs
+    # the Ferrite grid or topology.
+    cellsets = OrderedDict{String, Vector{Int}}()
+    for (set_name, cell_ids) in grid.cellsets
+        cellsets[set_name] = sort(collect(cell_ids))
+    end
+
+    facetsets = OrderedDict{String, Vector{Tuple{Int, Vector{NTuple{3, Int}}}}}()
+    for (set_name, facet_indices) in grid.facetsets
+        cell_face_pairs = [facet_index.idx for facet_index in facet_indices]
+        facetsets[set_name] = build_named_facetset(cell_face_pairs, cell_neighbors)
+    end
+
     CoordType = eltype(node_coordinates)
     T = eltype(CoordType)
     geo = FVMGeometry(
@@ -112,9 +133,13 @@ function generate_fvm_geometry(grid, top; node_coordinates = get_node_coordinate
         cell_face_layout_zeros(CoordType, cell_face_layout),
         cell_face_layout_zeros(T, cell_face_layout),
         cell_face_layout_zeros(CoordType, cell_face_layout),
-        node_coordinates
+        node_coordinates,
+
+        #Named sets
+        cellsets,
+        facetsets,
     )
-    
+
     return geo
 end
 
