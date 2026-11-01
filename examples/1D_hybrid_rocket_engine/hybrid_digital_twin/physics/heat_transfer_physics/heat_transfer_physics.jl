@@ -11,7 +11,7 @@ function heat_diffusion!(
 
     k_effective = 2 * u.k[idx_a] * u.k[idx_b] / (u.k[idx_a] + u.k[idx_b])
 
-    grad_T = (u.temp[idx_b] - u.temp[idx_a]) / dist
+    grad_T = (u.temperature[idx_b] - u.temperature[idx_a]) / dist
 
     du.heat[idx_a] -= -k_effective * grad_T * face_area_a
     du.heat[idx_b] += -k_effective * grad_T * face_area_b
@@ -47,7 +47,7 @@ function heat_diffusion_series_resistance!(
     half_cell_resistance_a = face_distance_a / (u.k[idx_a] * face_area_a)
     half_cell_resistance_b = face_distance_b / (u.k[idx_b] * face_area_b)
 
-    conduction_heat_flow = (u.temp[idx_b] - u.temp[idx_a]) / (half_cell_resistance_a + half_cell_resistance_b)
+    conduction_heat_flow = (u.temperature[idx_b] - u.temperature[idx_a]) / (half_cell_resistance_a + half_cell_resistance_b)
 
     du.heat[idx_a] += conduction_heat_flow
     du.heat[idx_b] -= conduction_heat_flow
