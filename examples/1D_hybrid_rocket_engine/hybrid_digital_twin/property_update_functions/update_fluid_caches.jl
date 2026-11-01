@@ -22,13 +22,17 @@ function ideal_eos!(du, u, p, t, system, geo, cell_id)
 end
 
 function clapeyron_eos!(du, u, p, t, system, geo, cell_id)
-    result = vt_flash(mode, geo.cell_volumes[cell_id], u.temperature[cell_id], view(system.moles_vec, cell_id))
+    cell_moles = system.moles_vec[cell_id]
 
-    u.pressure[cell_id] = pressure(result, system.model)
-    u.cp[cell_id] = isobaric_heat_capacity(result, system.model)
-    u.cv[cell_id] = isochoric_heat_capacity(result, system.model)
-    
-    u.vapor_quality[cell_id] = result.fractions[2]
+    result = vt_flash(system.model, geo.cell_volumes[cell_id], u.temperature[cell_id], cell_moles, system.clapeyron_method)
+
+    #Clapeyron's property functions take (model, result). The mass_ versions return J/(kg*K) to match the cp and cv caches.
+    #Two-phase results need the phase-weighted helper; the aggregate call errors when more than one phase is present.
+    u.pressure[cell_id] = pressure(system.model, result)
+    u.cp[cell_id] = phase_weighted_mass_property(mass_isobaric_heat_capacity, system.model, result)
+    u.cv[cell_id] = phase_weighted_mass_property(mass_isochoric_heat_capacity, system.model, result)
+
+    u.nitrous_oxide_vapor_quality[cell_id] = flash_vapor_quality(result)
 end
 
 

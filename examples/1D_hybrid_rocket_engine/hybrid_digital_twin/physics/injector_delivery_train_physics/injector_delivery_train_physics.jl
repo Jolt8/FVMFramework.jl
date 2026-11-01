@@ -127,7 +127,7 @@ function update_tank_properties!(du, u, p, t, system, geo, cell_id)
         tank_n_moles,
     )
     u.pressure[cell_id] = pressure(tank_flash)
-    u.vapor_quality[cell_id] = flash_vapor_quality(tank_flash)
+    u.nitrous_oxide_vapor_quality[cell_id] = flash_vapor_quality(tank_flash)
 
     # These describe the bulk material stored in the rigid tank. They are
     # intentionally independent of which phase is being withdrawn.
@@ -137,7 +137,7 @@ function update_tank_properties!(du, u, p, t, system, geo, cell_id)
 
     # These describe the material leaving the bottom of the tank. Withdraw
     # liquid while a distinct liquid inventory remains, then withdraw vapor.
-    if u.vapor_quality[cell_id] <= 0.999
+    if u.nitrous_oxide_vapor_quality[cell_id] <= 0.999
         outlet_phase = argmin(tank_flash.volumes)
     else
         vapor_phase = tank_flash.data.vapour_idx
@@ -162,7 +162,7 @@ function update_mid_section_properties!(du, u, p, t, system, geo, cell_id)
     )
     u.pressure[cell_id] = pressure(mid_section_flash)
 
-    u.vapor_quality[cell_id] = flash_vapor_quality(mid_section_flash)
+    u.nitrous_oxide_vapor_quality[cell_id] = flash_vapor_quality(mid_section_flash)
     u.density[cell_id] = mass_density(model, mid_section_flash)
     u.specific_internal_energy[cell_id] = mass_internal_energy(model, mid_section_flash)
     u.specific_enthalpy[cell_id] = mass_enthalpy(model, mid_section_flash)

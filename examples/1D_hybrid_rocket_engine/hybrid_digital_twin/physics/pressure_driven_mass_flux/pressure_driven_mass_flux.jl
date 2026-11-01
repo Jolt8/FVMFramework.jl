@@ -127,7 +127,10 @@ function pressure_driven_mass_flux_custom_geometry!(
 end
 
 
-function pressure_driven_mass_flux!(du, u, p, t, system, geo)
+function pressure_driven_mass_flux!(
+    du, u, p, t, system, geo,
+    idx_a, face_a, idx_b, face_b
+)
     (
         dist,
         face_area_a, face_normal_a, face_distance_a, volume_a,
