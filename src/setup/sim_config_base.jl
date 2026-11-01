@@ -30,6 +30,8 @@ mutable struct SimulationConfigInfo
     optimized_parameters::ComponentVector
 
     u_proto::ComponentVector
+
+    data::NamedTuple
 end
 
 
@@ -70,6 +72,7 @@ function create_fvm_config_from_geo(geo, u_proto)
         ComponentVector(),
         Symbol[],
         ComponentVector(),
-        u_proto
+        u_proto,
+        ()
     )
 end
