@@ -98,12 +98,6 @@ method = ChemPotDewPressure(
 
 config.data = merge(config.data, (clapeyron_method = method, nitrous_oxide_model = nitrous_oxide_model, model = model))
 
-injector_u0, injector_properties = get_injector_train_u0_and_properties(nitrous_oxide_model)
-
-u_proto = merge_properties(u_proto, injector_u0)
-
-config = create_fvm_config()
-
 add_setup_syms!(
     config;
     cache_syms_and_units = (
@@ -210,6 +204,8 @@ end
 
 Revise.includet(joinpath(@__DIR__, "property_update_functions", "system_moles_vec.jl"))
 Revise.includet(joinpath(@__DIR__, "property_update_functions", "update_fluid_caches.jl"))
+Revise.includet(joinpath(@__DIR__, "physics", "heat_transfer_physics", "heat_transfer_physics.jl"))
+Revise.includet(joinpath(@__DIR__, "physics", "injector_delivery_train_physics", "injector_delivery_train_physics.jl"))
 
 
 #Don't need this right now since k and mu are fixed
@@ -243,14 +239,13 @@ room_temp = 294.13u"K"
 air_initial_conditions = ComponentVector(
     density = 1.1225u"kg/m^3",
     temperature = room_temp,
-    mass_fractions = normalize!((
+    #normalize! needs a ComponentVector here; a bare NamedTuple can't be modified in place
+    mass_fractions = normalize!(ComponentVector(
         nitrous_oxide = 0.0,
         ethylene = 0.0,
         nitrogen = 0.781,
         oxygen = 0.211,
         carbon_dioxide = 0.0003,
-        carbon_monoxide = 0.0,
-        hydrogen = 0.0,
         water = 1e-8
     ))
 )
@@ -275,8 +270,6 @@ air_properties = ComponentVector(
         nitrogen = 1.8e-5u"m^2/s",
         oxygen = 1.9e-5u"m^2/s",
         carbon_dioxide = 1.6e-5u"m^2/s",
-        carbon_monoxide = 2.1e-5u"m^2/s",
-        hydrogen = 7.6e-5u"m^2/s",
         water = 2.4e-5u"m^2/s",
     ),
 )
@@ -314,6 +307,77 @@ add_region!(
             #recirculation_zone_closure(du, u, p, t, system, geo, cell_id)
         end
     end
+)
+
+tank = (
+    volume = 1.6u"L",
+    density = 0.0u"kg/m^3",
+    pressure = 0.0u"bar",
+    cp = 0.0u"J/(kg*K)",
+    cv = 0.0u"J/(kg*K)",
+    specific_internal_energy = 0.0u"J/kg",
+    specific_enthalpy = 0.0u"J/kg",
+    vapor_fraction = 0.0u"kg/kg",
+),
+mid_section = (
+    temperature = 298.0u"K",
+    volume = 474.05u"mm^3",
+    density = 0.0u"kg/m^3",
+    pressure = 0.0u"bar",
+    cp = 0.0u"J/(kg*K)",
+    cv = 0.0u"J/(kg*K)",
+    specific_internal_energy = 0.0u"J/kg",
+    specific_enthalpy = 0.0u"J/kg",
+    vapor_fraction = 0.0u"kg/kg",
+),
+
+tank_initial_conditions = ComponentVector(
+    density = (1.134u"kg" / geo.cell_volumes[get_cells(geo, "tank")]),
+    temperature = room_temp,
+    mass_fractions = (
+        nitrous_oxide = 1.0,
+        ethylene = 0.0,
+        nitrogen = 0.0,
+        oxygen = 0.0,
+        carbon_dioxide = 0.0,
+        water = 0.0
+    )
+)
+
+#=
+N2O properties to keep in mind:
+
+vapor_k = 0.017u"W/(m*K)"
+vapor_mu = 1.4e-5u"Pa*s"
+
+liquid_k = 0.09u"W/(m*K)"
+liquid_mu_lower_bound = 6.0e-5u"Pa*s"
+liquid_mu_upper_bound = 3.2e-4u"Pa*s"
+=#
+
+air_properties = ComponentVector(
+    #We're assuming these two stay constant which isn't that accurate, but oh well
+    #we'll use the vapor properties for now since a large majority of the calculations that involve these values happen in the vapor phase
+    k = 0.017u"W/(m*K)", 
+    mu = 1.4e-5u"Pa*s", 
+
+    molecular_weights = (
+        nitrous_oxide = 44.01u"g/mol", 
+        ethylene = 28.05u"g/mol", 
+        nitrogen = 28.01u"g/mol", 
+        oxygen = 32.00u"g/mol", 
+        carbon_dioxide = 44.01u"g/mol", 
+        water = 18.02u"g/mol"
+    ),
+    #these will just stay fixed for now
+    diffusion_coefficients = (
+        nitrous_oxide = 1.4e-5u"m^2/s",
+        ethylene = 1.4e-5u"m^2/s",
+        nitrogen = 1.8e-5u"m^2/s",
+        oxygen = 1.9e-5u"m^2/s",
+        carbon_dioxide = 1.6e-5u"m^2/s",
+        water = 2.4e-5u"m^2/s",
+    ),
 )
 
 add_region!(
@@ -400,10 +464,32 @@ add_region!(
 
 add_region!(
     config, "aluminum_housing_top",
+    type = Solid(),
+    initial_conditions = aluminum_initial_conditions,
+    properties = aluminum_properties,
+    property_update_function =
+    function update_aluminum_housing_top_region!(du, u, p, t, system, geo, cell_id)
+        update_solid_properties!(du, u, p, t, system, geo, cell_id)
+    end,
+    region_function =
+    function aluminum_housing_top_region!(du, u, p, t, system, geo, cell_id)
+        solid_physics!(du, u, p, t, system, geo, cell_id)
+    end
 )
 
 add_region!(
     config, "aluminum_housing",
+    type = Solid(),
+    initial_conditions = aluminum_initial_conditions,
+    properties = aluminum_properties,
+    property_update_function =
+    function update_aluminum_housing_region!(du, u, p, t, system, geo, cell_id)
+        update_solid_properties!(du, u, p, t, system, geo, cell_id)
+    end,
+    region_function =
+    function aluminum_housing_region!(du, u, p, t, system, geo, cell_id)
+        solid_physics!(du, u, p, t, system, geo, cell_id)
+    end
 )
 
 phenolic_liner_initial_conditions = ComponentVector(
@@ -433,16 +519,43 @@ add_region!(
 
 add_region!(
     config, "phenolic_liner",
+    type = Solid(),
     initial_conditions = phenolic_liner_initial_conditions,
     properties = phenolic_liner_properties,
+    property_update_function =
+    function update_phenolic_liner_region!(du, u, p, t, system, geo, cell_id)
+        update_solid_properties!(du, u, p, t, system, geo, cell_id)
+    end,
+    region_function =
+    function phenolic_liner_region!(du, u, p, t, system, geo, cell_id)
+        solid_physics!(du, u, p, t, system, geo, cell_id)
+    end
+)
+
+fuel_grain_initial_conditions = ComponentVector(
+    density = 950.0u"kg/m^3",
+    temperature = room_temp
+)
+
+fuel_grain_properties = ComponentVector(
+    cp = 2000.0u"J/(kg*K)",
+    k = 0.45u"W/(m*K)"
+)
+
+add_region!(
+    config, "fuel_grain",
+    type = Solid(),
+    initial_conditions = fuel_grain_initial_conditions,
+    properties = fuel_grain_properties,
     property_update_function = 
-    function update_phenolic_liner_top_region!(du, u, p, t, system, geo, cell_id)
+    function update_fuel_grain_region!(du, u, p, t, system, geo, cell_id)
         update_solid_properties!(du, u, p, t, system, geo, cell_id)
     end,
     region_function = 
-    function phenolic_liner_top_region!(du, u, p, t, system, geo, cell_id)
+    function fuel_grain_region!(du, u, p, t, system, geo, cell_id)
         solid_physics!(du, u, p, t, system, geo, cell_id)
     end
+
 )
 
 graphite_initial_conditions = ComponentVector(
@@ -673,7 +786,7 @@ add_patch!(
         idx_a, face_a, idx_b, face_b
     )
         #this is where the most complicated CFD closure will likely need to be to determine the mass flux between these two regions
-        pressure_driven_mass_flux!
+        pressure_driven_mass_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
 
@@ -860,9 +973,9 @@ add_patch!(
 function solve_system!(du, u, p, t, system, geo)
     update_fuel_regression_geometry!(u, system.fuel_regression_model, geo, system.fuel_regression_grid)
 
+    #Moles and mole fractions are already updated per cell inside update_region_groups!
+    #(fluid_property_update_ideal! / fluid_property_update_clapeyron!), after mw_avg!
     update_region_groups!(du, u, p, t, system, geo)
-    
-    update_sytem_moles_and_mole_fractions_vec(du, u, p, t, system, geo) #This has to be called after update_region_groups! is called
 
     axial_flux_functions!(du, u, p, t, system, geo)
     
