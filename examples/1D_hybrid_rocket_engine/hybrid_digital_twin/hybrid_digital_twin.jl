@@ -1,6 +1,29 @@
+using Revise
+
+using FVMFramework
+
+using Logging
+using Unitful
+using OrdinaryDiffEq
+using NonlinearSolve
+using Sparspak
+using Ferrite
+using FerriteGmsh
+using SparseConnectivityTracer
+using ForwardDiff
+using ComponentArrays
+import ADTypes
+using ILUZero
+using LinearAlgebra
+using StaticArrays
+using Clapeyron
+using PreallocationTools
+using DataInterpolations
+
 object_names = [
     "injector_bulkhead_top",
     "injector_bulkhead_bottom",
+    "tank",
     "mid_section",
     "pre_chamber",
     "phenolic_liner_top",
@@ -22,17 +45,25 @@ object_names = [
     "nozzle_retainer"
 ]
 
-#we would then add all the region functions (this part is very simple)
+rom_geometry_json_path = joinpath(@__DIR__, "rom_geometry", "hybrid_rom_geometry.json")
 
-#we're still going to need a script in the middle here that gets the geometry, data strucutres, and topology we need to complete this
-#this is going to be very difficult!
+rom_data = read_rom_geometry_json(rom_geometry_json_path);
 
-#let's do an example:
-#this one would be applied to every single fluid_domain cell
+add_virtual_cell!(rom_data;
+    name = "nitrous_oxide_tank",
+    volume = ustrip(upreferred(1.6u"L")),
+    faces = [(
+        neighbor_region = "mid_section", 
+        neighbor_axial_index = 1,
+        area = 0.0, 
+        half_cell_distance = 0.0, 
+        neighbor_half_cell_distance = 0.0
+    )]
+)
+
+geo = build_rom_fvm_geometry(rom_data);
 
 n_cells = geo.n_cells
-
-additional_data = () #we're going to merge stuff into this over the entire solver and put it into system.additional_data at the end
 
 u_proto = ComponentVector(
     mass = zeros(n_cells)u"kg",
@@ -50,13 +81,15 @@ u_proto = ComponentVector(
     #not sure if I should keep track of the nitrous oxide vapor fraction or liquid mass
 )
 
+config = create_fvm_config_from_geo(geo, u_proto);
+
 nitrous_oxide_model = PR(["nitrous oxide"])
 model = ReidIdeal([
     "nitrous oxide",
     "ethylene",
     "nitrogen",
     "oxygen",
-    "carbon_dioxide",
+    "carbon dioxide",
     "water"
 ])
 
@@ -65,7 +98,7 @@ method = ChemPotDewPressure(
     noncondensables = ["ethylene", "nitrogen", "oxygen", "carbon_dioxide", "water"] #I don't think water will ever condense
 )
 
-merge!(additional_data, (clapeyron_method = method, nitrous_oxide_model = nitrous_oxide_model, model = model))
+config.data = merge(config.data, (clapeyron_method = method, nitrous_oxide_model = nitrous_oxide_model, model = model))
 
 injector_u0, injector_properties = get_injector_train_u0_and_properties(nitrous_oxide_model)
 
@@ -82,6 +115,8 @@ air_initial_conditions, air_properties, air_cache_syms_and_units, air_special_ca
 add_setup_syms!(
     config;
     cache_syms_and_units = (
+        heat = u"J", #used for collecting heat fluxes (this is capped to temperature change)
+
         #updated based on temperature, density, and composition:
         density = u"kg/m^3",
         pressure = u"Pa",
@@ -89,11 +124,11 @@ add_setup_syms!(
 
         #updated based on temp:
         k = u"W/(m*K)",
-        mu = 1e-5u"Pa*s",
+        mu = u"Pa*s",
         
         #updated based on temperature, density, and composition:
-        cp = 1.005e3u"J/(kg*K)",
-        cv = 718.0u"J/(kg*K)",
+        cp = u"J/(kg*K)",
+        cv = u"J/(kg*K)",
 
         #updated based on cp and cv
         gamma = u"1",
@@ -120,6 +155,12 @@ add_setup_syms!(
             water = u"m^2/s",
         )
             =#
+
+        #Caches specifically for the injector delivery train
+        specific_internal_energy = 0.0u"J/kg",
+        specific_enthalpy = 0.0u"J/kg",
+        vapor_fraction = 0.0u"kg", #we can't use u.nitrous_oxide_vapor_fraction because we can't set a state variable
+        injector_velocity = 0.0u"m/s", #this is only used to observe injector velocity over time, it does not affect any physics
     ),
     special_caches = (
         
@@ -157,6 +198,12 @@ add_setup_syms!(
         regression_exponent_n = 0.331,
         fuel_heat_of_pyrolysis = 2.3u"MJ/kg",
         min_fuel_regression_temperature = 800.0u"K"
+
+        # Injector System Parameters:
+        injector_orifice_area = 4.0u"mm^2",
+        injector_discharge_coefficient = 0.7,
+        valve_flow_capacity_factor = 10.0u"mm^2",
+        valve_opening = 1.0
     ),
 )
 
@@ -196,6 +243,18 @@ add_region!(
     end
 )
 
+add_patch!(
+    owners = "tank",
+    connections = "mid_section",
+    patch_function = function tank_to_mid_section_flux!(
+        du, u, p, t, system, geo,
+        idx_a, face_a, idx_b, face_b,
+    )
+        mid_section_to_injector_bulkhead_top_closure_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+    end
+)
+
+#This patch is where the nitrous_oxide injection will happen
 add_patch!(
     owners = "mid_section",
     connections = "injector_bulkhead_top",
