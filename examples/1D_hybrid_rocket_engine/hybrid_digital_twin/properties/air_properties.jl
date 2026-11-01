@@ -21,7 +21,7 @@ function get_air_properties!(vol, room_temp)
     )
 
     properties = (
-        molar_masses = (
+        molecular_weights = (
             nitrous_oxide = 44.01u"g/mol", 
             ethylene = 28.05u"g/mol", 
             nitrogen = 28.01u"g/mol", 

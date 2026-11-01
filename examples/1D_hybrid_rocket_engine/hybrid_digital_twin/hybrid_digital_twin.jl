@@ -260,7 +260,7 @@ air_properties = ComponentVector(
     k = 0.024u"W/(m*K)", 
     mu = 1.9e-5u"Pa*s", 
 
-    molar_masses = (
+    molecular_weights = (
         nitrous_oxide = 44.01u"g/mol", 
         ethylene = 28.05u"g/mol", 
         nitrogen = 28.01u"g/mol", 

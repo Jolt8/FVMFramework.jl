@@ -43,7 +43,7 @@ function construct_fluid_initial_conditions_from_intuitive_inputs(compressible_s
         diffusion_coefficients_ambient = u.diffusion_coefficients_ambient,
         diffusion_coefficients_ambient_temperature = u.diffusion_coefficients_ambient_temperature,
         diffusion_coefficients_ambient_pressure = u.diffusion_coefficients_ambient_pressure,
-        molar_masses = u.molar_masses
+        molecular_weights = u.molecular_weights
     )
 
     if compressible_solver_options.use_sst_turbulence == true

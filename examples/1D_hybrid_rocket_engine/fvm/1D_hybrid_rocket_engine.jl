@@ -401,7 +401,7 @@ fluid_initial_conditions, fluid_properties = construct_fluid_initial_conditions_
         #k = 0.026u"W/(m*K)",
         prandtl_number = 0.705,
 
-        molar_masses = (
+        molecular_weights = (
             nitrous_oxide = 44.01u"g/mol", 
             ethylene = 28.05u"g/mol", 
             nitrogen = 28.01u"g/mol", 
@@ -768,7 +768,7 @@ supersonic_inlet_initial_conditions, supersonic_inlet_properties = construct_flu
             hydrogen = 0.0,
             water = 0.0
         ),
-        molar_masses = (
+        molecular_weights = (
             nitrous_oxide = 44.01u"g/mol", 
             ethylene = 28.05u"g/mol", 
             nitrogen = 28.01u"g/mol", 
