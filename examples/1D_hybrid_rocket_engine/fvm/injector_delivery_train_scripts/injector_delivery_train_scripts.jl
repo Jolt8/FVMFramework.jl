@@ -107,8 +107,8 @@ function phase_weighted_mass_property(property_function, model, flash)
     # feed model contains only one species: nitrous oxide.
     for phase in eachindex(flash.fractions)
         phase_fraction = flash.fractions[phase] / total_phase_amount
-        weighted_property +=
-            phase_fraction * property_function(model, flash, phase)
+        
+        weighted_property += phase_fraction * property_function(model, flash, phase)
     end
 
     return weighted_property
