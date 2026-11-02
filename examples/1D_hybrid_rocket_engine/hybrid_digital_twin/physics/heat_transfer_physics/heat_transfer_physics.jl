@@ -33,6 +33,23 @@ housing wall. With d_a = d_b and A_a = A_b both functions agree. For a
 coaxial cylindrical face of a ROM export, d is d_eq = r_f |ln(r_f / r_c)|,
 which makes this flat-wall form exact for a cylindrical shell.
 """
+
+function heat_diffusion_series_resistance_custom_geometry!(
+    du, u, p, t, system, geo,
+    idx_a, face_a,
+    idx_b, face_b,
+    face_area_a, face_distance_a,
+    face_area_b, face_distance_b,
+)
+    half_cell_resistance_a = face_distance_a / (u.k[idx_a] * face_area_a)
+    half_cell_resistance_b = face_distance_b / (u.k[idx_b] * face_area_b)
+
+    conduction_heat_flow = (u.temperature[idx_b] - u.temperature[idx_a]) / (half_cell_resistance_a + half_cell_resistance_b)
+
+    du.heat[idx_a] += conduction_heat_flow
+    du.heat[idx_b] -= conduction_heat_flow
+end
+
 function heat_diffusion_series_resistance!(
     du, u, p, t, system, geo,
     idx_a, face_a,
@@ -44,11 +61,11 @@ function heat_diffusion_series_resistance!(
         face_area_b, face_normal_b, face_distance_b, volume_b,
     ) = interface_geometry(geo, idx_a, face_a, idx_b, face_b)
 
-    half_cell_resistance_a = face_distance_a / (u.k[idx_a] * face_area_a)
-    half_cell_resistance_b = face_distance_b / (u.k[idx_b] * face_area_b)
-
-    conduction_heat_flow = (u.temperature[idx_b] - u.temperature[idx_a]) / (half_cell_resistance_a + half_cell_resistance_b)
-
-    du.heat[idx_a] += conduction_heat_flow
-    du.heat[idx_b] -= conduction_heat_flow
+    heat_diffusion_series_resistance_custom_geometry!(
+        du, u, p, t, system, geo,
+        idx_a, face_a,
+        idx_b, face_b,
+        face_area_a, face_distance_a,
+        face_area_b, face_distance_b,
+    )
 end
