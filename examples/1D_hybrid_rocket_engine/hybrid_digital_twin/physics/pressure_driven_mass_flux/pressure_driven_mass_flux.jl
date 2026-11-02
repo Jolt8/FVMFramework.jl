@@ -20,8 +20,9 @@ of the gas crossing the face are taken from the upwind (donor) cell.
 function pressure_driven_mass_flux_custom_geometry!(
     du, u, p, t, system, geo,
     idx_a, face_a, idx_b, face_b,
-    dist, face_area_a, face_area_b, 
-    vol_a, vol_b
+    dist, 
+    face_area_a, vol_a, 
+    face_area_b, vol_b
 )
     radius_a = sqrt(face_area_a / pi)
     radius_b = sqrt(face_area_b / pi)
