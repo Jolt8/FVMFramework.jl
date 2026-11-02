@@ -258,10 +258,20 @@ function adjustable_valve_flow!(
     return mass_flow
 end
 
+function open_injector_valve!(du, u, p, t, system, geo)
+    if t > p.valve_open_time
+        p.valve_opening = 1.0
+    else
+        p.valve_opening = 0.0
+    end
+end
+
 function injector_valve_flow!(
     du, u, p, t, system, geo,
     mid_section_cell_id, face_a, pre_chamber_cell_id, face_b,
 )
+    open_injector_valve!(du, u, p, t, system, geo)
+    
     # Reset the diagnostic first, so it reads zero (not a stale value) whenever there is no injection
     u.neglected_injector_cooling_power[pre_chamber_cell_id] = 0.0
 
