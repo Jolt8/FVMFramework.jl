@@ -106,8 +106,16 @@ function finish_fvm_config(config, connection_map_function, additional_data; che
                 continue
             end
 
-            # Ensure each physical internal face between idx_a and idx_b is processed once
-            face_key = minmax(idx_a, idx_b)
+            # Ensure each physical internal face between idx_a and idx_b is processed once.
+            # The key is the face as seen from the lower cell id, NOT the cell
+            # pair: two cells can share more than one face (a ROM stepped
+            # contact, e.g. a retainer on a flat shoulder and a cylindrical
+            # wall), and each of those faces needs its own flux.
+            if idx_a < idx_b
+                face_key = (idx_a, face_idx_a)
+            else
+                face_key = (idx_b, face_idx_b)
+            end
             if face_key in visited_mesh_faces
                 continue
             end

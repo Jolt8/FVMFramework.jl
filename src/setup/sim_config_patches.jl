@@ -1,17 +1,27 @@
-#this could probably also be handled by dynamic dispatch for facets, but it helps the user know a different routine is happening
-#this needs to be updated, it currently doesn't work
-function get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_idx, top) #returning the face_b is not really necessary
-    neighbor_info = top.face_face_neighbor[cell_id, face_idx]
+"""
+    patch_faces_from_geo(geo, name, owner_region)
 
-    if !isempty(neighbor_info)
-        face_idx_neighbor = first(neighbor_info)
-        idx_b = face_idx_neighbor.idx[1]
-        face_b = face_idx_neighbor.idx[2]
+The faces of face set `name` (a boundary patch, or "<region_a>__<region_b>"),
+in the `cell_neighbors` layout, keeping only cells of `owner_region` unless
+it is "" (all cells).
+"""
+function patch_faces_from_geo(geo, name, owner_region)
+    facetset = get_facetset(geo, name)
+
+    if owner_region == ""
+        owner_region_cell_ids = nothing
     else
-        return nothing, nothing
+        owner_region_cell_ids = Set(get_cellset(geo, owner_region))
     end
 
-    return idx_b, face_b
+    cell_neighbors = Tuple{Int, Vector{Tuple{Int, Int, Int}}}[]
+    for (idx_a, neighbor_list) in facetset
+        if !isnothing(owner_region_cell_ids) && !(idx_a in owner_region_cell_ids)
+            continue
+        end
+        push!(cell_neighbors, (idx_a, copy(neighbor_list)))
+    end
+    return cell_neighbors
 end
 
 function add_patch!(
@@ -20,37 +30,10 @@ function add_patch!(
     properties = ComponentVector(),
     patch_function,
 )
-    cell_ids_and_face_idxs = [cell_id_facet_idx.idx for cell_id_facet_idx in keys(config.grid.facetsets[name].dict)]
-    #[(cell_id, face_idx), (cell_id, face_idx), ...]
+    owner_region_name = isnothing(owner_region) ? "" : owner_region
+    cell_neighbors = patch_faces_from_geo(config.geo, name, owner_region_name)
 
-    if !isnothing(owner_region)
-        owner_region_cell_ids = getcellset(config.grid, owner_region)
-    end
-
-    n_cells = length(config.grid.cells)
-    
-    cell_neighbors = [(cell_id, Vector{Tuple{Int, Int, Int}}()) for cell_id in 1:n_cells]
-
-    for (cell_id, face_a) in cell_ids_and_face_idxs
-        if !isnothing(owner_region)
-            if !(cell_id in owner_region_cell_ids)
-                continue
-            end
-        end
-        idx_b, face_b = get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_a, config.top)
-        if !isnothing(idx_b)
-            push!(cell_neighbors[cell_id][2], (idx_b, face_a, face_b))
-            #push!(cell_neighbors[idx_b][2], (cell_id, face_b)) #This is not necessary
-        else
-            push!(cell_neighbors[cell_id][2], (0, face_a, 0))
-        end
-    end
-
-    
-    filter!(conn -> !(isempty(conn[2])), cell_neighbors)
-    #get rid of empty connections
-
-    patch = PatchSetupInfo(name, properties, patch_function, cell_neighbors)
+    patch = PatchSetupInfo(name, properties, patch_function, cell_neighbors, owner_region_name)
 
     all_patch_names = [patch.name for patch in config.patches]
 
@@ -58,35 +41,21 @@ function add_patch!(
         existing_patch_idx = findfirst(x -> x == name, all_patch_names)
 
         config.patches[existing_patch_idx] = patch
-    else   
+    else
         push!(config.patches, patch)
     end
-    return 
+    return
 end
 
-#this is for updating the state vector (u0) when doing different experimental trials
-function update_patch!(config, name) 
+#rebuild a patch's faces from geo (keeps its properties, function and owner region)
+function update_patch!(config, name)
     all_patch_names = [patch.name for patch in config.patches]
     existing_patch_idx = findfirst(x -> x == name, all_patch_names)
-    
-    patch = config.patches[existing_patch_idx]
-
-    cell_ids_and_face_idxs = [cell_id_facet_idx.idx for cell_id_facet_idx in keys(config.grid.facetsets[name].dict)]
-    #[(cell_id, face_idx), (cell_id, face_idx), ...]
-
-    n_cells = length(config.grid.cells)
-    
-    cell_neighbors = [(cell_id, Vector{Tuple{Int, Int, Int}}()) for cell_id in 1:n_cells]
-
-    for (cell_id, face_a) in cell_ids_and_face_idxs
-        idx_b, face_b = get_neighboring_cell_and_face_idx_from_face_idx(cell_id, face_a, config.top)
-        if !isnothing(idx_b)
-            push!(cell_neighbors[cell_id][2], (idx_b, face_a, face_b))
-            #push!(cell_neighbors[idx_b][2], (cell_id, face_b)) #This is not necessary
-        else
-            push!(cell_neighbors[cell_id][2], (0, face_a, 0))
-        end
+    if isnothing(existing_patch_idx)
+        error("no patch named \"$name\"")
     end
 
-    config.regions[existing_region_idx] = region
+    patch = config.patches[existing_patch_idx]
+    patch.cell_neighbors = patch_faces_from_geo(config.geo, name, patch.owner_region)
+    return
 end

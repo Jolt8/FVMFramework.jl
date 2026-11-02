@@ -13,12 +13,14 @@ mutable struct PatchSetupInfo #this must be defined before SimulationConfigInfo
     properties::ComponentVector
     patch_function::Function
     cell_neighbors::Vector{Tuple{Int, Vector{Tuple{Int, Int, Int}}}}
+    owner_region::String #"" = every cell of the face set; kept so update_patch! can rebuild the faces
 end
 
 mutable struct SimulationConfigInfo
-    grid::Ferrite.Grid
+    # Everything the setup needs (cells, faces, cell sets and face sets) is in
+    # geo, so the same config works for a Ferrite mesh and a reduced-order
+    # model (create_fvm_config_from_rom). Keep your own `grid` for VTK output.
     geo::FVMGeometry
-    top::ExclusiveTopology
     regions::Vector{RegionSetupInfo}
     patches::Vector{PatchSetupInfo}
 
@@ -28,6 +30,8 @@ mutable struct SimulationConfigInfo
     optimized_parameters::ComponentVector
 
     u_proto::ComponentVector
+
+    data::NamedTuple
 end
 
 
@@ -50,16 +54,25 @@ function create_fvm_config(grid, u_proto)
 
     geo = build_fvm_geo_into_struct(grid, top)
 
+    return create_fvm_config_from_geo(geo, u_proto)
+end
+
+"""
+    create_fvm_config_from_geo(geo, u_proto)
+
+Create a `SimulationConfigInfo` from an already built `FVMGeometry` (from a
+mesh via `build_fvm_geo_into_struct`, or from a ROM export).
+"""
+function create_fvm_config_from_geo(geo, u_proto)
     return SimulationConfigInfo(
-        grid,
         geo,
-        top, 
         RegionSetupInfo[],
         PatchSetupInfo[],
         NamedTuple(), 
         ComponentVector(),
         Symbol[],
         ComponentVector(),
-        u_proto
+        u_proto,
+        ()
     )
 end

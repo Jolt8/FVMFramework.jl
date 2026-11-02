@@ -1,0 +1,355 @@
+{
+ "format_version": 1,
+ "generator": {
+  "name": "ROMGeometry",
+  "version": "0.1.0",
+  "freecad_version": "1.1.4"
+ },
+ "source_document": "built in code: cup and plug stepped contact",
+ "exported_at": "2026-10-31T16:34:38-06:00",
+ "axis": {
+  "origin": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "direction": [
+   0.0,
+   0.0,
+   1.0
+  ]
+ },
+ "radial_node_rule": "geometric_mean",
+ "parameters": {},
+ "regions": [
+  {
+   "name": "cup",
+   "material": "aluminum_6061",
+   "source_shapes": [
+    "cup"
+   ],
+   "inverted": false,
+   "z_min": 0.0,
+   "z_max": 0.01,
+   "r_min": null,
+   "r_max": null,
+   "n_axial_cells": 1,
+   "cell_ids": [
+    1
+   ],
+   "z_min_expression": "",
+   "z_max_expression": ""
+  },
+  {
+   "name": "plug",
+   "material": "copper",
+   "source_shapes": [
+    "plug"
+   ],
+   "inverted": false,
+   "z_min": 0.005,
+   "z_max": 0.01,
+   "r_min": null,
+   "r_max": null,
+   "n_axial_cells": 1,
+   "cell_ids": [
+    2
+   ],
+   "z_min_expression": "",
+   "z_max_expression": ""
+  }
+ ],
+ "cells": [
+  {
+   "id": 1,
+   "region": "cup",
+   "axial_index": 1,
+   "volume": 4.131194339470578e-06,
+   "centroid": [
+    0.0,
+    0.0,
+    0.00476235741444867
+   ],
+   "z_min": 0.0,
+   "z_max": 0.01,
+   "r_inner": 0.0,
+   "r_outer": 0.012000000000000002,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "interface",
+     "neighbor_cell": 2,
+     "neighbor_local_idx": 1,
+     "area": 7.853981633974483e-05,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.005
+     ],
+     "half_cell_distance": 0.00023764258555133023,
+     "neighbor_distance": 0.002737642585551331,
+     "centroid_distance": 0.002737642585551331,
+     "distance_method": "planar",
+     "notes": "one of 2 faces to cell 2 (plug) (cylinder r = 5 mm, plane), kept separate so each has its own normal and conduction distance"
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 2,
+     "neighbor_local_idx": 2,
+     "area": 0.00015707963267948965,
+     "surface": "cylinder",
+     "radius": 0.005,
+     "outward": "-r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.007499999999999999
+     ],
+     "half_cell_distance": 0.0009116077839697735,
+     "neighbor_distance": 0.004377343686769499,
+     "centroid_distance": 0.002737642585551331,
+     "distance_method": "cylindrical_log",
+     "notes": "one of 2 faces to cell 2 (plug) (cylinder r = 5 mm, plane), kept separate so each has its own normal and conduction distance; solid cell (r_inner = 0): radial node taken as r_outer / 2"
+    },
+    {
+     "local_idx": 3,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": null,
+     "area": 0.0004523893421169303,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "half_cell_distance": 0.00476235741444867,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 4,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": null,
+     "area": 0.0007539822368615503,
+     "surface": "cylinder",
+     "radius": 0.012,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.005
+     ],
+     "half_cell_distance": 0.008317766166719342,
+     "distance_method": "cylindrical_log",
+     "notes": "solid cell (r_inner = 0): radial node taken as r_outer / 2"
+    },
+    {
+     "local_idx": 5,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": null,
+     "area": 0.0003738495257771855,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.01
+     ],
+     "half_cell_distance": 0.00523764258555133,
+     "distance_method": "planar",
+     "notes": ""
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "region": "plug",
+   "axial_index": 1,
+   "volume": 3.926990816987241e-07,
+   "centroid": [
+    0.0,
+    0.0,
+    0.0075000000000000015
+   ],
+   "z_min": 0.005,
+   "z_max": 0.01,
+   "r_inner": 0.0,
+   "r_outer": 0.005000000000000001,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "interface",
+     "neighbor_cell": 1,
+     "neighbor_local_idx": 1,
+     "area": 7.853981633974483e-05,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.005
+     ],
+     "half_cell_distance": 0.002500000000000001,
+     "neighbor_distance": 0.002737642585551331,
+     "centroid_distance": 0.002737642585551331,
+     "distance_method": "planar",
+     "notes": "one of 2 faces to cell 1 (cup) (cylinder r = 5 mm, plane), kept separate so each has its own normal and conduction distance"
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 1,
+     "neighbor_local_idx": 2,
+     "area": 0.00015707963267948965,
+     "surface": "cylinder",
+     "radius": 0.005,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.007499999999999999
+     ],
+     "half_cell_distance": 0.0034657359027997253,
+     "neighbor_distance": 0.004377343686769499,
+     "centroid_distance": 0.002737642585551331,
+     "distance_method": "cylindrical_log",
+     "notes": "one of 2 faces to cell 1 (cup) (cylinder r = 5 mm, plane), kept separate so each has its own normal and conduction distance; solid cell (r_inner = 0): radial node taken as r_outer / 2"
+    },
+    {
+     "local_idx": 3,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": null,
+     "area": 7.853981633974483e-05,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.01
+     ],
+     "half_cell_distance": 0.002499999999999999,
+     "distance_method": "planar",
+     "notes": ""
+    }
+   ]
+  }
+ ],
+ "cellsets": {
+  "cup": [
+   1
+  ],
+  "plug": [
+   2
+  ]
+ },
+ "facetsets": {
+  "cup__plug": [
+   [
+    1,
+    1
+   ],
+   [
+    1,
+    2
+   ]
+  ]
+ },
+ "unassigned_boundary_faces": [
+  {
+   "cell": 1,
+   "local_idx": 3,
+   "area": 0.0004523893421169303,
+   "centroid": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "cell": 1,
+   "local_idx": 4,
+   "area": 0.0007539822368615503,
+   "centroid": [
+    0.0,
+    0.0,
+    0.005
+   ]
+  },
+  {
+   "cell": 1,
+   "local_idx": 5,
+   "area": 0.0003738495257771855,
+   "centroid": [
+    0.0,
+    0.0,
+    0.01
+   ]
+  },
+  {
+   "cell": 2,
+   "local_idx": 3,
+   "area": 7.853981633974483e-05,
+   "centroid": [
+    0.0,
+    0.0,
+    0.01
+   ]
+  }
+ ],
+ "near_contacts": [],
+ "validation": {
+  "errors": [],
+  "warnings": [
+   "region 'cup': 1580.22 mm^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'plug': 78.5398 mm^2 of boundary has no patch (adiabatic unless you add one)"
+  ],
+  "notes": [
+   "cell 1 (cup) meets cell 2 (plug) on 2 different surfaces (cylinder r = 5 mm, plane); they stay separate faces, each with its own normal and conduction distance. This is normal for stepped contacts."
+  ]
+ }
+}
