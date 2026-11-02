@@ -274,7 +274,9 @@ function injector_valve_flow!(
 
     mid_section_outflow_density = u.outflow_density[mid_section_cell_id]
 
-    volumetric_flow = p.injector_discharge_coefficient * p.injector_orifice_area * sqrt((2 * (u.pressure[mid_section_cell_id] - chamber_pressure)) / mid_section_outflow_density)
+    injector_orifice_area = system.cad_data.injector_orifice_area
+
+    volumetric_flow = p.injector_discharge_coefficient * injector_orifice_area * sqrt((2 * (u.pressure[mid_section_cell_id] - chamber_pressure)) / mid_section_outflow_density)
 
     oxidizer_mass_flow = volumetric_flow * mid_section_outflow_density
 
@@ -374,5 +376,7 @@ function injector_valve_flow!(
 
     du.temperature[pre_chamber_cell_id] += pre_chamber_internal_energy_rate / (pre_chamber_mass * u.cv[pre_chamber_cell_id])
 
-    u.injector_velocity[pre_chamber_cell_id] = oxidizer_mass_flow / (mid_section_outflow_density * p.injector_orifice_area)
+    injector_orifice_area = system.cad_data.injector_orifice_area
+
+    u.injector_velocity[pre_chamber_cell_id] = oxidizer_mass_flow / (mid_section_outflow_density * injector_orifice_area)
 end
