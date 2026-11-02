@@ -19,6 +19,7 @@ using StaticArrays
 using Clapeyron
 using PreallocationTools
 using DataInterpolations
+using JSON
 
 object_names = [
     "injector_bulkhead_top",
@@ -46,7 +47,7 @@ object_names = [
     "nozzle_retainer"
 ]
 
-rom_geometry_json_path = joinpath(@__DIR__, "rom_geometry", "hybrid_rom_geometry.json")
+rom_geometry_json_path = joinpath(@__DIR__, "rom_and_table_inputs", "rom_geometry", "hybrid_rom_geometry.json")
 
 rom_data = read_rom_geometry_json(rom_geometry_json_path);
 
@@ -77,9 +78,21 @@ u_proto = ComponentVector(
         carbon_dioxide = zeros(n_cells)u"kg/kg",
         water = zeros(n_cells)u"kg/kg",
     ),
+    fuel_port_radius = zeros(n_cells)u"m"
 )
 
 config = create_fvm_config_from_geo(geo, u_proto);
+
+cad_table_data_json_path = joinpath(@__DIR__, "rom_and_table_inputs", "table_data", "freecad_table_data.json")
+Revise.includet(joinpath(@__DIR__, "rom_and_table_inputs", "table_data", "read_freecad_table_data.jl"))
+cad_data = ComponentVector(read_freecad_table_data_json(cad_table_data_json_path))
+
+nozzle_inlet_radius = cad_data.nozzle_inlet_diameter / 2
+nozzle_throat_radius = cad_data.nozzle_throat_diameter / 2
+nozzle_exit_radius = cad_data.nozzle_exit_diameter / 2
+
+converging_nozzle_surface_area = pi * (nozzle_inlet_radius + nozzle_throat_radius) * sqrt((nozzle_inlet_radius - nozzle_throat_radius)^2 + nozzle_converging_height^2)
+diverging_nozzle_surface_area = pi * (nozzle_throat_radius + nozzle_exit_radius) * sqrt((nozzle_exit_radius - nozzle_throat_radius)^2 + nozzle_diverging_height^2)
 
 nitrous_oxide_model = PR(["nitrous oxide"])
 model = ReidIdeal([
@@ -96,7 +109,14 @@ method = ChemPotDewPressure(
     noncondensables = ["ethylene", "nitrogen", "oxygen", "carbon_dioxide", "water"] #I don't think water will ever condense
 )
 
-config.data = merge(config.data, (clapeyron_method = method, nitrous_oxide_model = nitrous_oxide_model, model = model))
+config.data = merge(config.data, (
+    cad_data = ustrip.(upreferred.(cad_data)),
+    converging_nozzle_surface_area = converging_nozzle_surface_area,
+    diverging_nozzle_surface_area = diverging_nozzle_surface_area,
+    clapeyron_method = method, 
+    nitrous_oxide_model = nitrous_oxide_model, 
+    model = model
+))
 
 add_setup_syms!(
     config;
@@ -189,11 +209,13 @@ add_setup_syms!(
         min_fuel_regression_temperature = 800.0u"K",
 
         # Injector System Parameters:
-        injector_orifice_area = 4.0u"mm^2",
         injector_discharge_coefficient = 0.7,
         valve_flow_capacity_factor = 10.0u"mm^2",
         valve_opening = 1.0,
         minimum_pre_chamber_temperature = 230.0u"K", #temperature threshold where the latent heat of vaporization is ignored in injector_deliver_train_physics
+        
+        #Nozzle Parameters:
+        nozzle_discharge_coefficient = 0.98,
     ),
 )
 
@@ -216,7 +238,6 @@ Revise.includet(joinpath(@__DIR__, "property_update_functions", "system_moles_ve
 Revise.includet(joinpath(@__DIR__, "property_update_functions", "update_fluid_caches.jl"))
 Revise.includet(joinpath(@__DIR__, "physics", "heat_transfer_physics", "heat_transfer_physics.jl"))
 Revise.includet(joinpath(@__DIR__, "physics", "injector_delivery_train_physics", "injector_delivery_train_physics.jl"))
-
 
 #Don't need this right now since k and mu are fixed
 #=
@@ -282,6 +303,8 @@ air_properties = ComponentVector(
         carbon_dioxide = 1.6e-5u"m^2/s",
         water = 2.4e-5u"m^2/s",
     ),
+
+    R_gas = 8.314u"J/(mol*K)"
 )
 
 add_region!(
@@ -332,46 +355,31 @@ tank_initial_conditions = ComponentVector(
     )
 )
 
-tank_properties = ComponentVector(
-    #=
-    N2O properties to keep in mind:
+#=
+N2O properties to keep in mind:
 
-    vapor_k = 0.017u"W/(m*K)"
-    vapor_mu = 1.4e-5u"Pa*s"
+vapor_k = 0.017u"W/(m*K)"
+vapor_mu = 1.4e-5u"Pa*s"
 
-    liquid_k = 0.09u"W/(m*K)"
-    liquid_mu_lower_bound = 6.0e-5u"Pa*s"
-    liquid_mu_upper_bound = 3.2e-4u"Pa*s"
-    =#
+liquid_k = 0.09u"W/(m*K)"
+liquid_mu_lower_bound = 6.0e-5u"Pa*s"
+liquid_mu_upper_bound = 3.2e-4u"Pa*s"
+=#
 
-    #we'll use the vapor properties for now since a large majority of the calculations that involve these values happen in the vapor phase
-    k = 0.017u"W/(m*K)", 
-    mu = 1.4e-5u"Pa*s", 
-
-    molecular_weights = (
-        nitrous_oxide = 44.01u"g/mol", 
-        ethylene = 28.05u"g/mol", 
-        nitrogen = 28.01u"g/mol", 
-        oxygen = 32.00u"g/mol", 
-        carbon_dioxide = 44.01u"g/mol", 
-        water = 18.02u"g/mol"
-    ),
-    #these will just stay fixed for now
-    diffusion_coefficients = (
-        nitrous_oxide = 1.4e-5u"m^2/s",
-        ethylene = 1.4e-5u"m^2/s",
-        nitrogen = 1.8e-5u"m^2/s",
-        oxygen = 1.9e-5u"m^2/s",
-        carbon_dioxide = 1.6e-5u"m^2/s",
-        water = 2.4e-5u"m^2/s",
-    ),
+#we'll use the vapor properties for now since a large majority of the calculations that involve these values happen in the vapor phase
+nitrous_oxide_properties = merge_properties(
+    air_properties,
+    ComponentVector(
+        k = 0.017u"W/(m*K)", 
+        mu = 1.4e-5u"Pa*s", 
+    )
 )
 
 add_region!(
     config, "tank",
     type = Fluid(),
-    initial_conditions = n2o_initial_conditions,
-    properties = n2o_properties,
+    initial_conditions = tank_initial_conditions,
+    properties = nitrous_oxide_properties,
     property_update_function = 
     function update_tank_region!(du, u, p, t, system, geo, cell_id)
         update_tank_properties!(du, u, p, t, system, geo, cell_id)
@@ -382,14 +390,27 @@ add_region!(
     end
 )
 
-u0_mid_section_mass = mass_density(nitrous_oxide_model, 1.0u"atm", 298.0u"K", [1.0]) * properties.mid_section.volume |> u"kg"
+u0_mid_section_mass = mass_density(nitrous_oxide_model, 1.0u"atm", 298.0u"K", [1.0]) * geo.cell_volumes[get_cells(geo, "mid_section")] |> u"kg"
 
+#Although this is less accurate, we're using a pure EOS model here, so we can't have anything other than nitrous oxide in it
+mid_section_initial_conditions = ComponentVector(
+    density = (u0_mid_section_mass / geo.cell_volumes[get_cells(geo, "mid_section")]),
+    temperature = room_temp,
+    mass_fractions = (
+        nitrous_oxide = 1.0,
+        ethylene = 0.0,
+        nitrogen = 0.0,
+        oxygen = 0.0,
+        carbon_dioxide = 0.0,
+        water = 0.0
+    )
+)
 
 add_region!(
     config, "mid_section",
     type = Fluid(),
-    initial_conditions = air_initial_conditions,
-    properties = air_properties,
+    initial_conditions = mid_section_initial_conditions,
+    properties = nitrous_oxide_properties,
     property_update_function = 
     function update_mid_section_region!(du, u, p, t, system, geo, cell_id)
         update_mid_section_properties!(du, u, p, t, system, geo, cell_id)
@@ -429,14 +450,8 @@ add_region!(
     type = Solid(),
     initial_conditions = aluminum_initial_conditions,
     properties = aluminum_properties,
-    property_update_function = 
-    function update_injector_bulkhead_top_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
-    end,
-    region_function = 
-    function injector_bulkhead_top_region!(du, u, p, t, system, geo, cell_id)
-        solid_physics!(du, u, p, t, system, geo, cell_id)
-    end
+    property_update_function = update_solid_properties!,
+    region_function = solid_physics!
 )
 
 add_region!(
@@ -444,14 +459,8 @@ add_region!(
     type = Solid(),
     initial_conditions = aluminum_initial_conditions,
     properties = aluminum_properties,
-    property_update_function = 
-    function update_injector_bulkhead_bottom_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
-    end,
-    region_function = 
-    function injector_bulkhead_bottom_region!(du, u, p, t, system, geo, cell_id)
-        solid_physics!(du, u, p, t, system, geo, cell_id)
-    end
+    property_update_function = update_solid_properties!,
+    region_function = solid_physics!
 )
 
 add_region!(
@@ -459,14 +468,8 @@ add_region!(
     type = Solid(),
     initial_conditions = aluminum_initial_conditions,
     properties = aluminum_properties,
-    property_update_function =
-    function update_aluminum_housing_top_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
-    end,
-    region_function =
-    function aluminum_housing_top_region!(du, u, p, t, system, geo, cell_id)
-        solid_physics!(du, u, p, t, system, geo, cell_id)
-    end
+    property_update_function = update_solid_properties!,
+    region_function = solid_physics!
 )
 
 add_region!(
@@ -474,14 +477,8 @@ add_region!(
     type = Solid(),
     initial_conditions = aluminum_initial_conditions,
     properties = aluminum_properties,
-    property_update_function =
-    function update_aluminum_housing_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
-    end,
-    region_function =
-    function aluminum_housing_region!(du, u, p, t, system, geo, cell_id)
-        solid_physics!(du, u, p, t, system, geo, cell_id)
-    end
+    property_update_function = update_solid_properties!,
+    region_function = solid_physics!
 )
 
 phenolic_liner_initial_conditions = ComponentVector(
@@ -499,14 +496,8 @@ add_region!(
     type = Solid(),
     initial_conditions = phenolic_liner_initial_conditions,
     properties = phenolic_liner_properties,
-    property_update_function = 
-    function update_phenolic_liner_top_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
-    end,
-    region_function = 
-    function phenolic_liner_top_region!(du, u, p, t, system, geo, cell_id)
-        solid_physics!(du, u, p, t, system, geo, cell_id)
-    end
+    property_update_function = update_solid_properties!,
+    region_function = solid_physics!
 )
 
 add_region!(
@@ -514,19 +505,16 @@ add_region!(
     type = Solid(),
     initial_conditions = phenolic_liner_initial_conditions,
     properties = phenolic_liner_properties,
-    property_update_function =
-    function update_phenolic_liner_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
-    end,
-    region_function =
-    function phenolic_liner_region!(du, u, p, t, system, geo, cell_id)
-        solid_physics!(du, u, p, t, system, geo, cell_id)
-    end
+    property_update_function = update_solid_properties!,
+    region_function = solid_physics!
 )
+
+initial_fuel_port_radius = config.data.cad_data.initial_fuel_grain_void_diameter * u"m"
 
 fuel_grain_initial_conditions = ComponentVector(
     density = 950.0u"kg/m^3",
-    temperature = room_temp
+    temperature = room_temp,
+    fuel_port_radius = initial_fuel_port_radius
 )
 
 fuel_grain_properties = ComponentVector(
@@ -565,14 +553,8 @@ add_region!(
     type = Solid(),
     initial_conditions = graphite_initial_conditions,
     properties = graphite_properties,
-    property_update_function = 
-    function update_nozzle_top_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
-    end,
-    region_function = 
-    function nozzle_top_region!(du, u, p, t, system, geo, cell_id)
-        solid_physics!(du, u, p, t, system, geo, cell_id)
-    end
+    property_update_function = update_solid_properties!,
+    region_function = solid_physics!
 )
 
 add_region!(
@@ -580,14 +562,8 @@ add_region!(
     type = Solid(),
     initial_conditions = aluminum_initial_conditions,
     properties = aluminum_properties,
-    property_update_function = 
-    function update_aluminum_housing_near_nozzle_top_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
-    end,
-    region_function = 
-    function aluminum_housing_near_nozzle_top_region!(du, u, p, t, system, geo, cell_id)
-        solid_physics!(du, u, p, t, system, geo, cell_id)
-    end
+    property_update_function = update_solid_properties!,
+    region_function = solid_physics!
 )
 
 add_region!(
@@ -595,14 +571,8 @@ add_region!(
     type = Solid(),
     initial_conditions = graphite_initial_conditions,
     properties = graphite_properties,
-    property_update_function = 
-    function update_nozzle_bottom_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
-    end,
-    region_function = 
-    function nozzle_bottom_region!(du, u, p, t, system, geo, cell_id)
-        solid_physics!(du, u, p, t, system, geo, cell_id)
-    end
+    property_update_function = update_solid_properties!,
+    region_function = solid_physics!
 )
 
 add_region!(
@@ -610,14 +580,8 @@ add_region!(
     type = Solid(),
     initial_conditions = aluminum_initial_conditions,
     properties = aluminum_properties,
-    property_update_function = 
-    function update_aluminum_housing_near_nozzle_bottom_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
-    end,
-    region_function = 
-    function aluminum_housing_near_nozzle_bottom_region!(du, u, p, t, system, geo, cell_id)
-        solid_physics!(du, u, p, t, system, geo, cell_id)
-    end
+    property_update_function = update_solid_properties!,
+    region_function = solid_physics!
 )
 
 add_region!(
@@ -625,14 +589,8 @@ add_region!(
     type = Solid(),
     initial_conditions = aluminum_initial_conditions,
     properties = aluminum_properties,
-    property_update_function = 
-    function update_nozzle_retainer_region!(du, u, p, t, system, geo, cell_id)
-        update_solid_properties!(du, u, p, t, system, geo, cell_id)
-    end,
-    region_function = 
-    function nozzle_retainer_region!(du, u, p, t, system, geo, cell_id)
-        solid_physics!(du, u, p, t, system, geo, cell_id)
-    end
+    property_update_function = update_solid_properties!,
+    region_function = solid_physics!
 )
 
 add_patch!(
@@ -794,54 +752,67 @@ function fluid_domain_axial_flux!(du, u, p, t, system, geo)
     fluid_domain_cells = get_cells(geo, "fluid_domain")
 
     #if we use this, we'll have n-1 axial fuel port id states
-    fuel_port_id = 1
+    axial_idx = 1
 
     #this requires that fluid_domain cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
-    for upstream_cell in fluid_domain_cells[1:end-1]
-        downstream_cell = upstream_cell + 1
+    for upstream_cell_id in fluid_domain_cells[1:end-1]
+        downstream_cell_id = upstream_cell + 1
+        fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
         #some flux function here
 
-        fuel_port_id = system.fuel_port_ids[upstream_cell, downstream_cell]
+        pressure_driven_mass_flux_custom_geometry!(
+            du, u, p, t, system, geo,
+            idx_a, face_a, idx_b, face_b,
+            dist, face_area_a, face_area_b,
+            volume_a, volume_b
+        )
 
-        fluid_port_area = pi * u.fuel_port_radius[fuel_port_id]^2
-        fuel_grain_area = pi * (geo.max_bounding_box_x[upstream_cell] - geo.centroids[upstream_cell][1])
-        interface_area = fuel_grain_area - fluid_port_area
-
-        #use the new geometry to calculate the flux
-
-        pressure_driven_mass_flux!
-
-        fuel_port_id += 1
+        axial_idx += 1
     end
 end
 
 function fuel_grain_axial_flux!(du, u, p, t, system, geo)
     fuel_grain_cells = get_cells(geo, "fuel_grain")
 
+    axial_idx = 1
+
     #this requires that fuel_grain cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
     for upstream_cell in fuel_grain_cells[1:end-1]
         downstream_cell = upstream_cell + 1
+        fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
         #some flux function here
+
+        axial_idx += 1
     end
 end
 
 function phenolic_liner_axial_flux!(du, u, p, t, system, geo)
     phenolic_liner_cells = get_cells(geo, "phenolic_liner")
 
+    axial_idx = 1
+
     #this requires that phenolic_liner cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
     for upstream_cell in phenolic_liner_cells[1:end-1]
         downstream_cell = upstream_cell + 1
+        fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
         #some flux function here
+
+        axial_idx += 1
     end
 end
 
 function aluminum_housing_axial_flux!(du, u, p, t, system, geo)
     aluminum_housing_cells = get_cells(geo, "aluminum_housing")
 
+    axial_idx = 1
+
     #this requires that aluminum_housing cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
     for upstream_cell in aluminum_housing_cells[1:end-1]
         downstream_cell = upstream_cell + 1
+        fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
         #some flux function here
+
+        axial_idx += 1
     end
 end
 
@@ -862,6 +833,8 @@ add_patch!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
+        axial_idx = findfirst(==(idx_a), geo.cell_sets["fluid_domain"])
+        fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
         #some flux function 
         #this requires geometry updating
     end
@@ -874,6 +847,7 @@ add_patch!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
+        #idx_a is the fuel_grain_cell_id here!
         #some flux function 
         #this requires geometry updating
     end
@@ -886,11 +860,13 @@ add_patch!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
-        #some flux function 
-        #this requires geometry updating
+        #this one, unlike the others, does not require geometry updating
+        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
 #end
+
+Revise.includet(joinpath(@__DIR__, "physics", "nozzle_outlet_closure", "nozzle_outlet_closure.jl"))
 
 add_patch!(
     owner = "fluid_domain",
@@ -900,7 +876,26 @@ add_patch!(
         idx_a, face_a, idx_b, face_b
     )
         nozzle_outlet_closure!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
-        heat_transfer_from_fluid_to_nozzle_top!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        #heat_transfer_from_fluid_to_nozzle_top!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+
+        fluid_cell_id = idx_a
+        converging_cell_id = idx_b
+        diverging_cell_id = get_cells(geo, "nozzle_bottom")[1]
+
+        #Very rough heat transfer coefficients right now because we're definitely going to develop a closure for this using CFD
+        #We're going slightly high on the converging and diverging numbers because we're neglecting the typical throat heat transfer coefficient
+        h_converging = 4000 #W/m^2K (ranges between 1000 and 5000)
+        #h_throat = 12000 #W/m^2K (ranges between 10000 and 20000)
+        h_diverging = 6000 #W/m^2K (ranges between 2000 and 8000)
+
+        converging_area = system.converging_nozzle_surface_area
+        diverging_area = system.diverging_nozzle_surface_area
+
+        du.heat[fluid_cell_id] -= h_converging * converging_area * (u.temperature[fluid_cell_id] - u.temperature[converging_cell_id])
+        du.heat[converging_cell_id] += h_converging * converging_area * (u.temperature[fluid_cell_id] - u.temperature[converging_cell_id])
+
+        du.heat[fluid_cell_id] -= h_diverging * diverging_area * (u.temperature[fluid_cell_id] - u.temperature[diverging_cell_id])
+        du.heat[diverging_cell_id] += h_diverging * diverging_area * (u.temperature[fluid_cell_id] - u.temperature[diverging_cell_id])
     end
 )
 
@@ -914,7 +909,7 @@ add_patch!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
-        nozzle_top_to_aluminum_housing_nozzle_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
 
@@ -925,7 +920,7 @@ add_patch!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
-        heat_diffusion!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
 
@@ -936,7 +931,7 @@ add_patch!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
-        heat_diffusion!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
 
@@ -947,7 +942,7 @@ add_patch!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
-        heat_diffusion!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
 
@@ -958,7 +953,7 @@ add_patch!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
-        heat_diffusion!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
 
@@ -977,7 +972,6 @@ function solve_system!(du, u, p, t, system, geo)
     regress_fuel_layers!(du, u, p, t, system, geo)
     solve_region_groups!(du, u, p, t, system, geo)
 end
-
 
 system_data = (
     moles_vec = generate_system_moles_vec(config),
