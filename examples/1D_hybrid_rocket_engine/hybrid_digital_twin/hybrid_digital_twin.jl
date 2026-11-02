@@ -76,9 +76,11 @@ u_proto = ComponentVector(
         nitrogen = zeros(n_cells)u"kg/kg",
         oxygen = zeros(n_cells)u"kg/kg",
         carbon_dioxide = zeros(n_cells)u"kg/kg",
+        carbon_monoxide = zeros(n_cells)u"kg/kg",
         water = zeros(n_cells)u"kg/kg",
     ),
-    fuel_port_radius = zeros(n_cells)u"m"
+    fuel_port_radius = zeros(n_cells)u"m",
+    igniter_mass = [0.0u"kg"]
 )
 
 config = create_fvm_config_from_geo(geo, u_proto);
@@ -104,12 +106,13 @@ model = ReidIdeal([
     "nitrogen",
     "oxygen",
     "carbon dioxide",
+    "carbon monoxide",
     "water"
 ])
 
 #We're going to have to append this to system.additional_data
 method = ChemPotDewPressure(
-    noncondensables = ["ethylene", "nitrogen", "oxygen", "carbon_dioxide", "water"] #I don't think water will ever condense
+    noncondensables = ["ethylene", "nitrogen", "oxygen", "carbon dioxide", "carbon monoxide", "water"] #I don't think water will ever condense
 )
 
 config.data = merge(config.data, (
@@ -119,7 +122,9 @@ config.data = merge(config.data, (
     clapeyron_method = method, 
     nitrous_oxide_model = nitrous_oxide_model, 
     model = model,
-    cold_flow = true
+    tstops = [],
+    cold_flow = true,
+    hot_fire = false
 ))
 
 add_setup_syms!(
@@ -151,6 +156,7 @@ add_setup_syms!(
             nitrogen = u"mol/m^3",
             oxygen = u"mol/m^3",
             carbon_dioxide = u"mol/m^3",
+            carbon_monoxide = u"mol/m^3",
             water = u"mol/m^3",
         ),
         
@@ -162,6 +168,7 @@ add_setup_syms!(
             nitrogen = u"m^2/s",
             oxygen = u"m^2/s",
             carbon_dioxide = u"m^2/s",
+            carbon_monoxide = u"m^2/s",
             water = u"m^2/s",
         )
         =#
@@ -217,11 +224,29 @@ add_setup_syms!(
         valve_flow_capacity_factor = 10.0u"mm^2",
         valve_opening = 1.0,
         minimum_pre_chamber_temperature = 230.0u"K", #temperature threshold where the latent heat of vaporization is ignored in injector_deliver_train_physics
+        valve_open_time = 0.1u"s",
         
-        #Nozzle Parameters:
+        # Nozzle Parameters:
         nozzle_discharge_coefficient = 0.98,
+        ambient_pressure = 1.0u"atm",
+
+        # Igniter Parameters:
+        igniter_density = 1.90u"g/cm^3", #based on the density of the sugar rocket recipe
+        igniter_heat_of_combustion = 2.30u"kJ/g", #based on the middle value of typical heat of combustion for the sugar rocket recipe
+        igniter_burn_time = 0.5u"s",
+        igniter_volume = cad_data.igniter_puck_volume |> u"m",
+
+        # Stop Parameters
+        min_fuel_port_radius = (cad_data.phenolic_liner_inner_diameter - 2 * cad_data.fuel_grain_desired_fuel_web_thickness) / 2,
+        min_chamber_pressure = 150_000u"Pa", # Solver stops once the pressure drops below this value
+
+        # Convection Parameters:
+        chamber_convective_heat_transfer_coefficient = 3000.0u"W/(m^2*K)"
     ),
 )
+
+push!(config.data.tstops, config.optimized_parameters.valve_open_time)
+push!(config.data.tstops, config.optimized_parameters.igniter_burn_time)
 
 function cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
     #Every cell has a fixed volume, so heat raises internal energy at constant volume: M * cv * dT/dt = Q.
@@ -258,10 +283,16 @@ function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
     fluid_property_update_ideal!(du, u, p, t, system, geo, cell_id)
 end
 
+Revise.includet(joinpath(@__DIR__, "physics", "fuel_oxidizer_reaction_physics", "combustion_reaction_model", "simple_arrhenius_reaction_model.jl"))
+Revise.includet(joinpath(@__DIR__, "physics", "fuel_oxidizer_reaction_physics", "combustion_reaction_model", "westbrook_dryer_reaction_mechanism.jl"))
+
+Revise.includet(joinpath(@__DIR__, "physics", "fuel_oxidizer_reaction_physics", "fuel_oxidizer_reaction_physics.jl"))
+
 function fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
-    overall_combustion_model!(du, u, p, t, system, geo, cell_id)
+    if system.hot_fire == true
+        overall_combustion_model!(du, u, p, t, system, geo, cell_id)
+    end
     cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
-    cap_fluid_flow!(du, u, p, t, system, geo, cell_id)
 end
 
 function normalize!(vec)
@@ -281,6 +312,7 @@ air_initial_conditions = ComponentVector(
         nitrogen = 0.781,
         oxygen = 0.211,
         carbon_dioxide = 0.0003,
+        carbon_monoxide = 0.0,
         water = 1e-8
     ))
 )
@@ -296,6 +328,7 @@ air_properties = ComponentVector(
         nitrogen = 28.01u"g/mol", 
         oxygen = 32.00u"g/mol", 
         carbon_dioxide = 44.01u"g/mol",
+        carbon_monoxide = 28.01u"g/mol",
         water = 18.02u"g/mol"
     ),
     #these will just stay fixed for now
@@ -305,11 +338,18 @@ air_properties = ComponentVector(
         nitrogen = 1.8e-5u"m^2/s",
         oxygen = 1.9e-5u"m^2/s",
         carbon_dioxide = 1.6e-5u"m^2/s",
+        carbon_monoxide = 2.1-5u"m^2/s",
         water = 2.4e-5u"m^2/s",
     ),
 
     R_gas = 8.314u"J/(mol*K)"
 )
+
+initial_igniter_puck_mass = config.optimized_parameters.igniter_density * config.data.cad_data.igniter_puck_volume
+config.u_proto.igniter_mass = [initial_igniter_puck_mass]
+config.data = merge_properties(config.data, (
+    initial_igniter_mass = initial_igniter_puck_mass
+))
 
 add_region!(
     config, "pre_chamber";
@@ -319,6 +359,7 @@ add_region!(
     property_update_function = 
     function update_pre_chamber_region!(du, u, p, t, system, geo, cell_id)
         update_fluid_properties!(du, u, p, t, system, geo, cell_id)
+        
     end,
     region_function = 
     function pre_chamber_region!(du, u, p, t, system, geo, cell_id)
@@ -355,6 +396,7 @@ tank_initial_conditions = ComponentVector(
         nitrogen = 0.0,
         oxygen = 0.0,
         carbon_dioxide = 0.0,
+        carbon_monoxide = 0.0,
         water = 0.0
     )
 )
@@ -406,6 +448,7 @@ mid_section_initial_conditions = ComponentVector(
         nitrogen = 0.0,
         oxygen = 0.0,
         carbon_dioxide = 0.0,
+        carbon_monoxide = 0.0,
         water = 0.0
     )
 )
@@ -679,7 +722,8 @@ add_patch!(
         idx_a, face_a, idx_b, face_b
     )
         #TODO: WE CANNOT IGNORE CONVECTION (IT WILL LIKELY BE OFF BY A FACTOR OF 1000x)!
-        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b) #this is pretty negligible
+        chamber_convective_heat_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
 
@@ -707,6 +751,9 @@ add_patch!(
 #end
 
 #Radial fluxes across top cells
+
+Revise.includet(joinpath(@__DIR__, "physics", "chamber_convective_heat_transfer", "chamber_convective_heat_transfer.jl"))
+
 #start
 add_patch!(
     owner = "pre_chamber",
@@ -718,6 +765,7 @@ add_patch!(
         #this one will likely need a CFD closure in the future to account for convection
         #TODO: WE CANNOT IGNORE CONVECTION (IT WILL LIKELY BE OFF BY A FACTOR OF 1000x)!
         heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        chamber_convective_heat_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
 
@@ -742,7 +790,15 @@ add_patch!(
         idx_a, face_a, idx_b, face_b
     )
         #this is where the most complicated CFD closure will likely need to be to determine the mass flux between these two regions
-        pressure_driven_mass_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+
+        #face_area_a, face_area_b, and vol_b will change over time based on the position of the fuel grain port radius
+        pressure_driven_mass_flux_custom_geometry!(
+            du, u, p, t, system, geo,
+            idx_a, face_a, idx_b, face_b,
+            dist, 
+            face_area_a, vol_a, 
+            face_area_b, vol_b
+        )
     end
 )
 
@@ -766,11 +822,13 @@ function fluid_domain_axial_flux!(du, u, p, t, system, geo)
         fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
         #some flux function here
 
+        #all geometry variables here will change over time
         pressure_driven_mass_flux_custom_geometry!(
             du, u, p, t, system, geo,
             idx_a, face_a, idx_b, face_b,
-            dist, face_area_a, face_area_b,
-            volume_a, volume_b
+            dist, 
+            face_area_a, vol_a, 
+            face_area_b, vol_b
         )
 
         axial_idx += 1
@@ -787,6 +845,16 @@ function fuel_grain_axial_flux!(du, u, p, t, system, geo)
         downstream_cell = upstream_cell_id + 1
         fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
         #some flux function here
+
+        #you would probably need the max port radius which is cad_data.phenolic_liner_inner_diameter / 2
+
+        heat_diffusion_series_resistance_custom_geometry!(
+            du, u, p, t, system, geo,
+            idx_a, face_a,
+            idx_b, face_b,
+            face_area_a, face_distance_a,
+            face_area_b, face_distance_b,
+        )
 
         axial_idx += 1
     end
@@ -843,6 +911,25 @@ add_patch!(
         fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
         #some flux function 
         #this requires geometry updating
+
+        #this is where the actual fuel regression should happen (probably)
+
+        
+        # We switch to regressing the fuel when the **GAS** temperature (not the fuel grain temperature) is above a certain threshold
+        if u.temperature[idx_a] < min_fuel_regression_temperature || system.cold_flow == true
+            chamber_convective_heat_flux_custom_geometry!(
+                du, u, p, t, system, geo, 
+                idx_a, face_a, idx_b, face_b,
+                face_area
+            )
+        else
+            fuel_grain_regression!(
+                du, u, p, t, system, geo, 
+                idx_a, face_a, idx_b, face_b,
+                face_area, dist,
+                vol_a, vol_b,
+            )
+        end
     end
 )
 
@@ -980,8 +1067,53 @@ function solve_system!(du, u, p, t, system, geo)
 end
 
 system_data = (
+    config.data...,
     moles_vec = generate_system_moles_vec(config),
     mole_fractions_vec = generate_system_mole_fractions_vec(config)
+)
+
+du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, system_data, check_units = false);
+
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, ad_geometry_cache, solve_system!)
+
+p_guess = ustrip.(upreferred.(deepcopy(config.optimized_parameters)))
+
+detector = SparseConnectivityTracer.TracerLocalSparsityDetector()
+
+jac_sparsity = ADTypes.jacobian_sparsity(
+    (du, u) -> f_closure_implicit(du, u, p_guess, 0.0), du0_vec, u0_vec, detector
+)
+
+t0 = 0.0
+switch_time = 0.001
+tMax = 10.0
+
+ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
+startup_prob = ODEProblem(ode_func, u0_vec, (t0, switch_time), p_guess)
+
+Revise.includet(joinpath(@__DIR__, "callbacks", "stop_sol_callbacks.jl"))
+
+callbacks = CallbackSet(
+    approximate_time_to_finish_cb,
+    port_diameter_termination_cb,
+    min_chamber_pressure_termination_cb
+)
+
+Revise.includet(joinpath(@__DIR__, "state_is_invalid/state_is_invalid.jl"))
+
+state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
+
+@time startup_sol = solve(
+    startup_prob,
+    Tsit5(),
+    #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
+    #FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()),
+    #AutoTsit5(FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff())),
+    #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoFiniteDiff()),
+    #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
+    #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
+    callback = callbacks,
+    isoutofdomain = state_is_invalid_closure,
 )
 
 
