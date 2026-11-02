@@ -234,11 +234,11 @@ add_setup_syms!(
         igniter_density = 1.90u"g/cm^3", #based on the density of the sugar rocket recipe
         igniter_heat_of_combustion = 2.30u"kJ/g", #based on the middle value of typical heat of combustion for the sugar rocket recipe
         igniter_burn_time = 0.5u"s",
-        igniter_volume = cad_data.igniter_puck_volume |> u"m",
+        igniter_volume = cad_data.igniter_puck_volume |> u"m^3",
 
         # Stop Parameters
         min_fuel_port_radius = (cad_data.phenolic_liner_inner_diameter - 2 * cad_data.fuel_grain_desired_fuel_web_thickness) / 2,
-        min_chamber_pressure = 150_000u"Pa", # Solver stops once the pressure drops below this value
+        min_chamber_pressure = 100_000u"Pa", # Solver stops once the pressure drops below this value (also requires 2 seconds to pass before this is allowed to stop the solver)
 
         # Convection Parameters:
         chamber_convective_heat_transfer_coefficient = 3000.0u"W/(m^2*K)"
@@ -338,7 +338,7 @@ air_properties = ComponentVector(
         nitrogen = 1.8e-5u"m^2/s",
         oxygen = 1.9e-5u"m^2/s",
         carbon_dioxide = 1.6e-5u"m^2/s",
-        carbon_monoxide = 2.1-5u"m^2/s",
+        carbon_monoxide = 2.1e-5u"m^2/s",
         water = 2.4e-5u"m^2/s",
     ),
 
@@ -464,7 +464,7 @@ add_region!(
     end,
     region_function = 
     function mid_section_region!(du, u, p, t, system, geo, cell_id)
-        fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
+        cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
     end
 )
 
