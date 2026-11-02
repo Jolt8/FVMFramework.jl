@@ -674,6 +674,7 @@ add_patch!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b
     )
+        #TODO: WE CANNOT IGNORE CONVECTION (IT WILL LIKELY BE OFF BY A FACTOR OF 1000x)!
         heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
@@ -711,6 +712,7 @@ add_patch!(
         idx_a, face_a, idx_b, face_b
     )
         #this one will likely need a CFD closure in the future to account for convection
+        #TODO: WE CANNOT IGNORE CONVECTION (IT WILL LIKELY BE OFF BY A FACTOR OF 1000x)!
         heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
