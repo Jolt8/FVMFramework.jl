@@ -6,7 +6,7 @@
   "freecad_version": "1.1.4"
  },
  "source_document": "C:/Users/wille/Desktop/hybrid-rocket-CAD/src/hybrid_assembly_for_cfd.FCStd",
- "exported_at": "2026-10-31T16:56:22-06:00",
+ "exported_at": "2026-11-01T19:24:00-06:00",
  "axis": {
   "origin": [
    0.0,
@@ -67,7 +67,7 @@
    "z_max_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body001.PolarPattern001.Edge3"
   },
   {
-   "name": "injector_bulkhead_region_2",
+   "name": "mid_section",
    "material": "",
    "source_shapes": [
     "injector_bulkhead"
@@ -757,7 +757,7 @@
   },
   {
    "id": 3,
-   "region": "injector_bulkhead_region_2",
+   "region": "mid_section",
    "axial_index": 1,
    "volume": 4.7405295531057756e-07,
    "centroid": [
@@ -1330,7 +1330,7 @@
      "kind": "boundary",
      "neighbor_cell": 0,
      "neighbor_local_idx": 0,
-     "patch": null,
+     "patch": "fluid_domain_to_nozzle_inlet",
      "area": 0.00029315960342532363,
      "surface": "plane",
      "radius": null,
@@ -14355,7 +14355,7 @@
   "injector_bulkhead_bottom": [
    2
   ],
-  "injector_bulkhead_region_2": [
+  "mid_section": [
    3
   ],
   "pre_chamber": [
@@ -14518,7 +14518,7 @@
     1
    ]
   ],
-  "injector_bulkhead_region__injector_bulkhead_region_2": [
+  "injector_bulkhead_region__mid_section": [
    [
     1,
     2
@@ -14680,7 +14680,7 @@
     6
    ]
   ],
-  "injector_bulkhead_bottom__injector_bulkhead_region_2": [
+  "injector_bulkhead_bottom__mid_section": [
    [
     2,
     2
@@ -14977,6 +14977,12 @@
    ],
    [
     36,
+    3
+   ]
+  ],
+  "fluid_domain_to_nozzle_inlet": [
+   [
+    7,
     3
    ]
   ],
@@ -15709,16 +15715,6 @@
    ]
   },
   {
-   "cell": 7,
-   "local_idx": 3,
-   "area": 0.00029315960342532363,
-   "centroid": [
-    0.0,
-    0.0,
-    0.04146166555400459
-   ]
-  },
-  {
    "cell": 37,
    "local_idx": 4,
    "area": 0.0005788070304973836,
@@ -15785,10 +15781,9 @@
   "warnings": [
    "region 'injector_bulkhead_region': 356.361 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "region 'injector_bulkhead_bottom': 490.664 mm^2 of boundary has no patch (adiabatic unless you add one)",
-   "region 'injector_bulkhead_region_2': 100.943 mm^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'mid_section': 100.943 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "region 'pre_chamber': 4 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "region 'aluminum_housing_top': 455.215 mm^2 of boundary has no patch (adiabatic unless you add one)",
-   "region 'fluid_domain': 293.16 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "region 'fuel_grain': 578.807 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "region 'nozzle_top': 2309.9 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "region 'nozzle_bottom': 912.894 mm^2 of boundary has no patch (adiabatic unless you add one)",
