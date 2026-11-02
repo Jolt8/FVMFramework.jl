@@ -6,10 +6,10 @@ function update_cell_moles_vec!(du, u, p, t, system, geo, cell_id)
     species_idx = 1
 
     cell_mass = u.density[cell_id] * geo.cell_volumes[cell_id]
-    
+
     for_fields!(u.mass_fractions, u.molecular_weights) do species, u_mass_fractions, u_molecular_weights
         system.moles_vec[cell_id][species_idx] = (u_mass_fractions[species[cell_id]] * cell_mass) / u_molecular_weights[species[cell_id]]
-
+        
         species_idx += 1
     end
 end
