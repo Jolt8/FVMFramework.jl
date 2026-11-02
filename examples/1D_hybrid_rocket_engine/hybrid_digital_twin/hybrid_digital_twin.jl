@@ -52,7 +52,7 @@ rom_geometry_json_path = joinpath(@__DIR__, "rom_and_table_inputs", "rom_geometr
 rom_data = read_rom_geometry_json(rom_geometry_json_path);
 
 add_virtual_cell!(rom_data;
-    name = "nitrous_oxide_tank",
+    name = "tank",
     volume = ustrip(upreferred(1.6u"L")),
     faces = [(
         neighbor_region = "mid_section", 
@@ -91,6 +91,9 @@ nozzle_inlet_radius = cad_data.nozzle_inlet_diameter / 2
 nozzle_throat_radius = cad_data.nozzle_throat_diameter / 2
 nozzle_exit_radius = cad_data.nozzle_exit_diameter / 2
 
+nozzle_converging_height = cad_data.nozzle_converging_height
+nozzle_diverging_height = cad_data.nozzle_diverging_height
+
 converging_nozzle_surface_area = pi * (nozzle_inlet_radius + nozzle_throat_radius) * sqrt((nozzle_inlet_radius - nozzle_throat_radius)^2 + nozzle_converging_height^2)
 diverging_nozzle_surface_area = pi * (nozzle_throat_radius + nozzle_exit_radius) * sqrt((nozzle_exit_radius - nozzle_throat_radius)^2 + nozzle_diverging_height^2)
 
@@ -115,7 +118,8 @@ config.data = merge(config.data, (
     diverging_nozzle_surface_area = diverging_nozzle_surface_area,
     clapeyron_method = method, 
     nitrous_oxide_model = nitrous_oxide_model, 
-    model = model
+    model = model,
+    cold_flow = true
 ))
 
 add_setup_syms!(
@@ -318,7 +322,7 @@ add_region!(
     end,
     region_function = 
     function pre_chamber_region!(du, u, p, t, system, geo, cell_id)
-        fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
+        cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
     end
 )
 
@@ -343,7 +347,7 @@ add_region!(
 )
 
 tank_initial_conditions = ComponentVector(
-    density = (1.134u"kg" / geo.cell_volumes[get_cells(geo, "tank")]),
+    density = (1.134u"kg" / geo.cell_volumes[get_cells(geo, "tank")[1]]),
     temperature = room_temp,
     mass_fractions = (
         nitrous_oxide = 1.0,
@@ -386,7 +390,7 @@ add_region!(
     end,
     region_function = 
     function tank_region!(du, u, p, t, system, geo, cell_id)
-        fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
+        cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
     end
 )
 
@@ -509,7 +513,7 @@ add_region!(
     region_function = solid_physics!
 )
 
-initial_fuel_port_radius = config.data.cad_data.initial_fuel_grain_void_diameter * u"m"
+initial_fuel_port_radius = (config.data.cad_data.initial_fuel_grain_void_diameter / 2) * u"m"
 
 fuel_grain_initial_conditions = ComponentVector(
     density = 950.0u"kg/m^3",
@@ -758,7 +762,7 @@ function fluid_domain_axial_flux!(du, u, p, t, system, geo)
 
     #this requires that fluid_domain cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
     for upstream_cell_id in fluid_domain_cells[1:end-1]
-        downstream_cell_id = upstream_cell + 1
+        downstream_cell_id = upstream_cell_id + 1
         fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
         #some flux function here
 
@@ -780,7 +784,7 @@ function fuel_grain_axial_flux!(du, u, p, t, system, geo)
 
     #this requires that fuel_grain cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
     for upstream_cell in fuel_grain_cells[1:end-1]
-        downstream_cell = upstream_cell + 1
+        downstream_cell = upstream_cell_id + 1
         fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
         #some flux function here
 
@@ -795,7 +799,7 @@ function phenolic_liner_axial_flux!(du, u, p, t, system, geo)
 
     #this requires that phenolic_liner cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
     for upstream_cell in phenolic_liner_cells[1:end-1]
-        downstream_cell = upstream_cell + 1
+        downstream_cell = upstream_cell_id + 1
         fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
         #some flux function here
 
@@ -810,7 +814,7 @@ function aluminum_housing_axial_flux!(du, u, p, t, system, geo)
 
     #this requires that aluminum_housing cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
     for upstream_cell in aluminum_housing_cells[1:end-1]
-        downstream_cell = upstream_cell + 1
+        downstream_cell = upstream_cell_id + 1
         fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
         #some flux function here
 
@@ -906,7 +910,7 @@ add_patch!(
 #This is a radial flux between the nozzle graphite and aluminum housing
 add_patch!(
     owner = "nozzle_top",
-    connection = "aluminum_housing_nozzle",
+    connection = "aluminum_housing_near_nozzle_top",
     patch_function = function fuel_wall_patch_flux!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
@@ -928,7 +932,7 @@ add_patch!(
 
 add_patch!(
     owner = "nozzle_bottom",
-    connection = "aluminum_housing_bottom",
+    connection = "aluminum_housing_near_nozzle_bottom",
     patch_function = function fuel_wall_patch_flux!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
@@ -949,7 +953,7 @@ add_patch!(
 )
 
 add_patch!(
-    owner = "aluminum_housing_bottom",
+    owner = "aluminum_housing_near_nozzle_bottom",
     connection = "nozzle_retainer",
     patch_function = function fuel_wall_patch_flux!(
         du, u, p, t, system, geo, 
