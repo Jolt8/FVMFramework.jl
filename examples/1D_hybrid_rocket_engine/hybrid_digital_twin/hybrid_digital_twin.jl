@@ -76,7 +76,7 @@ u_proto = ComponentVector(
         oxygen = zeros(n_cells)u"kg/kg",
         carbon_dioxide = zeros(n_cells)u"kg/kg",
         water = zeros(n_cells)u"kg/kg",
-    )
+    ),
 )
 
 config = create_fvm_config_from_geo(geo, u_proto);
@@ -145,7 +145,11 @@ add_setup_syms!(
         #Caches specifically for the injector delivery train
         specific_internal_energy = 0.0u"J/kg",
         specific_enthalpy = 0.0u"J/kg",
+        outflow_density = u"kg/m^3", #density of what leaves the cell (liquid from the tank bottom); kept separate from the density state
         injector_velocity = 0.0u"m/s", #this is only used to observe injector velocity over time, it does not affect any physics (yet!)
+
+        #TODO: REPLACE THE PRE-CHAMBER TEMPERATURE FLOOR WITH A REAL VAPORIZATION MODEL.
+        neglected_injector_cooling_power = u"W", #TODO: latent heat per second the pre-chamber temperature floor is currently not charging. Diagnostic only.
     ),
     special_caches = (
         
@@ -188,12 +192,18 @@ add_setup_syms!(
         injector_orifice_area = 4.0u"mm^2",
         injector_discharge_coefficient = 0.7,
         valve_flow_capacity_factor = 10.0u"mm^2",
-        valve_opening = 1.0
+        valve_opening = 1.0,
+        minimum_pre_chamber_temperature = 230.0u"K", #temperature threshold where the latent heat of vaporization is ignored in injector_deliver_train_physics
     ),
 )
 
 function cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
-    du.temperature[cell_id] += du.heat[cell_id] / (geo.cell_volumes[cell_id] * u.density[cell_id] * u.cp[cell_id])
+    #Every cell has a fixed volume, so heat raises internal energy at constant volume: M * cv * dT/dt = Q.
+    #Solids set cv = cp in update_solid_properties!, so this also covers them.
+    du.temperature[cell_id] += du.heat[cell_id] / (geo.cell_volumes[cell_id] * u.density[cell_id] * u.cv[cell_id])
+
+    #Old version (uses cp, which overstates the heat capacity of gas cells by gamma):
+    #du.temperature[cell_id] += du.heat[cell_id] / (geo.cell_volumes[cell_id] * u.density[cell_id] * u.cp[cell_id])
 end
 
 function overall_combustion_model!(du, u, p, t, system, geo, cell_id)
@@ -260,7 +270,7 @@ air_properties = ComponentVector(
         ethylene = 28.05u"g/mol", 
         nitrogen = 28.01u"g/mol", 
         oxygen = 32.00u"g/mol", 
-        carbon_dioxide = 44.01u"g/mol", 
+        carbon_dioxide = 44.01u"g/mol",
         water = 18.02u"g/mol"
     ),
     #these will just stay fixed for now
@@ -309,28 +319,6 @@ add_region!(
     end
 )
 
-tank = (
-    volume = 1.6u"L",
-    density = 0.0u"kg/m^3",
-    pressure = 0.0u"bar",
-    cp = 0.0u"J/(kg*K)",
-    cv = 0.0u"J/(kg*K)",
-    specific_internal_energy = 0.0u"J/kg",
-    specific_enthalpy = 0.0u"J/kg",
-    vapor_fraction = 0.0u"kg/kg",
-),
-mid_section = (
-    temperature = 298.0u"K",
-    volume = 474.05u"mm^3",
-    density = 0.0u"kg/m^3",
-    pressure = 0.0u"bar",
-    cp = 0.0u"J/(kg*K)",
-    cv = 0.0u"J/(kg*K)",
-    specific_internal_energy = 0.0u"J/kg",
-    specific_enthalpy = 0.0u"J/kg",
-    vapor_fraction = 0.0u"kg/kg",
-),
-
 tank_initial_conditions = ComponentVector(
     density = (1.134u"kg" / geo.cell_volumes[get_cells(geo, "tank")]),
     temperature = room_temp,
@@ -344,19 +332,18 @@ tank_initial_conditions = ComponentVector(
     )
 )
 
-#=
-N2O properties to keep in mind:
+tank_properties = ComponentVector(
+    #=
+    N2O properties to keep in mind:
 
-vapor_k = 0.017u"W/(m*K)"
-vapor_mu = 1.4e-5u"Pa*s"
+    vapor_k = 0.017u"W/(m*K)"
+    vapor_mu = 1.4e-5u"Pa*s"
 
-liquid_k = 0.09u"W/(m*K)"
-liquid_mu_lower_bound = 6.0e-5u"Pa*s"
-liquid_mu_upper_bound = 3.2e-4u"Pa*s"
-=#
+    liquid_k = 0.09u"W/(m*K)"
+    liquid_mu_lower_bound = 6.0e-5u"Pa*s"
+    liquid_mu_upper_bound = 3.2e-4u"Pa*s"
+    =#
 
-air_properties = ComponentVector(
-    #We're assuming these two stay constant which isn't that accurate, but oh well
     #we'll use the vapor properties for now since a large majority of the calculations that involve these values happen in the vapor phase
     k = 0.017u"W/(m*K)", 
     mu = 1.4e-5u"Pa*s", 
@@ -383,8 +370,8 @@ air_properties = ComponentVector(
 add_region!(
     config, "tank",
     type = Fluid(),
-    initial_conditions = air_initial_conditions,
-    properties = air_properties,
+    initial_conditions = n2o_initial_conditions,
+    properties = n2o_properties,
     property_update_function = 
     function update_tank_region!(du, u, p, t, system, geo, cell_id)
         update_tank_properties!(du, u, p, t, system, geo, cell_id)
@@ -394,6 +381,9 @@ add_region!(
         fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
     end
 )
+
+u0_mid_section_mass = mass_density(nitrous_oxide_model, 1.0u"atm", 298.0u"K", [1.0]) * properties.mid_section.volume |> u"kg"
+
 
 add_region!(
     config, "mid_section",
@@ -416,6 +406,8 @@ function update_solid_properties!(du, u, p, t, system, geo, cell_id)
     #u.k[cell_id] = properties.k[cell_id] #not needed right now, but will be in the future
     u.cp[cell_id] = properties.cp[cell_id]
 
+    #Solids barely expand, so cp and cv are effectively equal
+    u.cv[cell_id] = properties.cp[cell_id]
 end
 
 function solid_physics!(du, u, p, t, system, geo, cell_id)
