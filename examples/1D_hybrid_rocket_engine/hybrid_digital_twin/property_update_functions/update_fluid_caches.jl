@@ -38,9 +38,7 @@ function ideal_gas_heat_capacities!(du, u, p, t, system, geo, cell_id)
 end
 
 function clapeyron_eos!(du, u, p, t, system, geo, cell_id)
-    cell_moles = system.moles_vec[cell_id]
-
-    result = vt_flash(system.model, geo.cell_volumes[cell_id], u.temperature[cell_id], cell_moles, system.clapeyron_method)
+    result = vt_flash(system.model, geo.cell_volumes[cell_id], u.temperature[cell_id], system.moles_vec[cell_id], system.clapeyron_method)
 
     #Clapeyron's property functions take (model, result). The mass_ versions return J/(kg*K) to match the cp and cv caches.
     #The aggregate cp/cv calls error when more than one phase is present, so the phase-weighted helper is used.
