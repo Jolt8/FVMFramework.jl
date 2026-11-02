@@ -12,11 +12,25 @@ function nozzle_outlet_simple!(
 
     gamma = u.cp[idx_a] / u.cv[idx_a]
 
+    mach_number = sqrt(
+        (2 / (gamma - 1)) * 
+        ((u.pressure[idx_a] / p.ambient_pressure)^((gamma - 1) / gamma) - 1)
+    )
+
+    mass_flow = p.nozzle_throat_area * 
+        u.pressure[idx_a] / sqrt(u.temperature[idx_a]) * 
+        sqrt(gamma / R_gas[idx_a]) *
+        mach_number * (1 + ((gamma - 1) / 2) * mach_number^2)^(-(gamma + 1) / (2 * (gamma - 1)))
+
+
+    #=
+    #Old equation which always assumed supersonic flow:
     mass_flow = p.nozzle_discharge_coefficient * nozzle_throat_area * u.pressure[idx_a] *
         sqrt(
             (k / u.R_gas[idx_a] * u.temperature[idx_a]) * 
             (2 / (gamma + 1)) ^ ((k + 1) / (k-1))
     )
+    =#
 
     du.density[idx_a] -= mass_flow / geo.cell_volumes[idx_a]
 
