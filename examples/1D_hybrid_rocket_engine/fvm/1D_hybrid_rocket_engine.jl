@@ -811,11 +811,11 @@ add_patch!(
             injector_velocity,
         )
         =#
-        #inlet_conditions = update_injector_train!(du, u, p, t, system, geo)
+        inlet_conditions = update_injector_train!(du, u, p, t, system, geo)
 
-        no_slip_adiabatic_wall_flux!(du, u, p, t, system, geo, idx_a, face_a)
+        subsonic_inlet_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b; inlet_conditions = inlet_conditions)
 
-        #subsonic_inlet_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b; inlet_conditions = inlet_conditions)
+        #no_slip_adiabatic_wall_flux!(du, u, p, t, system, geo, idx_a, face_a)        
     end,
 )
 
@@ -1058,8 +1058,12 @@ jac_sparsity = ADTypes.jacobian_sparsity(
     (du, u) -> f_closure_implicit(du, u, p_guess, 0.0), du0_vec, u0_vec, detector
 )
 
+Revise.includet(joinpath(@__DIR__, "jacobians.jl"))
+
+check_phantom_dependencies(jac_sparsity, u0_vec, system, phantom_threshold = 1e-15)
+
 t0 = 0.0
-switch_time = 0.01
+switch_time = 0.001
 tMax = 10.0
 
 ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
@@ -1131,11 +1135,12 @@ end
     #FBDF(linsolve = KrylovJL_GMRES()),
     #Tsit5(),
     #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
-    FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()),
+    #FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()),
     #AutoTsit5(FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff())),
     #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoFiniteDiff()),
     #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoForwardDiff()),
     #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
+    #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoForwardDiff(), precs = iluzero, concrete_jac = true),
     #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
     callback = callbacks,
     isoutofdomain = state_is_invalid_closure,
