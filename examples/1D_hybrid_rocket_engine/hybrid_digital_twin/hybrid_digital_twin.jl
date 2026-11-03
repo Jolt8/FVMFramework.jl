@@ -112,6 +112,8 @@ nozzle_diverging_height = cad_data.nozzle_diverging_length
 converging_nozzle_surface_area = pi * (nozzle_inlet_radius + nozzle_throat_radius) * sqrt((nozzle_inlet_radius - nozzle_throat_radius)^2 + nozzle_converging_height^2)
 diverging_nozzle_surface_area = pi * (nozzle_throat_radius + nozzle_exit_radius) * sqrt((nozzle_exit_radius - nozzle_throat_radius)^2 + nozzle_diverging_height^2)
 
+Revise.includet(joinpath(@__DIR__, "overloads", "clapeyron_tracer_overloads.jl"))
+
 nitrous_oxide_model = PR(["nitrous oxide"])
 model = ReidIdeal([
     "nitrous oxide",
@@ -855,7 +857,7 @@ function fluid_domain_axial_flux!(du, u, p, t, system, geo)
         #all geometry variables here will change over time
         pressure_driven_mass_flux_custom_geometry!(
             du, u, p, t, system, geo,
-            idx_a, face_a, idx_b, face_b,
+            upstream_cell_id, face_a, fuel_grain_cell_id, face_b,
             dist, 
             face_area_a, vol_a, 
             face_area_b, vol_b
