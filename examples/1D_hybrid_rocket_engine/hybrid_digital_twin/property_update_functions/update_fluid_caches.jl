@@ -54,7 +54,7 @@ end
 
 function fluid_property_update_ideal!(du, u, p, t, system, geo, cell_id)
     mw_avg!(du, u, p, t, system, geo, cell_id)
-    update_cell_moles_and_mole_fractions_vec(du, u, p, t, system, geo, cell_id)
+    update_cell_moles_and_mole_fractions_vec!(du, u, p, t, system, geo, cell_id)
     molar_concentrations!(du, u, p, t, system, geo, cell_id)
     ideal_eos!(du, u, p, t, system, geo, cell_id)
     ideal_gas_heat_capacities!(du, u, p, t, system, geo, cell_id) #cp and cv were never set for ideal-gas cells before
@@ -62,7 +62,7 @@ end
 
 function fluid_property_update_clapeyron!(du, u, p, t, system, geo, cell_id)
     mw_avg!(du, u, p, t, system, geo, cell_id)
-    update_cell_moles_and_mole_fractions_vec(du, u, p, t, system, geo, cell_id)
+    update_cell_moles_and_mole_fractions_vec!(du, u, p, t, system, geo, cell_id)
     molar_concentrations!(du, u, p, t, system, geo, cell_id)
     clapeyron_eos!(du, u, p, t, system, geo, cell_id)
 end

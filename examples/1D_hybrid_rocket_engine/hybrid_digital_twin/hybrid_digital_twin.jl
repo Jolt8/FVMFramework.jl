@@ -298,7 +298,6 @@ end
 
 function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
     #manual_fluid_cache_updates!(du, u, p, t, system, geo, cell_id)
-    update_cell_moles_and_mole_fractions_vec!(du, u, p, t, system, geo, cell_id)
     fluid_property_update_ideal!(du, u, p, t, system, geo, cell_id)
 end
 

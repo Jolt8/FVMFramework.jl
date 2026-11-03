@@ -275,7 +275,7 @@ function injector_valve_flow!(
     # Reset the diagnostic first, so it reads zero (not a stale value) whenever there is no injection
     u.neglected_injector_cooling_power[pre_chamber_cell_id] = 0.0
 
-    post_injector_cell_ids = get_cells(geo, "pre_chamber")[1]
+    post_injector_cell_ids = get_cellset(geo, "pre_chamber")[1]
     chamber_pressure = sum([u.pressure[cell_id] for cell_id in post_injector_cell_ids]) / length(post_injector_cell_ids)
 
     if u.pressure[mid_section_cell_id] - chamber_pressure <= 0
