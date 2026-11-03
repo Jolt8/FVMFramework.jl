@@ -47,6 +47,10 @@ object_names = [
     "nozzle_retainer"
 ]
 
+cad_table_data_json_path = joinpath(@__DIR__, "rom_and_table_inputs", "table_data", "freecad_table_data.json")
+Revise.includet(joinpath(@__DIR__, "rom_and_table_inputs", "table_data", "read_freecad_table_data.jl"))
+cad_data = ComponentVector(read_freecad_table_data_json(cad_table_data_json_path))
+
 rom_geometry_json_path = joinpath(@__DIR__, "rom_and_table_inputs", "rom_geometry", "hybrid_rom_geometry.json")
 
 rom_data = read_rom_geometry_json(rom_geometry_json_path);
@@ -63,7 +67,20 @@ add_virtual_cell!(rom_data;
     )]
 )
 
+add_virtual_face!(rom_data;
+    region_a = "pre_chamber",
+    axial_index_a = 1,
+    region_b = "mid_section",
+    axial_index_b = 1,
+    area = ustrip(upreferred(cad_data.injector_orifice_area)), 
+    half_cell_distance_a = 0.0, 
+    half_cell_distance_b = 0.0
+)
+
 geo = build_rom_fvm_geometry(rom_data);
+
+rom_data["cells"][127]
+
 
 n_cells = geo.n_cells
 
@@ -85,16 +102,12 @@ u_proto = ComponentVector(
 
 config = create_fvm_config_from_geo(geo, u_proto);
 
-cad_table_data_json_path = joinpath(@__DIR__, "rom_and_table_inputs", "table_data", "freecad_table_data.json")
-Revise.includet(joinpath(@__DIR__, "rom_and_table_inputs", "table_data", "read_freecad_table_data.jl"))
-cad_data = ComponentVector(read_freecad_table_data_json(cad_table_data_json_path))
-
 nozzle_inlet_radius = cad_data.nozzle_inlet_diameter / 2
 nozzle_throat_radius = cad_data.nozzle_throat_diameter / 2
 nozzle_exit_radius = cad_data.nozzle_exit_diameter / 2
 
-nozzle_converging_height = cad_data.nozzle_converging_height
-nozzle_diverging_height = cad_data.nozzle_diverging_height
+nozzle_converging_height = cad_data.nozzle_converging_length
+nozzle_diverging_height = cad_data.nozzle_diverging_length
 
 converging_nozzle_surface_area = pi * (nozzle_inlet_radius + nozzle_throat_radius) * sqrt((nozzle_inlet_radius - nozzle_throat_radius)^2 + nozzle_converging_height^2)
 diverging_nozzle_surface_area = pi * (nozzle_throat_radius + nozzle_exit_radius) * sqrt((nozzle_exit_radius - nozzle_throat_radius)^2 + nozzle_diverging_height^2)
@@ -117,8 +130,8 @@ method = ChemPotDewPressure(
 
 config.data = merge(config.data, (
     cad_data = ustrip.(upreferred.(cad_data)),
-    converging_nozzle_surface_area = converging_nozzle_surface_area,
-    diverging_nozzle_surface_area = diverging_nozzle_surface_area,
+    converging_nozzle_surface_area = ustrip(upreferred(converging_nozzle_surface_area)),
+    diverging_nozzle_surface_area = ustrip(upreferred(diverging_nozzle_surface_area)),
     clapeyron_method = method, 
     nitrous_oxide_model = nitrous_oxide_model, 
     model = model,
@@ -182,7 +195,7 @@ add_setup_syms!(
         #TODO: REPLACE THE PRE-CHAMBER TEMPERATURE FLOOR WITH A REAL VAPORIZATION MODEL.
         neglected_injector_cooling_power = u"W", #TODO: latent heat per second the pre-chamber temperature floor is currently not charging. Diagnostic only.
     ),
-    special_caches = (
+    special_caches = ComponentVector(
         
     ),
     second_order_syms = [],
@@ -245,6 +258,11 @@ add_setup_syms!(
     ),
 )
 
+struct Fluid <: AbstractPhysics end
+struct Solid <: AbstractPhysics end
+struct FuelGrain <: AbstractPhysics end
+struct IgniterPuck <: AbstractPhysics end
+
 push!(config.data.tstops, config.optimized_parameters.valve_open_time)
 push!(config.data.tstops, config.optimized_parameters.igniter_burn_time)
 
@@ -280,6 +298,7 @@ end
 
 function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
     #manual_fluid_cache_updates!(du, u, p, t, system, geo, cell_id)
+    update_cell_moles_and_mole_fractions_vec!(du, u, p, t, system, geo, cell_id)
     fluid_property_update_ideal!(du, u, p, t, system, geo, cell_id)
 end
 
@@ -298,6 +317,19 @@ end
 function normalize!(vec)
     total = sum(vec)
     vec ./= total
+end
+
+#Since we're defining all connections manually, we can just have no_flux! for every region
+function no_flux!(
+    du, u, p, t, system, geo,
+    idx_a, face_a, 
+    idx_b, face_b,
+)
+    #nothing here since we handle these BCs at the patches
+end
+
+function connection_map_function(phys_a, phys_b)
+    return no_flux!
 end
 
 room_temp = 294.13u"K"
@@ -347,8 +379,8 @@ air_properties = ComponentVector(
 
 initial_igniter_puck_mass = config.optimized_parameters.igniter_density * config.data.cad_data.igniter_puck_volume
 config.u_proto.igniter_mass = [initial_igniter_puck_mass]
-config.data = merge_properties(config.data, (
-    initial_igniter_mass = initial_igniter_puck_mass
+config.data = merge(config.data, (
+    initial_igniter_mass = initial_igniter_puck_mass,
 ))
 
 add_region!(
@@ -359,7 +391,6 @@ add_region!(
     property_update_function = 
     function update_pre_chamber_region!(du, u, p, t, system, geo, cell_id)
         update_fluid_properties!(du, u, p, t, system, geo, cell_id)
-        
     end,
     region_function = 
     function pre_chamber_region!(du, u, p, t, system, geo, cell_id)
@@ -380,7 +411,7 @@ add_region!(
     function fluid_domain_region!(du, u, p, t, system, geo, cell_id)
         fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
 
-        if cell_id == get_cells(geo, "fluid_domain")[end]
+        if cell_id == get_cellset(geo, "fluid_domain")[end]
             #TODO: do some CFD to create a closure for the recirculation zone here
             #recirculation_zone_closure(du, u, p, t, system, geo, cell_id)
         end
@@ -388,7 +419,7 @@ add_region!(
 )
 
 tank_initial_conditions = ComponentVector(
-    density = (1.134u"kg" / geo.cell_volumes[get_cells(geo, "tank")[1]]),
+    density = (1.134u"kg" / geo.cell_volumes[get_cellset(geo, "tank")[1]]),
     temperature = room_temp,
     mass_fractions = (
         nitrous_oxide = 1.0,
@@ -436,11 +467,11 @@ add_region!(
     end
 )
 
-u0_mid_section_mass = mass_density(nitrous_oxide_model, 1.0u"atm", 298.0u"K", [1.0]) * geo.cell_volumes[get_cells(geo, "mid_section")] |> u"kg"
+u0_mid_section_mass = mass_density(nitrous_oxide_model, 1.0u"atm", 298.0u"K", [1.0]) * (geo.cell_volumes[get_cellset(geo, "mid_section")][1]u"m^3") |> u"kg"
 
 #Although this is less accurate, we're using a pure EOS model here, so we can't have anything other than nitrous oxide in it
 mid_section_initial_conditions = ComponentVector(
-    density = (u0_mid_section_mass / geo.cell_volumes[get_cells(geo, "mid_section")]),
+    density = (u0_mid_section_mass / (geo.cell_volumes[get_cellset(geo, "mid_section")][1]u"m^3")),
     temperature = room_temp,
     mass_fractions = (
         nitrous_oxide = 1.0,
@@ -640,9 +671,9 @@ add_region!(
     region_function = solid_physics!
 )
 
-add_patch!(
-    owners = "tank",
-    connections = "mid_section",
+add_patch!(config;
+    owner = "tank",
+    connection = "mid_section",
     patch_function = function tank_to_mid_section_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
@@ -652,9 +683,9 @@ add_patch!(
 )
 
 #This patch is where the nitrous_oxide injection will happen
-add_patch!(
-    owners = "mid_section",
-    connections = "injector_bulkhead_top",
+add_patch!(config;
+    owner = "mid_section",
+    connection = "injector_bulkhead_top",
     patch_function = function fuel_wall_patch_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
@@ -670,9 +701,9 @@ add_patch!(
     end
 )
 
-add_patch!(
-    owners = "mid_section",
-    connections = "injector_bulkhead_bottom",
+add_patch!(config;
+    owner = "mid_section",
+    connection = "injector_bulkhead_bottom",
     patch_function = function fuel_wall_patch_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
@@ -688,7 +719,7 @@ add_patch!(
     end
 )
 
-add_patch!(
+add_patch!(config;
     owner = "injector_bulkhead_top",
     connection = "injector_bulkhead_bottom",
     patch_function = function fuel_wall_patch_flux!(
@@ -699,7 +730,7 @@ add_patch!(
     end
 )
 
-add_patch!(
+add_patch!(config;
     owner = "mid_section",
     connection = "pre_chamber",
     patch_function = function fuel_wall_patch_flux!(
@@ -714,7 +745,7 @@ add_patch!(
 
 #Axial fluxes from top cells to injector_bulkhead_bottom:
 #start
-add_patch!(
+add_patch!(config;
     owner = "pre_chamber",
     connection = "injector_bulkhead_bottom",
     patch_function = function fuel_wall_patch_flux!(
@@ -727,7 +758,7 @@ add_patch!(
     end
 )
 
-add_patch!(
+add_patch!(config;
     owner = "phenolic_liner_top",
     connection = "injector_bulkhead_bottom",
     patch_function = function fuel_wall_patch_flux!(
@@ -738,7 +769,7 @@ add_patch!(
     end
 )
 
-add_patch!(
+add_patch!(config;
     owner = "aluminum_housing_top",
     connection = "injector_bulkhead_bottom",
     patch_function = function fuel_wall_patch_flux!(
@@ -755,7 +786,7 @@ add_patch!(
 Revise.includet(joinpath(@__DIR__, "physics", "chamber_convective_heat_transfer", "chamber_convective_heat_transfer.jl"))
 
 #start
-add_patch!(
+add_patch!(config;
     owner = "pre_chamber",
     connection = "phenolic_liner_top",
     patch_function = function fuel_wall_patch_flux!(
@@ -769,7 +800,7 @@ add_patch!(
     end
 )
 
-add_patch!(
+add_patch!(config;
     owner = "phenolic_liner_top",
     connection = "aluminum_housing_top",
     patch_function = function fuel_wall_patch_flux!(
@@ -782,7 +813,7 @@ add_patch!(
 
 Revise.includet(joinpath(@__DIR__, "physics", "pressure_driven_mass_flux", "pressure_driven_mass_flux.jl"))
 
-add_patch!(
+add_patch!(config;
     owner = "pre_chamber",
     connection = "fluid_domain", #1-n cells,
     patch_function = function fuel_wall_patch_flux!(
@@ -811,7 +842,7 @@ add_patch!(
 
 #these will be added to solve_system!
 function fluid_domain_axial_flux!(du, u, p, t, system, geo)
-    fluid_domain_cells = get_cells(geo, "fluid_domain")
+    fluid_domain_cells = get_cellset(geo, "fluid_domain")
 
     #if we use this, we'll have n-1 axial fuel port id states
     axial_idx = 1
@@ -819,7 +850,7 @@ function fluid_domain_axial_flux!(du, u, p, t, system, geo)
     #this requires that fluid_domain cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
     for upstream_cell_id in fluid_domain_cells[1:end-1]
         downstream_cell_id = upstream_cell_id + 1
-        fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
+        fuel_grain_cell_id = get_cellset(geo, "fuel_grain")[axial_idx]
         #some flux function here
 
         #all geometry variables here will change over time
@@ -836,14 +867,14 @@ function fluid_domain_axial_flux!(du, u, p, t, system, geo)
 end
 
 function fuel_grain_axial_flux!(du, u, p, t, system, geo)
-    fuel_grain_cells = get_cells(geo, "fuel_grain")
+    fuel_grain_cells = get_cellset(geo, "fuel_grain")
 
     axial_idx = 1
 
     #this requires that fuel_grain cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
     for upstream_cell in fuel_grain_cells[1:end-1]
         downstream_cell = upstream_cell_id + 1
-        fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
+        fuel_grain_cell_id = get_cellset(geo, "fuel_grain")[axial_idx]
         #some flux function here
 
         #you would probably need the max port radius which is cad_data.phenolic_liner_inner_diameter / 2
@@ -861,14 +892,14 @@ function fuel_grain_axial_flux!(du, u, p, t, system, geo)
 end
 
 function phenolic_liner_axial_flux!(du, u, p, t, system, geo)
-    phenolic_liner_cells = get_cells(geo, "phenolic_liner")
+    phenolic_liner_cells = get_cellset(geo, "phenolic_liner")
 
     axial_idx = 1
 
     #this requires that phenolic_liner cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
     for upstream_cell in phenolic_liner_cells[1:end-1]
         downstream_cell = upstream_cell_id + 1
-        fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
+        fuel_grain_cell_id = get_cellset(geo, "fuel_grain")[axial_idx]
         #some flux function here
 
         axial_idx += 1
@@ -876,14 +907,14 @@ function phenolic_liner_axial_flux!(du, u, p, t, system, geo)
 end
 
 function aluminum_housing_axial_flux!(du, u, p, t, system, geo)
-    aluminum_housing_cells = get_cells(geo, "aluminum_housing")
+    aluminum_housing_cells = get_cellset(geo, "aluminum_housing")
 
     axial_idx = 1
 
     #this requires that aluminum_housing cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
     for upstream_cell in aluminum_housing_cells[1:end-1]
         downstream_cell = upstream_cell_id + 1
-        fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
+        fuel_grain_cell_id = get_cellset(geo, "fuel_grain")[axial_idx]
         #some flux function here
 
         axial_idx += 1
@@ -900,7 +931,7 @@ end
 
 #Radial fluxes along cells
 #start
-add_patch!(
+add_patch!(config;
     owner = "fluid_domain",
     connection = "fuel_grain",
     patch_function = function fuel_wall_patch_flux!(
@@ -908,7 +939,7 @@ add_patch!(
         idx_a, face_a, idx_b, face_b
     )
         axial_idx = findfirst(==(idx_a), geo.cell_sets["fluid_domain"])
-        fuel_grain_cell_id = get_cells(geo, "fuel_grain")[axial_idx]
+        fuel_grain_cell_id = get_cellset(geo, "fuel_grain")[axial_idx]
         #some flux function 
         #this requires geometry updating
 
@@ -933,7 +964,7 @@ add_patch!(
     end
 )
 
-add_patch!(
+add_patch!(config;
     owner = "fuel_grain",
     connection = "phenolic_liner",
     patch_function = function fuel_wall_patch_flux!(
@@ -946,7 +977,7 @@ add_patch!(
     end
 )
 
-add_patch!(
+add_patch!(config;
     owner = "phenolic_liner",
     connection = "aluminum_housing",
     patch_function = function fuel_wall_patch_flux!(
@@ -959,21 +990,21 @@ add_patch!(
 )
 #end
 
-Revise.includet(joinpath(@__DIR__, "physics", "nozzle_outlet_closure", "nozzle_outlet_closure.jl"))
+Revise.includet(joinpath(@__DIR__, "physics", "nozzle_outlet", "nozzle_outlet_closure.jl"))
 
-add_patch!(
-    owner = "fluid_domain",
-    connection = "nozzle_top",
+add_patch!(config, "fluid_domain_to_nozzle_inlet";
     patch_function = function fuel_wall_patch_flux!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
+        #idx_b, and face_b are both 0 here
         nozzle_outlet_closure!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
         #heat_transfer_from_fluid_to_nozzle_top!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        #geometry information here is not accurate because this is a virtual boundary condition cell defined in CAD, use the CAD geometry data instead
 
         fluid_cell_id = idx_a
-        converging_cell_id = idx_b
-        diverging_cell_id = get_cells(geo, "nozzle_bottom")[1]
+        converging_cell_id = get_cellset(geo, "nozzle_top")[1]
+        diverging_cell_id = get_cellset(geo, "nozzle_bottom")[1]
 
         #Very rough heat transfer coefficients right now because we're definitely going to develop a closure for this using CFD
         #We're going slightly high on the converging and diverging numbers because we're neglecting the typical throat heat transfer coefficient
@@ -995,7 +1026,7 @@ add_patch!(
 #we could also add a flux between the nozzle top and phenolic liner but I don't think it's necessary
 
 #This is a radial flux between the nozzle graphite and aluminum housing
-add_patch!(
+add_patch!(config;
     owner = "nozzle_top",
     connection = "aluminum_housing_near_nozzle_top",
     patch_function = function fuel_wall_patch_flux!(
@@ -1006,7 +1037,7 @@ add_patch!(
     end
 )
 
-add_patch!(
+add_patch!(config;
     owner = "nozzle_top",
     connection = "nozzle_bottom",
     patch_function = function fuel_wall_patch_flux!(
@@ -1017,7 +1048,7 @@ add_patch!(
     end
 )
 
-add_patch!(
+add_patch!(config;
     owner = "nozzle_bottom",
     connection = "aluminum_housing_near_nozzle_bottom",
     patch_function = function fuel_wall_patch_flux!(
@@ -1028,7 +1059,7 @@ add_patch!(
     end
 )
 
-add_patch!(
+add_patch!(config;
     owner = "nozzle_bottom",
     connection = "nozzle_retainer",
     patch_function = function fuel_wall_patch_flux!(
@@ -1039,7 +1070,7 @@ add_patch!(
     end
 )
 
-add_patch!(
+add_patch!(config;
     owner = "aluminum_housing_near_nozzle_bottom",
     connection = "nozzle_retainer",
     patch_function = function fuel_wall_patch_flux!(
@@ -1050,8 +1081,19 @@ add_patch!(
     end
 )
 
+n_species = length(propertynames(config.u_proto.mass_fractions))
+
+system_moles_vec_cache = create_species_vector_cache(config.geo.n_cells, n_species)
+system_mole_fractions_vec_cache = create_species_vector_cache(config.geo.n_cells, n_species)
+
+config.data = merge(config.data, (
+    n_species = n_species,
+    moles_vec = system_moles_vec_cache,
+    mole_fractions_vec = system_mole_fractions_vec_cache,
+))
+
 function solve_system!(du, u, p, t, system, geo)
-    update_fuel_regression_geometry!(u, system.fuel_regression_model, geo, system.fuel_regression_grid)
+    #You could put the fuel regression logic here or in the patch between the fluid_domain and the fuel_grain
 
     #Moles and mole fractions are already updated per cell inside update_region_groups!
     #(fluid_property_update_ideal! / fluid_property_update_clapeyron!), after mw_avg!
@@ -1066,15 +1108,15 @@ function solve_system!(du, u, p, t, system, geo)
     solve_region_groups!(du, u, p, t, system, geo)
 end
 
-system_data = (
+#The leading semicolon keeps the field names; without it, splatting a NamedTuple gives a plain Tuple of values
+system_data = (;
     config.data...,
-    moles_vec = generate_system_moles_vec(config),
-    mole_fractions_vec = generate_system_mole_fractions_vec(config)
 )
 
 du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, system_data, check_units = false);
 
-f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, ad_geometry_cache, solve_system!)
+#Selects the moles_vec / mole_fractions_vec buffers that match the current number type (Float64, Dual, tracer) before solving
+f_closure_implicit = (du, u, p, t) -> fvm_operator_with_species_vectors!(du, u, p, t, system, geo, solve_system!)
 
 p_guess = ustrip.(upreferred.(deepcopy(config.optimized_parameters)))
 
