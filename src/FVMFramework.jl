@@ -54,7 +54,7 @@ include("geometry/geometry_sets.jl")
 export get_cellset, get_facetset, build_named_facetset
 
 include("geometry/rom_geometry_loading.jl")
-export read_rom_geometry_json, add_virtual_cell!, rom_cell_count, build_rom_fvm_geometry, create_fvm_config_from_rom
+export read_rom_geometry_json, add_virtual_cell!, add_virtual_face!, rom_cell_count, rom_region_cell_id, build_rom_fvm_geometry, create_fvm_config_from_rom
 
 include("geometry/frontend_geo_helper_functions.jl")
 export face_zeros, face_fill
