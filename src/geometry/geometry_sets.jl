@@ -112,5 +112,9 @@ function get_facetset(geo, region_a::AbstractString, region_b::AbstractString)
             push!(region_pair_faces, (idx_a, faces_to_region_b))
         end
     end
+
+    if isempty(region_pair_faces)
+        error("No faces found between $region_a and $region_b")
+    end
     return region_pair_faces
 end

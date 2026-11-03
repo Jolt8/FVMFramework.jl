@@ -1,6 +1,6 @@
 {
  "source_document": "C:/Users/wille/Desktop/hybrid-rocket-CAD/src/table_hybrid.FCStd",
- "exported_at": "2026-11-01T21:09:08-06:00",
+ "exported_at": "2026-11-02T14:53:14-06:00",
  "unit_note": "values are in FreeCAD's internal units: mm, kg, s, A, K, mol, cd, degrees",
  "easily_viewed_parameters": {
   "injector_orifice_area": "4.0 mm^2",
@@ -68,10 +68,13 @@
   "expansion_ratio": "4",
   "nozzle_throat_area": "153.93804002589985 mm^2",
   "nozzle_exit_area": "615.7521601035994 mm^2",
+  "nozzle_inlet_diameter": "33.32 mm",
   "nozzle_exit_diameter": "28.0 mm",
   "converging_half_angle": "30.0 °",
   "diverging_half_angle": "15.0 °",
   "nozzle_length": "42.8559664540975 mm",
+  "nozzle_converging_length": "16.731610801115355 mm",
+  "nozzle_diverging_length": "26.124355652982143 mm",
   "graphite_nozzle_phenolic_groove_height": "1.3943009000929458 mm",
   "graphite_nozzle_aluminum_groove_height": "10.0 mm",
   "nozzle_aluminum_distance_from_nozzle_wall": "1.0 mm",
@@ -534,66 +537,87 @@
    "sheet": "table_hybrid",
    "contents": "=expansion_ratio * nozzle_throat_area"
   },
+  "nozzle_inlet_diameter": {
+   "value": 33.32,
+   "unit": "mm",
+   "cell": "O9",
+   "sheet": "table_hybrid",
+   "contents": "=nozzle_throat_diameter + 2 * nozzle_converging_length * tan(converging_half_angle)"
+  },
   "nozzle_exit_diameter": {
    "value": 28.0,
    "unit": "mm",
-   "cell": "O9",
+   "cell": "O10",
    "sheet": "table_hybrid",
    "contents": "=2 * sqrt(nozzle_exit_area / pi)"
   },
   "converging_half_angle": {
    "value": 30.0,
    "unit": "°",
-   "cell": "O11",
+   "cell": "O12",
    "sheet": "table_hybrid",
    "contents": "=30 deg"
   },
   "diverging_half_angle": {
    "value": 15.0,
    "unit": "°",
-   "cell": "O12",
+   "cell": "O13",
    "sheet": "table_hybrid",
    "contents": "=15 deg"
   },
   "nozzle_length": {
    "value": 42.8559664540975,
    "unit": "mm",
-   "cell": "O14",
+   "cell": "O15",
    "sheet": "table_hybrid",
    "contents": "=(phenolic_liner_inner_diameter - nozzle_throat_diameter) / (2 * tan(converging_half_angle)) + (nozzle_exit_diameter - nozzle_throat_diameter) / (2 * tan(diverging_half_angle))"
+  },
+  "nozzle_converging_length": {
+   "value": 16.731610801115355,
+   "unit": "mm",
+   "cell": "O16",
+   "sheet": "table_hybrid",
+   "contents": "=(phenolic_liner_inner_diameter - nozzle_throat_diameter) / (2 * tan(converging_half_angle))"
+  },
+  "nozzle_diverging_length": {
+   "value": 26.124355652982143,
+   "unit": "mm",
+   "cell": "O17",
+   "sheet": "table_hybrid",
+   "contents": "=(nozzle_exit_diameter - nozzle_throat_diameter) / (2 * tan(diverging_half_angle))"
   },
   "graphite_nozzle_phenolic_groove_height": {
    "value": 1.3943009000929458,
    "unit": "mm",
-   "cell": "O17",
+   "cell": "O20",
    "sheet": "table_hybrid",
    "contents": "=phenolic_liner_wall_thickness / tan(converging_half_angle)"
   },
   "graphite_nozzle_aluminum_groove_height": {
    "value": 10.0,
    "unit": "mm",
-   "cell": "O18",
+   "cell": "O21",
    "sheet": "table_hybrid",
    "contents": "=10 mm"
   },
   "nozzle_aluminum_distance_from_nozzle_wall": {
    "value": 1.0,
    "unit": "mm",
-   "cell": "O19",
+   "cell": "O22",
    "sheet": "table_hybrid",
    "contents": "=1 mm"
   },
   "nozzle_aluminum_base_thickness": {
    "value": 2.465,
    "unit": "mm",
-   "cell": "O24",
+   "cell": "O27",
    "sheet": "table_hybrid",
    "contents": "=aluminum_casing_inner_diameter / 2 - nozzle_exit_diameter / 2 - nozzle_aluminum_distance_from_nozzle_wall"
   },
   "nozzle_aluminum_retainer_taper_half_angle": {
    "value": 15.0,
    "unit": "°",
-   "cell": "O25",
+   "cell": "O28",
    "sheet": "table_hybrid",
    "contents": "=15 deg"
   }

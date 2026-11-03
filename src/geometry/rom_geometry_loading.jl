@@ -53,6 +53,30 @@ Number of cells, including virtual cells added so far.
 rom_cell_count(rom_data) = length(rom_data["cells"])
 
 """
+    rom_region_cell_id(rom_data, region_name, axial_index)
+
+Cell id of one cell of a region: `axial_index` is an integer (1 = lowest z),
+`:first` or `:last`.
+"""
+function rom_region_cell_id(rom_data, region_name, axial_index)
+    if !haskey(rom_data["cellsets"], region_name)
+        error("no region named \"$region_name\". Available: $(join(keys(rom_data["cellsets"]), ", "))")
+    end
+    region_cell_ids = rom_data["cellsets"][region_name]
+
+    if axial_index == :first
+        return Int(first(region_cell_ids))
+    elseif axial_index == :last
+        return Int(last(region_cell_ids))
+    end
+
+    if !(1 <= axial_index <= length(region_cell_ids))
+        error("region \"$region_name\" has $(length(region_cell_ids)) cell(s); axial_index $axial_index is out of range")
+    end
+    return Int(region_cell_ids[axial_index])
+end
+
+"""
     add_virtual_cell!(rom_data; name, volume, faces, centroid = (0, 0, 0))
 
 Add a cell with no CAD volume (e.g. `recirculation_zone`) and connect it to
@@ -82,19 +106,7 @@ function add_virtual_cell!(rom_data; name, volume, faces, centroid = (0.0, 0.0, 
 
     for (virtual_face_idx, face_spec) in enumerate(faces)
         neighbor_region = face_spec.neighbor_region
-        if !haskey(rom_data["cellsets"], neighbor_region)
-            error("virtual cell \"$name\": no region named \"$neighbor_region\"")
-        end
-        neighbor_region_cells = rom_data["cellsets"][neighbor_region]
-
-        if face_spec.neighbor_axial_index == :first
-            neighbor_cell_id = first(neighbor_region_cells)
-        elseif face_spec.neighbor_axial_index == :last
-            neighbor_cell_id = last(neighbor_region_cells)
-        else
-            neighbor_cell_id = neighbor_region_cells[face_spec.neighbor_axial_index]
-        end
-
+        neighbor_cell_id = rom_region_cell_id(rom_data, neighbor_region, face_spec.neighbor_axial_index)
         neighbor_cell = rom_data["cells"][neighbor_cell_id]
         neighbor_face_idx = length(neighbor_cell["faces"]) + 1
 
@@ -132,6 +144,91 @@ function add_virtual_cell!(rom_data; name, volume, faces, centroid = (0.0, 0.0, 
     push!(rom_data["regions"], OrderedDict{String, Any}("name" => name, "virtual" => true, "cell_ids" => Any[virtual_cell_id]))
 
     return virtual_cell_id
+end
+
+"""
+    add_virtual_face!(rom_data; region_a, axial_index_a, region_b, axial_index_b,
+                      area, half_cell_distance_a, half_cell_distance_b, normal = nothing)
+
+Connect two existing cells that do not touch in the CAD (e.g. pre_chamber and
+mid_section) with a face of your own. Must be called BEFORE the geometry is
+built: the half-face layout (CellFaceLayout offsets) is fixed after that.
+
+  - `region_a`, `axial_index_a`: the first cell; `axial_index_a` is an integer
+    (1 = lowest z), `:first` or `:last`. Same for `region_b`, `axial_index_b`.
+  - `area`: face area (m^2), e.g. a flow area from a closure
+  - `half_cell_distance_a`: from cell a's node to the face (m); same for b.
+    Their sum is the node-to-node distance the flux functions use.
+  - optional `normal`: unit normal pointing from cell a into cell b (default
+    zero vector, as for a full 360 degree cylinder)
+
+Each cell gets one new half-face pointing at the other, so the result is a
+normal reciprocal interface: it shows up in `cell_neighbors`, in the
+connection group of the two regions (finish_fvm_config), and in
+`get_facetset(geo, region_a, region_b)` from either side. It is stored in
+the region pair's existing face set if there is one ("<a>__<b>" or
+"<b>__<a>"), otherwise in a new "<region_a>__<region_b>". Returns the two
+new local face indices `(face_idx_a, face_idx_b)`.
+"""
+function add_virtual_face!(
+    rom_data;
+    region_a, axial_index_a,
+    region_b, axial_index_b,
+    area, half_cell_distance_a, half_cell_distance_b,
+    normal = nothing,
+)
+    cell_id_a = rom_region_cell_id(rom_data, region_a, axial_index_a)
+    cell_id_b = rom_region_cell_id(rom_data, region_b, axial_index_b)
+    if cell_id_a == cell_id_b
+        error("add_virtual_face!: both sides are cell $cell_id_a; a face needs two different cells")
+    end
+
+    cell_a = rom_data["cells"][cell_id_a]
+    cell_b = rom_data["cells"][cell_id_b]
+    face_idx_a = length(cell_a["faces"]) + 1
+    face_idx_b = length(cell_b["faces"]) + 1
+
+    normal_a = isnothing(normal) ? nothing : collect(Float64, normal)
+    normal_b = isnothing(normal_a) ? nothing : -normal_a
+
+    # Series distance between the two nodes, as for exported interfaces.
+    neighbor_distance = half_cell_distance_a + half_cell_distance_b
+
+    push!(cell_a["faces"], OrderedDict{String, Any}(
+        "local_idx" => face_idx_a, "kind" => "interface",
+        "neighbor_cell" => cell_id_b, "neighbor_local_idx" => face_idx_b,
+        "area" => area, "surface" => "virtual", "normal" => normal_a, "centroid" => nothing,
+        "half_cell_distance" => half_cell_distance_a, "neighbor_distance" => neighbor_distance,
+        "distance_method" => "virtual", "notes" => "virtual face to $region_b, added by add_virtual_face!",
+    ))
+
+    push!(cell_b["faces"], OrderedDict{String, Any}(
+        "local_idx" => face_idx_b, "kind" => "interface",
+        "neighbor_cell" => cell_id_a, "neighbor_local_idx" => face_idx_a,
+        "area" => area, "surface" => "virtual", "normal" => normal_b, "centroid" => nothing,
+        "half_cell_distance" => half_cell_distance_b, "neighbor_distance" => neighbor_distance,
+        "distance_method" => "virtual", "notes" => "virtual face to $region_a, added by add_virtual_face!",
+    ))
+
+    # One face set per region pair: get_facetset(geo, a, b) looks up
+    # "<a>__<b>" first, so a second "<b>__<a>" set would hide these faces.
+    # Inside one region the set holds the lower cell id's half-face.
+    forward_set_name = "$(region_a)__$(region_b)"
+    reverse_set_name = "$(region_b)__$(region_a)"
+    if region_a == region_b
+        if cell_id_a < cell_id_b
+            face_set_entry = Any[cell_id_a, face_idx_a]
+        else
+            face_set_entry = Any[cell_id_b, face_idx_b]
+        end
+        push!(get!(rom_data["facetsets"], forward_set_name, Any[]), face_set_entry)
+    elseif haskey(rom_data["facetsets"], forward_set_name) || !haskey(rom_data["facetsets"], reverse_set_name)
+        push!(get!(rom_data["facetsets"], forward_set_name, Any[]), Any[cell_id_a, face_idx_a])
+    else
+        push!(rom_data["facetsets"][reverse_set_name], Any[cell_id_b, face_idx_b])
+    end
+
+    return face_idx_a, face_idx_b
 end
 
 """

@@ -47,6 +47,30 @@ function add_patch!(
     return
 end
 
+function add_patch!(
+    config;
+    owner = nothing,
+    connection = nothing,
+    properties = ComponentVector(),
+    patch_function,
+)
+    cell_neighbors = get_facetset(config.geo, owner, connection)
+    patch_name = "$(owner)__$(connection)"
+
+    patch = PatchSetupInfo(patch_name, properties, patch_function, cell_neighbors, owner)
+
+    all_patch_names = [patch.name for patch in config.patches]
+
+    if patch_name in all_patch_names
+        existing_patch_idx = findfirst(x -> x == patch_name, all_patch_names)
+
+        config.patches[existing_patch_idx] = patch
+    else
+        push!(config.patches, patch)
+    end
+    return
+end
+
 #rebuild a patch's faces from geo (keeps its properties, function and owner region)
 function update_patch!(config, name)
     all_patch_names = [patch.name for patch in config.patches]

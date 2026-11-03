@@ -6,7 +6,7 @@
   "freecad_version": "1.1.4"
  },
  "source_document": "C:/Users/wille/Desktop/hybrid-rocket-CAD/src/hybrid_assembly_for_cfd.FCStd",
- "exported_at": "2026-11-01T19:24:00-06:00",
+ "exported_at": "2026-11-02T15:58:29-06:00",
  "axis": {
   "origin": [
    0.0,
@@ -23,7 +23,7 @@
  "parameters": {},
  "regions": [
   {
-   "name": "injector_bulkhead_region",
+   "name": "injector_bulkhead_top",
    "material": "",
    "source_shapes": [
     "injector_bulkhead",
@@ -81,7 +81,7 @@
    "cell_ids": [
     3
    ],
-   "z_min_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body001.injector_bulkhead_o_ring_lcs",
+   "z_min_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body002.PolarPattern.Edge3",
    "z_max_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body001.thread_base_attachment_lcs"
   },
   {
@@ -103,7 +103,7 @@
    "z_max_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body001.PolarPattern001.Edge1"
   },
   {
-   "name": "phenolic_liner_region",
+   "name": "phenolic_liner_top",
    "material": "",
    "source_shapes": [
     "phenolic_liner"
@@ -335,7 +335,7 @@
     "inner_graphite_nozzle"
    ],
    "inverted": false,
-   "z_min": 0.01,
+   "z_min": 0.024730054754651565,
    "z_max": 0.04146166555400455,
    "r_min": null,
    "r_max": null,
@@ -343,7 +343,7 @@
    "cell_ids": [
     127
    ],
-   "z_min_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body005.Groove002.Edge4",
+   "z_min_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body005.Groove002.Edge8",
    "z_max_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body005.Groove002.Edge5"
   },
   {
@@ -354,7 +354,7 @@
    ],
    "inverted": false,
    "z_min": -3.3e-18,
-   "z_max": 0.010000000000000028,
+   "z_max": 0.024730054754651565,
    "r_min": null,
    "r_max": null,
    "n_axial_cells": 1,
@@ -362,7 +362,7 @@
     128
    ],
    "z_min_expression": "-3.3e-15 mm",
-   "z_max_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body.PolarPattern.Edge14"
+   "z_max_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body005.Groove002.Edge8"
   },
   {
    "name": "aluminum_housing_near_nozzle_bottom",
@@ -373,7 +373,7 @@
    ],
    "inverted": false,
    "z_min": 0.005,
-   "z_max": 0.010000000000000028,
+   "z_max": 0.024730054754651565,
    "r_min": null,
    "r_max": null,
    "n_axial_cells": 1,
@@ -381,7 +381,7 @@
     129
    ],
    "z_min_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body.PolarPattern.Edge4",
-   "z_max_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body.PolarPattern.Edge14"
+   "z_max_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body005.Groove002.Edge8"
   },
   {
    "name": "aluminum_housing_near_nozzle_top",
@@ -390,7 +390,7 @@
     "aluminum_housing"
    ],
    "inverted": false,
-   "z_min": 0.010000000000000028,
+   "z_min": 0.024730054754651565,
    "z_max": 0.04146166555400455,
    "r_min": null,
    "r_max": null,
@@ -398,7 +398,7 @@
    "cell_ids": [
     130
    ],
-   "z_min_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body.PolarPattern.Edge14",
+   "z_min_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body005.Groove002.Edge8",
    "z_max_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body005.Groove002.Edge5"
   },
   {
@@ -409,22 +409,22 @@
     "flange_fasteners_bottom__outer_aluminum_nozzle_casing_side"
    ],
    "inverted": false,
-   "z_min": 8e-17,
-   "z_max": 0.010000000000000085,
+   "z_min": -2.71602e-14,
+   "z_max": 0.005000000000000085,
    "r_min": null,
    "r_max": null,
    "n_axial_cells": 1,
    "cell_ids": [
     131
    ],
-   "z_min_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body006.PolarPattern.Edge14",
-   "z_max_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body006.PolarPattern.Edge2"
+   "z_min_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body006.PolarPattern.Edge13",
+   "z_max_expression": "reference hybrid_assembly_for_cfd#hybrid_assembly.Body006.PolarPattern.Edge4"
   }
  ],
  "cells": [
   {
    "id": 1,
-   "region": "injector_bulkhead_region",
+   "region": "injector_bulkhead_top",
    "axial_index": 1,
    "volume": 1.9386659314869394e-05,
    "centroid": [
@@ -434,8 +434,8 @@
    ],
    "z_min": 0.38146166555400457,
    "z_max": 0.3965616655540046,
-   "r_inner": 0.0055550000000001735,
-   "r_outer": 0.020965000000000397,
+   "r_inner": 0.0055550000000004,
+   "r_outer": 0.020965000000000747,
    "faces": [
     {
      "local_idx": 1,
@@ -457,8 +457,8 @@
       0.38146166555400457
      ],
      "half_cell_distance": 0.007550000000000068,
-     "neighbor_distance": 0.010050000000000125,
-     "centroid_distance": 0.010050000000000125,
+     "neighbor_distance": 0.010050000000000068,
+     "centroid_distance": 0.010050000000000068,
      "distance_method": "planar",
      "notes": ""
     },
@@ -477,8 +477,8 @@
       0.0,
       0.3839066655540046
      ],
-     "half_cell_distance": 0.003688953172042861,
-     "neighbor_distance": 0.007539385760053357,
+     "half_cell_distance": 0.003688953172043019,
+     "neighbor_distance": 0.007539385760053515,
      "centroid_distance": 0.005105000000000132,
      "distance_method": "cylindrical_log",
      "notes": ""
@@ -523,7 +523,7 @@
       0.0,
       0.3890116655540046
      ],
-     "half_cell_distance": 0.013922394824819571,
+     "half_cell_distance": 0.013922394824818973,
      "distance_method": "cylindrical_log",
      "notes": ""
     },
@@ -543,7 +543,7 @@
       0.0,
       0.3914566655540046
      ],
-     "half_cell_distance": 0.003688953172042861,
+     "half_cell_distance": 0.003688953172043019,
      "distance_method": "cylindrical_log",
      "notes": ""
     }
@@ -557,12 +557,12 @@
    "centroid": [
     0.0,
     0.0,
-    0.3789616655540045
+    0.37896166555400457
    ],
    "z_min": 0.3764616655540045,
    "z_max": 0.38146166555400457,
-   "r_inner": 0.0011283791670956861,
-   "r_outer": 0.024175000000000398,
+   "r_inner": 0.0011283791670959119,
+   "r_outer": 0.024175000000000748,
    "faces": [
     {
      "local_idx": 1,
@@ -583,9 +583,9 @@
       0.0,
       0.38146166555400457
      ],
-     "half_cell_distance": 0.002500000000000057,
-     "neighbor_distance": 0.010050000000000125,
-     "centroid_distance": 0.010050000000000125,
+     "half_cell_distance": 0.0025,
+     "neighbor_distance": 0.010050000000000068,
+     "centroid_distance": 0.010050000000000068,
      "distance_method": "planar",
      "notes": ""
     },
@@ -608,9 +608,9 @@
       0.0,
       0.3814616655540046
      ],
-     "half_cell_distance": 0.0025000000000001137,
-     "neighbor_distance": 0.004944999999999994,
-     "centroid_distance": 0.004944999999999994,
+     "half_cell_distance": 0.002500000000000057,
+     "neighbor_distance": 0.004944999999999936,
+     "centroid_distance": 0.004944999999999936,
      "distance_method": "planar",
      "notes": ""
     },
@@ -619,7 +619,7 @@
      "kind": "interface",
      "neighbor_cell": 4,
      "neighbor_local_idx": 1,
-     "area": 0.0008679666339227075,
+     "area": 0.0008679666339227073,
      "surface": "plane",
      "radius": null,
      "outward": null,
@@ -631,11 +631,11 @@
      "centroid": [
       0.0,
       0.0,
-      0.3764616655540046
+      0.37646166555400457
      ],
-     "half_cell_distance": 0.0024999999999998864,
-     "neighbor_distance": 0.0075,
-     "centroid_distance": 0.0075,
+     "half_cell_distance": 0.0025,
+     "neighbor_distance": 0.007500000000000057,
+     "centroid_distance": 0.007500000000000057,
      "distance_method": "planar",
      "notes": ""
     },
@@ -658,9 +658,9 @@
       0.0,
       0.37646166555400457
      ],
-     "half_cell_distance": 0.0024999999999999432,
-     "neighbor_distance": 0.007499999999999659,
-     "centroid_distance": 0.007499999999999659,
+     "half_cell_distance": 0.0025,
+     "neighbor_distance": 0.007499999999999716,
+     "centroid_distance": 0.007499999999999716,
      "distance_method": "planar",
      "notes": ""
     },
@@ -669,7 +669,7 @@
      "kind": "interface",
      "neighbor_cell": 6,
      "neighbor_local_idx": 1,
-     "area": 0.0008777748104206637,
+     "area": 0.000877774810420664,
      "surface": "plane",
      "radius": null,
      "outward": null,
@@ -683,9 +683,9 @@
       0.0,
       0.37646166555400457
      ],
-     "half_cell_distance": 0.0024999999999999432,
-     "neighbor_distance": 0.00662481209656005,
-     "centroid_distance": 0.00662481209656005,
+     "half_cell_distance": 0.0025,
+     "neighbor_distance": 0.006624812096560106,
+     "centroid_distance": 0.006624812096560106,
      "distance_method": "planar",
      "notes": ""
     },
@@ -705,7 +705,7 @@
       0.0,
       0.37896166555400457
      ],
-     "half_cell_distance": 0.0370425886147714,
+     "half_cell_distance": 0.03704258861476882,
      "distance_method": "cylindrical_log",
      "notes": ""
     },
@@ -725,7 +725,7 @@
       0.0,
       0.37896166555400457
      ],
-     "half_cell_distance": 0.0017289797430486916,
+     "half_cell_distance": 0.0017289797430488126,
      "distance_method": "cylindrical_log",
      "notes": ""
     },
@@ -749,7 +749,7 @@
       0.0,
       0.38146166555400457
      ],
-     "half_cell_distance": 0.002500000000000057,
+     "half_cell_distance": 0.0025,
      "distance_method": "planar",
      "notes": ""
     }
@@ -786,7 +786,7 @@
       0.3839066655540046
      ],
      "half_cell_distance": 0.0038504325880104953,
-     "neighbor_distance": 0.007539385760053357,
+     "neighbor_distance": 0.007539385760053515,
      "centroid_distance": 0.005105000000000132,
      "distance_method": "cylindrical_log",
      "notes": "solid cell (r_inner = 0): radial node taken as r_outer / 2"
@@ -811,8 +811,8 @@
       0.3814616655540046
      ],
      "half_cell_distance": 0.0024449999999998796,
-     "neighbor_distance": 0.004944999999999994,
-     "centroid_distance": 0.004944999999999994,
+     "neighbor_distance": 0.004944999999999936,
+     "centroid_distance": 0.004944999999999936,
      "distance_method": "planar",
      "notes": ""
     },
@@ -886,7 +886,7 @@
      "kind": "interface",
      "neighbor_cell": 2,
      "neighbor_local_idx": 3,
-     "area": 0.0008679666339227075,
+     "area": 0.0008679666339227073,
      "surface": "plane",
      "radius": null,
      "outward": null,
@@ -898,11 +898,11 @@
      "centroid": [
       0.0,
       0.0,
-      0.3764616655540046
+      0.37646166555400457
      ],
-     "half_cell_distance": 0.005000000000000114,
-     "neighbor_distance": 0.0075,
-     "centroid_distance": 0.0075,
+     "half_cell_distance": 0.005000000000000057,
+     "neighbor_distance": 0.007500000000000057,
+     "centroid_distance": 0.007500000000000057,
      "distance_method": "planar",
      "notes": ""
     },
@@ -1005,7 +1005,7 @@
   },
   {
    "id": 5,
-   "region": "phenolic_liner_region",
+   "region": "phenolic_liner_top",
    "axial_index": 1,
    "volume": 8.630151368952048e-07,
    "centroid": [
@@ -1038,8 +1038,8 @@
       0.37646166555400457
      ],
      "half_cell_distance": 0.004999999999999716,
-     "neighbor_distance": 0.007499999999999659,
-     "centroid_distance": 0.007499999999999659,
+     "neighbor_distance": 0.007499999999999716,
+     "centroid_distance": 0.007499999999999716,
      "distance_method": "planar",
      "notes": ""
     },
@@ -1132,7 +1132,7 @@
      "kind": "interface",
      "neighbor_cell": 2,
      "neighbor_local_idx": 5,
-     "area": 0.0008777748104206637,
+     "area": 0.000877774810420664,
      "surface": "plane",
      "radius": null,
      "outward": null,
@@ -1147,8 +1147,8 @@
       0.37646166555400457
      ],
      "half_cell_distance": 0.0041248120965601065,
-     "neighbor_distance": 0.00662481209656005,
-     "centroid_distance": 0.00662481209656005,
+     "neighbor_distance": 0.006624812096560106,
+     "centroid_distance": 0.006624812096560106,
      "distance_method": "planar",
      "notes": ""
     },
@@ -7274,8 +7274,8 @@
       0.04146166555400464
      ],
      "half_cell_distance": 0.005416666666666671,
-     "neighbor_distance": 0.02315454934016404,
-     "centroid_distance": 0.02315454934016404,
+     "neighbor_distance": 0.015808366549661258,
+     "centroid_distance": 0.015808366549661258,
      "distance_method": "planar",
      "notes": ""
     }
@@ -10523,8 +10523,8 @@
       0.04146166555400459
      ],
      "half_cell_distance": 0.005416666666666764,
-     "neighbor_distance": 0.021147499443669057,
-     "centroid_distance": 0.021147499443669057,
+     "neighbor_distance": 0.013782472066343218,
+     "centroid_distance": 0.013782472066343218,
      "distance_method": "planar",
      "notes": ""
     },
@@ -13686,13 +13686,13 @@
    "id": 127,
    "region": "nozzle_top",
    "axial_index": 1,
-   "volume": 1.8497417814822642e-05,
+   "volume": 8.268356224178101e-06,
    "centroid": [
     0.0,
     0.0,
-    0.023723782880507274
+    0.031069965671010055
    ],
-   "z_min": 0.01,
+   "z_min": 0.024730054754651565,
    "z_max": 0.04146166555400455,
    "r_inner": 0.006999999999999934,
    "r_outer": 0.017465000000000064,
@@ -13716,9 +13716,9 @@
       0.0,
       0.04146166555400464
      ],
-     "half_cell_distance": 0.01773788267349737,
-     "neighbor_distance": 0.02315454934016404,
-     "centroid_distance": 0.02315454934016404,
+     "half_cell_distance": 0.010391699882994586,
+     "neighbor_distance": 0.015808366549661258,
+     "centroid_distance": 0.015808366549661258,
      "distance_method": "planar",
      "notes": ""
     },
@@ -13727,7 +13727,7 @@
      "kind": "interface",
      "neighbor_cell": 128,
      "neighbor_local_idx": 1,
-     "area": 0.0003149248620546389,
+     "area": 0.0008043301075863273,
      "surface": "plane",
      "radius": null,
      "outward": null,
@@ -13739,11 +13739,11 @@
      "centroid": [
       0.0,
       0.0,
-      0.01
+      0.024730054754651568
      ],
-     "half_cell_distance": 0.013723782880507273,
-     "neighbor_distance": 0.017823657495280934,
-     "centroid_distance": 0.017823657495280934,
+     "half_cell_distance": 0.006339910916358484,
+     "neighbor_distance": 0.016054367772741863,
+     "centroid_distance": 0.016054367772741863,
      "distance_method": "planar",
      "notes": ""
     },
@@ -13752,7 +13752,7 @@
      "kind": "interface",
      "neighbor_cell": 130,
      "neighbor_local_idx": 2,
-     "area": 0.0034524720264793997,
+     "area": 0.0018360572215590865,
      "surface": "cylinder",
      "radius": 0.017465,
      "outward": "+r",
@@ -13760,65 +13760,16 @@
      "centroid": [
       0.0,
       0.0,
-      0.025730832777002277
+      0.03309586015432806
      ],
      "half_cell_distance": 0.007984026327769456,
      "neighbor_distance": 0.009579065502162684,
-     "centroid_distance": 0.002007049896495019,
+     "centroid_distance": 0.0020258944833180764,
      "distance_method": "cylindrical_log",
      "notes": ""
     },
     {
      "local_idx": 4,
-     "kind": "interface",
-     "neighbor_cell": 131,
-     "neighbor_local_idx": 1,
-     "area": 0.00025140980055452395,
-     "surface": "plane",
-     "radius": null,
-     "outward": null,
-     "normal": [
-      0.0,
-      0.0,
-      -1.0
-     ],
-     "centroid": [
-      0.0,
-      0.0,
-      0.009999999999999998
-     ],
-     "half_cell_distance": 0.013723782880507275,
-     "neighbor_distance": 0.02031326999397464,
-     "centroid_distance": 0.02031326999397464,
-     "distance_method": "planar",
-     "notes": ""
-    },
-    {
-     "local_idx": 5,
-     "kind": "boundary",
-     "neighbor_cell": 0,
-     "neighbor_local_idx": 0,
-     "patch": null,
-     "area": 0.0008738399016115467,
-     "surface": "cone",
-     "radius": null,
-     "outward": null,
-     "normal": null,
-     "meridional_normal": [
-      -0.962196585240546,
-      -0.27235589097985907
-     ],
-     "centroid": [
-      0.0,
-      0.0,
-      0.016801663515268406
-     ],
-     "half_cell_distance": 0.0036294696173578486,
-     "distance_method": "approximate",
-     "notes": "approximate: meridional normal distance from the cell node (r_c, z_centroid) to a point on the face"
-    },
-    {
-     "local_idx": 6,
      "kind": "boundary",
      "neighbor_cell": 0,
      "neighbor_local_idx": 0,
@@ -13837,7 +13788,7 @@
       0.0,
       0.0342344017176128
      ],
-     "half_cell_distance": 0.004016512924745402,
+     "half_cell_distance": 0.00034342152922616176,
      "distance_method": "approximate",
      "notes": "approximate: meridional normal distance from the cell node (r_c, z_centroid) to a point on the face"
     }
@@ -13847,23 +13798,23 @@
    "id": 128,
    "region": "nozzle_bottom",
    "axial_index": 1,
-   "volume": 2.0721064603336206e-06,
+   "volume": 1.3558217053766385e-05,
    "centroid": [
     0.0,
     0.0,
-    0.005900125385226338
+    0.015015597898268191
    ],
    "z_min": -3.3e-18,
-   "z_max": 0.010000000000000028,
-   "r_inner": 0.011169436109443499,
-   "r_outer": 0.015000000000000067,
+   "z_max": 0.024730054754651565,
+   "r_inner": 0.006999999999999934,
+   "r_outer": 0.017465000000000064,
    "faces": [
     {
      "local_idx": 1,
      "kind": "interface",
      "neighbor_cell": 127,
      "neighbor_local_idx": 2,
-     "area": 0.0003149248620546389,
+     "area": 0.0008043301075863273,
      "surface": "plane",
      "radius": null,
      "outward": null,
@@ -13875,20 +13826,41 @@
      "centroid": [
       0.0,
       0.0,
-      0.01
+      0.024730054754651568
      ],
-     "half_cell_distance": 0.004099874614773662,
-     "neighbor_distance": 0.017823657495280934,
-     "centroid_distance": 0.017823657495280934,
+     "half_cell_distance": 0.009714456856383379,
+     "neighbor_distance": 0.016054367772741863,
+     "centroid_distance": 0.016054367772741863,
      "distance_method": "planar",
      "notes": ""
     },
     {
      "local_idx": 2,
      "kind": "interface",
+     "neighbor_cell": 129,
+     "neighbor_local_idx": 1,
+     "area": 0.0021650939618697703,
+     "surface": "cylinder",
+     "radius": 0.017465,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.014865027377325781
+     ],
+     "half_cell_distance": 0.007984026327769456,
+     "neighbor_distance": 0.010823138151877366,
+     "centroid_distance": 0.0017300510792845074,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 3,
+     "kind": "interface",
      "neighbor_cell": 131,
-     "neighbor_local_idx": 2,
-     "area": 0.000942477796076938,
+     "neighbor_local_idx": 1,
+     "area": 0.000471238898038469,
      "surface": "cylinder",
      "radius": 0.015,
      "outward": "+r",
@@ -13896,16 +13868,41 @@
      "centroid": [
       0.0,
       0.0,
-      0.005
+      0.0025
      ],
-     "half_cell_distance": 0.0022115180391579833,
-     "neighbor_distance": 0.005791034340936576,
-     "centroid_distance": 0.002489612498693706,
+     "half_cell_distance": 0.004574935311677381,
+     "neighbor_distance": 0.008154451613455975,
+     "centroid_distance": 0.012515597898284096,
      "distance_method": "cylindrical_log",
-     "notes": ""
+     "notes": "one of 2 faces to cell 131 (nozzle_retainer) (plane, cylinder r = 15 mm), kept separate so each has its own normal and conduction distance"
     },
     {
-     "local_idx": 3,
+     "local_idx": 4,
+     "kind": "interface",
+     "neighbor_cell": 131,
+     "neighbor_local_idx": 2,
+     "area": 0.00025140980055452395,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.004999999999999999
+     ],
+     "half_cell_distance": 0.01001559789826819,
+     "neighbor_distance": 0.012515597898284096,
+     "centroid_distance": 0.012515597898284096,
+     "distance_method": "planar",
+     "notes": "one of 2 faces to cell 131 (nozzle_retainer) (plane, cylinder r = 15 mm), kept separate so each has its own normal and conduction distance"
+    },
+    {
+     "local_idx": 5,
      "kind": "boundary",
      "neighbor_cell": 0,
      "neighbor_local_idx": 0,
@@ -13924,17 +13921,17 @@
       0.0,
       0.0
      ],
-     "half_cell_distance": 0.005900125385226338,
+     "half_cell_distance": 0.015015597898268191,
      "distance_method": "planar",
      "notes": ""
     },
     {
-     "local_idx": 4,
+     "local_idx": 6,
      "kind": "boundary",
      "neighbor_cell": 0,
      "neighbor_local_idx": 0,
      "patch": null,
-     "area": 0.0008217875306287643,
+     "area": 0.001695627432240309,
      "surface": "cone",
      "radius": null,
      "outward": null,
@@ -13946,9 +13943,9 @@
      "centroid": [
       0.0,
       0.0,
-      0.004812566063707309
+      0.010991135446511808
      ],
-     "half_cell_distance": 0.0005906463811836635,
+     "half_cell_distance": 0.001257744137702619,
      "distance_method": "approximate",
      "notes": "approximate: meridional normal distance from the cell node (r_c, z_centroid) to a point on the face"
     }
@@ -13958,23 +13955,44 @@
    "id": 129,
    "region": "aluminum_housing_near_nozzle_bottom",
    "axial_index": 1,
-   "volume": 4.388874052117428e-06,
+   "volume": 1.0613204808939861e-05,
    "centroid": [
     0.0,
     0.0,
-    0.007500000000000029
+    0.013285546818983683
    ],
    "z_min": 0.005,
-   "z_max": 0.010000000000000028,
+   "z_max": 0.024730054754651565,
    "r_inner": 0.017465000000000144,
    "r_outer": 0.024175000000018886,
    "faces": [
     {
      "local_idx": 1,
      "kind": "interface",
+     "neighbor_cell": 128,
+     "neighbor_local_idx": 2,
+     "area": 0.0021650939618697703,
+     "surface": "cylinder",
+     "radius": 0.017465,
+     "outward": "-r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.014865027377325781
+     ],
+     "half_cell_distance": 0.0028391118241079096,
+     "neighbor_distance": 0.010823138151877366,
+     "centroid_distance": 0.0017300510792845074,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
      "neighbor_cell": 130,
      "neighbor_local_idx": 3,
-     "area": 0.00042255991987109496,
+     "area": 0.0004225599198710953,
      "surface": "plane",
      "radius": null,
      "outward": null,
@@ -13986,20 +14004,20 @@
      "centroid": [
       0.0,
       0.0,
-      0.010000000000000028
+      0.024730054754651565
      ],
-     "half_cell_distance": 0.002499999999999999,
-     "neighbor_distance": 0.018230832777002264,
-     "centroid_distance": 0.018230832777002264,
+     "half_cell_distance": 0.011444507935667883,
+     "neighbor_distance": 0.019810313335344446,
+     "centroid_distance": 0.019810313335344446,
      "distance_method": "planar",
      "notes": ""
     },
     {
-     "local_idx": 2,
+     "local_idx": 3,
      "kind": "interface",
      "neighbor_cell": 131,
      "neighbor_local_idx": 3,
-     "area": 0.0008777748104234853,
+     "area": 0.000877774810423485,
      "surface": "plane",
      "radius": null,
      "outward": null,
@@ -14013,32 +14031,11 @@
       0.0,
       0.005000000000000029
      ],
-     "half_cell_distance": 0.002500000000000001,
-     "neighbor_distance": 0.004089487113467397,
-     "centroid_distance": 0.004089487113467397,
+     "half_cell_distance": 0.008285546818983655,
+     "neighbor_distance": 0.010785546818999589,
+     "centroid_distance": 0.010785546818999589,
      "distance_method": "planar",
-     "notes": "one of 2 faces to cell 131 (nozzle_retainer) (plane, cylinder r = 17.46 mm), kept separate so each has its own normal and conduction distance"
-    },
-    {
-     "local_idx": 3,
-     "kind": "interface",
-     "neighbor_cell": 131,
-     "neighbor_local_idx": 4,
-     "area": 0.0005486791569494573,
-     "surface": "cylinder",
-     "radius": 0.017465,
-     "outward": "-r",
-     "normal": null,
-     "centroid": [
-      0.0,
-      0.0,
-      0.007500000000000029
-     ],
-     "half_cell_distance": 0.0028391118241079096,
-     "neighbor_distance": 0.004349585324939025,
-     "centroid_distance": 0.004089487113467397,
-     "distance_method": "cylindrical_log",
-     "notes": "one of 2 faces to cell 131 (nozzle_retainer) (plane, cylinder r = 17.46 mm), kept separate so each has its own normal and conduction distance"
+     "notes": ""
     },
     {
      "local_idx": 4,
@@ -14058,10 +14055,30 @@
      ],
      "half_cell_distance": 0.003929889971248354,
      "distance_method": "cylindrical_log",
-     "notes": ""
+     "notes": "one of 2 faces to patch 'ambient_heat_exchange_vertical' (cylinder r = 24.18 mm, cylinder r = 20.96 mm), kept separate so each has its own normal and conduction distance"
     },
     {
      "local_idx": 5,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": "ambient_heat_exchange_vertical",
+     "area": 0.0019403456275496362,
+     "surface": "cylinder",
+     "radius": 0.020965,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.017365027377325787
+     ],
+     "half_cell_distance": 0.0004213004975595316,
+     "distance_method": "cylindrical_log",
+     "notes": "one of 2 faces to patch 'ambient_heat_exchange_vertical' (cylinder r = 24.18 mm, cylinder r = 20.96 mm), kept separate so each has its own normal and conduction distance"
+    },
+    {
+     "local_idx": 6,
      "kind": "boundary",
      "neighbor_cell": 0,
      "neighbor_local_idx": 0,
@@ -14080,7 +14097,7 @@
       0.0,
       0.010000000000000028
      ],
-     "half_cell_distance": 0.002499999999999999,
+     "half_cell_distance": 0.003285546818983654,
      "distance_method": "planar",
      "notes": ""
     }
@@ -14090,13 +14107,13 @@
    "id": 130,
    "region": "aluminum_housing_near_nozzle_top",
    "axial_index": 1,
-   "volume": 1.3294438875511343e-05,
+   "volume": 7.070108118688912e-06,
    "centroid": [
     0.0,
     0.0,
-    0.02573083277700229
+    0.03309586015432813
    ],
-   "z_min": 0.010000000000000028,
+   "z_min": 0.024730054754651565,
    "z_max": 0.04146166555400455,
    "r_inner": 0.017465000000000144,
    "r_outer": 0.02096500000000032,
@@ -14120,9 +14137,9 @@
       0.0,
       0.04146166555400459
      ],
-     "half_cell_distance": 0.015730832777002293,
-     "neighbor_distance": 0.021147499443669057,
-     "centroid_distance": 0.021147499443669057,
+     "half_cell_distance": 0.008365805399676454,
+     "neighbor_distance": 0.013782472066343218,
+     "centroid_distance": 0.013782472066343218,
      "distance_method": "planar",
      "notes": ""
     },
@@ -14131,7 +14148,7 @@
      "kind": "interface",
      "neighbor_cell": 127,
      "neighbor_local_idx": 3,
-     "area": 0.0034524720264793997,
+     "area": 0.0018360572215590865,
      "surface": "cylinder",
      "radius": 0.017465,
      "outward": "-r",
@@ -14139,11 +14156,11 @@
      "centroid": [
       0.0,
       0.0,
-      0.025730832777002277
+      0.03309586015432806
      ],
      "half_cell_distance": 0.0015950391743932294,
      "neighbor_distance": 0.009579065502162684,
-     "centroid_distance": 0.002007049896495019,
+     "centroid_distance": 0.0020258944833180764,
      "distance_method": "cylindrical_log",
      "notes": ""
     },
@@ -14151,8 +14168,8 @@
      "local_idx": 3,
      "kind": "interface",
      "neighbor_cell": 129,
-     "neighbor_local_idx": 1,
-     "area": 0.00042255991987109496,
+     "neighbor_local_idx": 2,
+     "area": 0.0004225599198710953,
      "surface": "plane",
      "radius": null,
      "outward": null,
@@ -14164,11 +14181,11 @@
      "centroid": [
       0.0,
       0.0,
-      0.010000000000000028
+      0.024730054754651565
      ],
-     "half_cell_distance": 0.015730832777002265,
-     "neighbor_distance": 0.018230832777002264,
-     "centroid_distance": 0.018230832777002264,
+     "half_cell_distance": 0.008365805399676563,
+     "neighbor_distance": 0.019810313335344446,
+     "centroid_distance": 0.019810313335344446,
      "distance_method": "planar",
      "notes": ""
     },
@@ -14178,7 +14195,7 @@
      "neighbor_cell": 0,
      "neighbor_local_idx": 0,
      "patch": "ambient_heat_exchange_vertical",
-     "area": 0.004144350188098515,
+     "area": 0.002204004560548879,
      "surface": "cylinder",
      "radius": 0.020965,
      "outward": "+r",
@@ -14186,7 +14203,7 @@
      "centroid": [
       0.0,
       0.0,
-      0.02573083277700229
+      0.03309586015432811
      ],
      "half_cell_distance": 0.001914686303529658,
      "distance_method": "cylindrical_log",
@@ -14198,21 +14215,42 @@
    "id": 131,
    "region": "nozzle_retainer",
    "axial_index": 1,
-   "volume": 6.902972057648558e-06,
+   "volume": 5.645923054899573e-06,
    "centroid": [
     0.0,
     0.0,
-    0.003410512886532632
+    0.0024999999999840935
    ],
-   "z_min": 8e-17,
-   "z_max": 0.010000000000000085,
+   "z_min": -2.71602e-14,
+   "z_max": 0.005000000000000085,
    "r_inner": 0.014999999999999916,
    "r_outer": 0.024175000000000085,
    "faces": [
     {
      "local_idx": 1,
      "kind": "interface",
-     "neighbor_cell": 127,
+     "neighbor_cell": 128,
+     "neighbor_local_idx": 3,
+     "area": 0.000471238898038469,
+     "surface": "cylinder",
+     "radius": 0.015,
+     "outward": "-r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.0025
+     ],
+     "half_cell_distance": 0.003579516301778593,
+     "neighbor_distance": 0.008154451613455975,
+     "centroid_distance": 0.012515597898284096,
+     "distance_method": "cylindrical_log",
+     "notes": "one of 2 faces to cell 128 (nozzle_bottom) (plane, cylinder r = 15 mm), kept separate so each has its own normal and conduction distance"
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 128,
      "neighbor_local_idx": 4,
      "area": 0.00025140980055452395,
      "surface": "plane",
@@ -14226,41 +14264,20 @@
      "centroid": [
       0.0,
       0.0,
-      0.009999999999999998
+      0.004999999999999999
      ],
-     "half_cell_distance": 0.006589487113467366,
-     "neighbor_distance": 0.02031326999397464,
-     "centroid_distance": 0.02031326999397464,
+     "half_cell_distance": 0.0025000000000159057,
+     "neighbor_distance": 0.012515597898284096,
+     "centroid_distance": 0.012515597898284096,
      "distance_method": "planar",
-     "notes": ""
-    },
-    {
-     "local_idx": 2,
-     "kind": "interface",
-     "neighbor_cell": 128,
-     "neighbor_local_idx": 2,
-     "area": 0.000942477796076938,
-     "surface": "cylinder",
-     "radius": 0.015,
-     "outward": "-r",
-     "normal": null,
-     "centroid": [
-      0.0,
-      0.0,
-      0.005
-     ],
-     "half_cell_distance": 0.003579516301778593,
-     "neighbor_distance": 0.005791034340936576,
-     "centroid_distance": 0.002489612498693706,
-     "distance_method": "cylindrical_log",
-     "notes": ""
+     "notes": "one of 2 faces to cell 128 (nozzle_bottom) (plane, cylinder r = 15 mm), kept separate so each has its own normal and conduction distance"
     },
     {
      "local_idx": 3,
      "kind": "interface",
      "neighbor_cell": 129,
-     "neighbor_local_idx": 2,
-     "area": 0.0008777748104234853,
+     "neighbor_local_idx": 3,
+     "area": 0.000877774810423485,
      "surface": "plane",
      "radius": null,
      "outward": null,
@@ -14274,35 +14291,14 @@
       0.0,
       0.005000000000000029
      ],
-     "half_cell_distance": 0.0015894871134673964,
-     "neighbor_distance": 0.004089487113467397,
-     "centroid_distance": 0.004089487113467397,
+     "half_cell_distance": 0.002500000000015935,
+     "neighbor_distance": 0.010785546818999589,
+     "centroid_distance": 0.010785546818999589,
      "distance_method": "planar",
-     "notes": "one of 2 faces to cell 129 (aluminum_housing_near_nozzle_bottom) (plane, cylinder r = 17.46 mm), kept separate so each has its own normal and conduction distance"
+     "notes": ""
     },
     {
      "local_idx": 4,
-     "kind": "interface",
-     "neighbor_cell": 129,
-     "neighbor_local_idx": 3,
-     "area": 0.0005486791569494573,
-     "surface": "cylinder",
-     "radius": 0.017465,
-     "outward": "+r",
-     "normal": null,
-     "centroid": [
-      0.0,
-      0.0,
-      0.007500000000000029
-     ],
-     "half_cell_distance": 0.0015104735008311155,
-     "neighbor_distance": 0.004349585324939025,
-     "centroid_distance": 0.004089487113467397,
-     "distance_method": "cylindrical_log",
-     "notes": "one of 2 faces to cell 129 (aluminum_housing_near_nozzle_bottom) (plane, cylinder r = 17.46 mm), kept separate so each has its own normal and conduction distance"
-    },
-    {
-     "local_idx": 5,
      "kind": "boundary",
      "neighbor_cell": 0,
      "neighbor_local_idx": 0,
@@ -14321,17 +14317,17 @@
       0.0,
       0.0
      ],
-     "half_cell_distance": 0.0034105128865325467,
+     "half_cell_distance": 0.0025000000000112536,
      "distance_method": "planar",
      "notes": ""
     },
     {
-     "local_idx": 6,
+     "local_idx": 5,
      "kind": "boundary",
      "neighbor_cell": 0,
      "neighbor_local_idx": 0,
      "patch": "ambient_heat_exchange_vertical",
-     "area": 0.0007594800240053324,
+     "area": 0.0007594800240094709,
      "surface": "cylinder",
      "radius": 0.024175000000000002,
      "outward": "+r",
@@ -14339,7 +14335,7 @@
      "centroid": [
       0.0,
       0.0,
-      0.0025000000000000855
+      0.0024999999999864623
      ],
      "half_cell_distance": 0.0057689871063665524,
      "distance_method": "cylindrical_log",
@@ -14349,7 +14345,7 @@
   }
  ],
  "cellsets": {
-  "injector_bulkhead_region": [
+  "injector_bulkhead_top": [
    1
   ],
   "injector_bulkhead_bottom": [
@@ -14361,7 +14357,7 @@
   "pre_chamber": [
    4
   ],
-  "phenolic_liner_region": [
+  "phenolic_liner_top": [
    5
   ],
   "aluminum_housing_top": [
@@ -14512,13 +14508,13 @@
   ]
  },
  "facetsets": {
-  "injector_bulkhead_region__injector_bulkhead_bottom": [
+  "injector_bulkhead_top__injector_bulkhead_bottom": [
    [
     1,
     1
    ]
   ],
-  "injector_bulkhead_region__mid_section": [
+  "injector_bulkhead_top__mid_section": [
    [
     1,
     2
@@ -14672,12 +14668,16 @@
     4
    ],
    [
+    129,
+    5
+   ],
+   [
     130,
     4
    ],
    [
     131,
-    6
+    5
    ]
   ],
   "injector_bulkhead_bottom__mid_section": [
@@ -14692,7 +14692,7 @@
     3
    ]
   ],
-  "injector_bulkhead_bottom__phenolic_liner_region": [
+  "injector_bulkhead_bottom__phenolic_liner_top": [
    [
     2,
     4
@@ -14704,7 +14704,7 @@
     5
    ]
   ],
-  "pre_chamber__phenolic_liner_region": [
+  "pre_chamber__phenolic_liner_top": [
    [
     4,
     2
@@ -14722,13 +14722,13 @@
     4
    ]
   ],
-  "phenolic_liner_region__aluminum_housing_top": [
+  "phenolic_liner_top__aluminum_housing_top": [
    [
     5,
     3
    ]
   ],
-  "phenolic_liner_region__phenolic_liner": [
+  "phenolic_liner_top__phenolic_liner": [
    [
     5,
     4
@@ -15608,29 +15608,29 @@
     3
    ]
   ],
-  "nozzle_top__nozzle_retainer": [
-   [
-    127,
-    4
-   ]
-  ],
-  "nozzle_bottom__nozzle_retainer": [
+  "nozzle_bottom__aluminum_housing_near_nozzle_bottom": [
    [
     128,
     2
    ]
   ],
+  "nozzle_bottom__nozzle_retainer": [
+   [
+    128,
+    3
+   ],
+   [
+    128,
+    4
+   ]
+  ],
   "aluminum_housing_near_nozzle_bottom__aluminum_housing_near_nozzle_top": [
    [
     129,
-    1
+    2
    ]
   ],
   "aluminum_housing_near_nozzle_bottom__nozzle_retainer": [
-   [
-    129,
-    2
-   ],
    [
     129,
     3
@@ -15639,7 +15639,7 @@
   "ambient_heat_exchange_horizontal_downwards": [
    [
     131,
-    5
+    4
    ]
   ]
  },
@@ -15726,17 +15726,7 @@
   },
   {
    "cell": 127,
-   "local_idx": 5,
-   "area": 0.0008738399016115467,
-   "centroid": [
-    0.0,
-    0.0,
-    0.016801663515268406
-   ]
-  },
-  {
-   "cell": 127,
-   "local_idx": 6,
+   "local_idx": 4,
    "area": 0.0014360571876766053,
    "centroid": [
     0.0,
@@ -15746,7 +15736,7 @@
   },
   {
    "cell": 128,
-   "local_idx": 3,
+   "local_idx": 5,
    "area": 9.110618695410403e-05,
    "centroid": [
     0.0,
@@ -15756,17 +15746,17 @@
   },
   {
    "cell": 128,
-   "local_idx": 4,
-   "area": 0.0008217875306287643,
+   "local_idx": 6,
+   "area": 0.001695627432240309,
    "centroid": [
     0.0,
     0.0,
-    0.004812566063707309
+    0.010991135446511808
    ]
   },
   {
    "cell": 129,
-   "local_idx": 5,
+   "local_idx": 6,
    "area": 0.00045521489055238976,
    "centroid": [
     0.0,
@@ -15779,22 +15769,22 @@
  "validation": {
   "errors": [],
   "warnings": [
-   "region 'injector_bulkhead_region': 356.361 mm^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'injector_bulkhead_top': 356.361 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "region 'injector_bulkhead_bottom': 490.664 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "region 'mid_section': 100.943 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "region 'pre_chamber': 4 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "region 'aluminum_housing_top': 455.215 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "region 'fuel_grain': 578.807 mm^2 of boundary has no patch (adiabatic unless you add one)",
-   "region 'nozzle_top': 2309.9 mm^2 of boundary has no patch (adiabatic unless you add one)",
-   "region 'nozzle_bottom': 912.894 mm^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'nozzle_top': 1436.06 mm^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'nozzle_bottom': 1786.73 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "region 'aluminum_housing_near_nozzle_bottom': 455.215 mm^2 of boundary has no patch (adiabatic unless you add one)",
-   "cell 127 (nozzle_top) face 5: cone face, half-cell distance is approximate",
-   "cell 127 (nozzle_top) face 6: cone face, half-cell distance is approximate",
-   "cell 128 (nozzle_bottom) face 4: cone face, half-cell distance is approximate"
+   "cell 127 (nozzle_top) face 4: cone face, half-cell distance is approximate",
+   "cell 128 (nozzle_bottom) face 6: cone face, half-cell distance is approximate"
   ],
   "notes": [
    "cell 6 (aluminum_housing_top) meets patch 'ambient_heat_exchange_vertical' on 2 different surfaces (cylinder r = 24.18 mm, cylinder r = 20.96 mm); they stay separate faces, each with its own normal and conduction distance. This is normal for stepped contacts.",
-   "cell 129 (aluminum_housing_near_nozzle_bottom) meets cell 131 (nozzle_retainer) on 2 different surfaces (plane, cylinder r = 17.46 mm); they stay separate faces, each with its own normal and conduction distance. This is normal for stepped contacts."
+   "cell 128 (nozzle_bottom) meets cell 131 (nozzle_retainer) on 2 different surfaces (plane, cylinder r = 15 mm); they stay separate faces, each with its own normal and conduction distance. This is normal for stepped contacts.",
+   "cell 129 (aluminum_housing_near_nozzle_bottom) meets patch 'ambient_heat_exchange_vertical' on 2 different surfaces (cylinder r = 24.18 mm, cylinder r = 20.96 mm); they stay separate faces, each with its own normal and conduction distance. This is normal for stepped contacts."
   ]
  }
 }

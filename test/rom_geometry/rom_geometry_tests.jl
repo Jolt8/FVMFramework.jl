@@ -46,6 +46,54 @@ function total_face_count(facetset)
     return face_count
 end
 
+"""
+Cup at 300 K (k = 200 W/m/K) and plug at 400 K (k = 50 W/m/K), connected by
+heat_diffusion_series_resistance! through finish_fvm_config and fvm_operator!.
+Returns (faces in the connection group, recorded du.heat, hand-calculated heat
+into the cup), the hand calculation summing, over every interface face of the
+cup, two half-cell resistances in series: R = d_cup / (k_cup A) + d_plug / (k_plug A).
+"""
+function run_cup_and_plug_conduction(rom_data)
+    config = create_fvm_config_from_rom(rom_data, ComponentVector(temp = zeros(2)u"K"))
+    add_setup_syms!(
+        config;
+        cache_syms_and_units = (heat = u"J",),
+        special_caches = ComponentVector(),
+        optimized_parameters = ComponentVector(unused_parameter = 1.0),
+    )
+
+    cup_conductivity = 200.0
+    plug_conductivity = 50.0
+    add_test_solid_region!(config, "cup", 300.0u"K", cup_conductivity * u"W/(m*K)")
+    add_test_solid_region!(config, "plug", 400.0u"K", plug_conductivity * u"W/(m*K)")
+
+    solid_connection_map(type_a, type_b) = heat_diffusion_series_resistance!
+    du0_vec, u0_vec, system, geo = finish_fvm_config(config, solid_connection_map, NamedTuple(); check_units = false)
+    connection_face_count = total_face_count(only(system.connection_groups).cell_neighbors)
+
+    recorded_heat = zeros(2)
+    function solve_and_record_heat!(du, u, p, t, system, geo)
+        solve_connection_groups!(du, u, p, t, system, geo)
+        recorded_heat[1] = du.heat[1]
+        recorded_heat[2] = du.heat[2]
+    end
+    fvm_operator!(zero(du0_vec), u0_vec, system.p_vec, 0.0, system, geo, solve_and_record_heat!)
+
+    cup_cell, plug_cell = rom_data["cells"]
+    expected_heat_into_cup = 0.0
+    for cup_face in cup_cell["faces"]
+        if cup_face["kind"] != "interface"
+            continue
+        end
+        plug_face = plug_cell["faces"][cup_face["neighbor_local_idx"]]
+        half_cell_resistance_cup = cup_face["half_cell_distance"] / (cup_conductivity * cup_face["area"])
+        half_cell_resistance_plug = plug_face["half_cell_distance"] / (plug_conductivity * plug_face["area"])
+        expected_heat_into_cup += (400.0 - 300.0) / (half_cell_resistance_cup + half_cell_resistance_plug)
+    end
+
+    return connection_face_count, recorded_heat, expected_heat_into_cup
+end
+
 @testset "ROM geometry" begin
 
     @testset "fixture geometry matches the export" begin
@@ -154,47 +202,68 @@ end
 
     @testset "stepped contact: both faces conduct (finish_fvm_config + fvm_operator!)" begin
         rom_data = read_rom_geometry_json(ROM_STEPPED_CONTACT_PATH)
-        config = create_fvm_config_from_rom(rom_data, ComponentVector(temp = zeros(2)u"K"))
-        add_setup_syms!(
-            config;
-            cache_syms_and_units = (heat = u"J",),
-            special_caches = ComponentVector(),
-            optimized_parameters = ComponentVector(unused_parameter = 1.0),
-        )
-
-        cup_conductivity = 200.0
-        plug_conductivity = 50.0
-        add_test_solid_region!(config, "cup", 300.0u"K", cup_conductivity * u"W/(m*K)")
-        add_test_solid_region!(config, "plug", 400.0u"K", plug_conductivity * u"W/(m*K)")
-
-        solid_connection_map(type_a, type_b) = heat_diffusion_series_resistance!
-        du0_vec, u0_vec, system, geo = finish_fvm_config(config, solid_connection_map, NamedTuple(); check_units = false)
+        connection_face_count, recorded_heat, expected_heat_into_cup = run_cup_and_plug_conduction(rom_data)
 
         # The plug touches the cup on a plane AND a cylinder: two faces, two fluxes.
-        @test total_face_count(only(system.connection_groups).cell_neighbors) == 2
+        @test connection_face_count == 2
+        @test recorded_heat[1] ≈ expected_heat_into_cup rtol = 1e-12
+        @test recorded_heat[2] ≈ -expected_heat_into_cup rtol = 1e-12
+    end
 
-        recorded_heat = zeros(2)
-        function solve_and_record_heat!(du, u, p, t, system, geo)
-            solve_connection_groups!(du, u, p, t, system, geo)
-            recorded_heat[1] = du.heat[1]
-            recorded_heat[2] = du.heat[2]
-        end
-        fvm_operator!(zero(du0_vec), u0_vec, system.p_vec, 0.0, system, geo, solve_and_record_heat!)
+    @testset "add_virtual_face!" begin
+        # Two cells that never touch: end_cap_center (cell 9) and the nozzle (cell 11).
+        rom_data = read_rom_geometry_json(ROM_FIXTURE_PATH)
+        face_idx_a, face_idx_b = add_virtual_face!(
+            rom_data;
+            region_a = "end_cap_center", axial_index_a = 1,
+            region_b = "nozzle", axial_index_b = :last,
+            area = 5.0e-5, half_cell_distance_a = 2.0e-3, half_cell_distance_b = 3.0e-3,
+            normal = (0.0, 0.0, -1.0),
+        )
+        geo = build_rom_fvm_geometry(rom_data)
 
-        # Hand calculation from the export: per face, two half-cell
-        # resistances in series, R = d_cup / (k_cup A) + d_plug / (k_plug A).
-        cup_cell, plug_cell = rom_data["cells"]
-        expected_heat_into_cup = 0.0
-        for cup_face in cup_cell["faces"]
-            if cup_face["kind"] != "interface"
-                continue
-            end
-            plug_face = plug_cell["faces"][cup_face["neighbor_local_idx"]]
-            half_cell_resistance_cup = cup_face["half_cell_distance"] / (cup_conductivity * cup_face["area"])
-            half_cell_resistance_plug = plug_face["half_cell_distance"] / (plug_conductivity * plug_face["area"])
-            expected_heat_into_cup += (400.0 - 300.0) / (half_cell_resistance_cup + half_cell_resistance_plug)
-        end
+        @test (face_idx_a, face_idx_b) == (4, 5)
+        @test geo.cell_n_faces[9] == 4
+        @test geo.cell_n_faces[11] == 5
+        @test (11, 4, 5) in geo.cell_neighbors[9][2]
+        @test (9, 5, 4) in geo.cell_neighbors[11][2]
+        @test geo.cell_face_areas[9, 4] == geo.cell_face_areas[11, 5] == 5.0e-5
+        @test geo.cell_neighbor_distances[9, 4] ≈ 5.0e-3
+        @test geo.cell_face_normals[9, 4] == -geo.cell_face_normals[11, 5]
+        @test get_facetset(geo, "end_cap_center", "nozzle") == [(9, [(11, 4, 5)])]
+        @test get_facetset(geo, "nozzle", "end_cap_center") == [(11, [(9, 5, 4)])]
 
+        # A pair that already has a face set ("cavity__liner") gets the new
+        # face added to it, so asking from either side still finds all faces.
+        rom_data = read_rom_geometry_json(ROM_FIXTURE_PATH)
+        add_virtual_face!(
+            rom_data;
+            region_a = "liner", axial_index_a = :last,
+            region_b = "cavity", axial_index_b = :first,
+            area = 1.0e-5, half_cell_distance_a = 1.0e-3, half_cell_distance_b = 1.0e-3,
+        )
+        geo = build_rom_fvm_geometry(rom_data)
+        @test !haskey(geo.facetsets, "liner__cavity")
+        @test total_face_count(get_facetset(geo, "cavity", "liner")) == 4
+        @test total_face_count(get_facetset(geo, "liner", "cavity")) == 4
+
+        @test_throws ErrorException add_virtual_face!(rom_data; region_a = "cavity", axial_index_a = 1, region_b = "cavity", axial_index_b = 1, area = 1.0, half_cell_distance_a = 1.0, half_cell_distance_b = 1.0)
+        @test_throws ErrorException add_virtual_face!(rom_data; region_a = "cavity", axial_index_a = 7, region_b = "liner", axial_index_b = 1, area = 1.0, half_cell_distance_a = 1.0, half_cell_distance_b = 1.0)
+        @test_throws ErrorException add_virtual_face!(rom_data; region_a = "mid_section", axial_index_a = 1, region_b = "liner", axial_index_b = 1, area = 1.0, half_cell_distance_a = 1.0, half_cell_distance_b = 1.0)
+    end
+
+    @testset "a virtual face conducts like a real one (finish_fvm_config + fvm_operator!)" begin
+        rom_data = read_rom_geometry_json(ROM_STEPPED_CONTACT_PATH)
+        add_virtual_face!(
+            rom_data;
+            region_a = "cup", axial_index_a = 1,
+            region_b = "plug", axial_index_b = 1,
+            area = 2.0e-5, half_cell_distance_a = 4.0e-3, half_cell_distance_b = 1.0e-3,
+        )
+        connection_face_count, recorded_heat, expected_heat_into_cup = run_cup_and_plug_conduction(rom_data)
+
+        # The two real faces plus the virtual one, each with its own flux.
+        @test connection_face_count == 3
         @test recorded_heat[1] ≈ expected_heat_into_cup rtol = 1e-12
         @test recorded_heat[2] ≈ -expected_heat_into_cup rtol = 1e-12
     end
