@@ -23,8 +23,7 @@ function pure_component_vt_flash(model, volume, temperature, amount)
     amount > zero(amount) ||
         throw(DomainError(amount, "flash amount must be positive"))
 
-    saturation_pressure_value, liquid_molar_volume, vapor_molar_volume =
-        saturation_pressure(model, temperature)
+    saturation_pressure_value, liquid_molar_volume, vapor_molar_volume = saturation_pressure(model, temperature)
     bulk_molar_volume = volume / amount
     pure_composition = SVector(one(amount))
 
