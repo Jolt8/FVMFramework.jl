@@ -27,11 +27,11 @@ function min_chamber_pressure_limit_expanded(u, t, integrator, system, geo)
     u_named = ComponentVector(u, system.state_axes)
     p_named = ComponentVector(integrator.p, system.p_axes)
 
-    pre_chamber_cell_id = get_cells(geo, "pre_chamber")[1]
+    pre_chamber_cell_id = get_cellset(geo, "pre_chamber")[1]
 
     result = vt_flash(system.model, geo.cell_volumes[pre_chamber_cell_id], u_named.temperature[pre_chamber_cell_id], system.moles_vec[pre_chamber_cell_id], system.clapeyron_method)
 
-    pre_chamber_pressure = pressure(result, system.model)
+    pre_chamber_pressure = pressure(system.model, result)
 
     if t < 2.0 #we make sure that all rockets can burn for at least 2 seconds before applying this
         return 1.0
