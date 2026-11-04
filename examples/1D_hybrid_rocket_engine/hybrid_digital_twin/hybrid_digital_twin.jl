@@ -498,7 +498,7 @@ add_region!(
     end
 )
 
-u0_mid_section_mass = mass_density(nitrous_oxide_model, 20.0u"atm", 298.0u"K", [1.0]) * (geo.cell_volumes[get_cellset(geo, "mid_section")][1]u"m^3") |> u"kg"
+u0_mid_section_mass = mass_density(nitrous_oxide_model, 1.0u"atm", 298.0u"K", [1.0]) * (geo.cell_volumes[get_cellset(geo, "mid_section")][1]u"m^3") |> u"kg"
 
 #Although this is less accurate, we're using a pure EOS model here, so we can't have anything other than nitrous oxide in it
 mid_section_initial_conditions = ComponentVector(
