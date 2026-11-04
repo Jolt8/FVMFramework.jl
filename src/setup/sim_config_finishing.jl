@@ -28,29 +28,35 @@ struct ConnectionGroup{RA <: RegionGroup, RB <: RegionGroup, F <: Function}
     cell_neighbors::Vector{Tuple{Int, Vector{Tuple{Int, Int, Int}}}} #we could probably use ::Vector{CellNeighbors} here
 end
 
-struct FVMSystem
+#Every field except the group vectors is parametric so its concrete type is part of typeof(system).
+#With abstract annotations (::NamedTuple, ::Tuple, ::DiffCache) the compiler only knows "some NamedTuple", so every
+#system.xxx read inside a physics function returns Any, and everything computed from it is dynamically dispatched and boxed.
+#The group vectors stay abstract on purpose: each group is one dynamic dispatch into a function barrier per RHS call,
+#while concrete tuples of ~40 differently-typed groups would make compile times explode.
+struct FVMSystem{DVA <: NamedTuple, UVA <: NamedTuple, SA <: Tuple, DDC <: DiffCache, UDC <: DiffCache, CA <: Tuple, PRA <: Tuple, PA <: Tuple, AD <: NamedTuple}
     connection_groups::Vector{ConnectionGroup}
     patch_groups::Vector{PatchGroup}
     region_groups::Vector{RegionGroup}
     du0_vec::Vector{Float64}
     u0_vec::Vector{Float64}
-    du_virtual_axes::NamedTuple
-    u_virtual_axes::NamedTuple
-    state_axes::Tuple
-    du_diff_cache::DiffCache
-    u_diff_cache::DiffCache
+    du_virtual_axes::DVA
+    u_virtual_axes::UVA
+    state_axes::SA
+    du_diff_cache::DDC
+    u_diff_cache::UDC
     cache_vec::Vector{Float64}
-    cache_axes::Tuple
+    cache_axes::CA
     properties_vec::Vector{Float64}
-    properties_axes::Tuple
+    properties_axes::PRA
     p_vec::Vector{Float64}
-    p_axes::Tuple
-    additional_data::NamedTuple
+    p_axes::PA
+    additional_data::AD
 end
 
-function Base.getproperty(sys::FVMSystem, sym::Symbol)
+#@inline lets the literal Symbol in system.xxx constant-propagate, so both branches below fold away at compile time
+@inline function Base.getproperty(sys::FVMSystem, sym::Symbol)
     # 1. Fall back to FVMSystem's own fields
-    if sym in fieldnames(FVMSystem)
+    if sym in fieldnames(typeof(sys))
         return getfield(sys, sym)
     end
     
