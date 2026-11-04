@@ -1226,7 +1226,7 @@ callbacks = CallbackSet(
 
 Revise.includet(joinpath(@__DIR__, "state_is_invalid", "state_is_invalid.jl"))
 
-state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
+#state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
 
 #Implicit from the start. The laminar port flux equalizes pressure between neighbouring port cells on a ~1 ns
 #timescale (Jacobian entries ~1e11), so an explicit method like Tsit5 needs nanosecond steps and blows up on its
