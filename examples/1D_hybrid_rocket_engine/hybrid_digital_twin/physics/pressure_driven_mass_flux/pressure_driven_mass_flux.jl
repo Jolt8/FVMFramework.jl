@@ -138,11 +138,14 @@ function pressure_driven_mass_flux!(
         face_area_b, face_normal_b, face_distance_b, volume_b,
     ) = interface_geometry(geo, idx_a, face_a, idx_b, face_b)
 
+    # Same argument order as the custom-geometry signature: each face area is followed by its cell's volume.
+    # The current volume comes from u.cell_volume, so this stays correct for cells whose volume changes.
     pressure_driven_mass_flux_custom_geometry!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
-        dist, face_area_a, face_area_b,
-        volume_a, volume_b
+        dist,
+        face_area_a, u.cell_volume[idx_a],
+        face_area_b, u.cell_volume[idx_b]
     )
 end
 
