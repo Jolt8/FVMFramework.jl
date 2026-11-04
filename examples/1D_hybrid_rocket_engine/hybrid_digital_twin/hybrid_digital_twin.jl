@@ -706,7 +706,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "mid_section",
     connection = "injector_bulkhead_top",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function mid_seciton_to_injector_bulkhead_top_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
     )
@@ -724,7 +724,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "mid_section",
     connection = "injector_bulkhead_bottom",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function mid_section_to_injector_bulkhead_bottom_flux!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
     )
@@ -1019,6 +1019,7 @@ add_patch!(config;
 #end
 
 Revise.includet(joinpath(@__DIR__, "physics", "nozzle_outlet", "nozzle_outlet_closure.jl"))
+Revise.includet(joinpath(@__DIR__, "physics", "nozzle_outlet", "nozzle_outlet_simple.jl"))
 
 add_patch!(config, "fluid_domain_to_nozzle_inlet";
     patch_function = function fuel_wall_patch_flux!(
@@ -1026,7 +1027,7 @@ add_patch!(config, "fluid_domain_to_nozzle_inlet";
         idx_a, face_a, idx_b, face_b
     )
         #idx_b, and face_b are both 0 here
-        nozzle_outlet_closure!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        nozzle_outlet_simple!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
         #heat_transfer_from_fluid_to_nozzle_top!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
         #geometry information here is not accurate because this is a virtual boundary condition cell defined in CAD, use the CAD geometry data instead
 
@@ -1098,6 +1099,8 @@ add_patch!(config;
     end
 )
 
+get_facetset(config.geo, "aluminum_housing_near_nozzle_bottom", "nozzle_retainer")
+
 add_patch!(config;
     owner = "aluminum_housing_near_nozzle_bottom",
     connection = "nozzle_retainer",
@@ -1105,6 +1108,10 @@ add_patch!(config;
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
+        @show idx_a
+        @show face_a
+        @show idx_b
+        @show face_b
         heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
