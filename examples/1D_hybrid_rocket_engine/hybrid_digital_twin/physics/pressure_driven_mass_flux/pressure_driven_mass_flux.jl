@@ -76,6 +76,9 @@ function pressure_driven_mass_flux_custom_geometry!(
 
     inertial_term = 2.0 * upwind_density * minor_loss_coefficient * pressure_difference_magnitude
 
+    @show upwind_density
+    @show upwind_cell
+
     face_velocity = 2.0 * pressure_difference_magnitude / (viscous_resistance + sqrt(viscous_resistance^2 + inertial_term))
 
     # Always >= 0, directed from the upwind cell to the downwind cell

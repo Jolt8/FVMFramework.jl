@@ -431,6 +431,12 @@ add_region!(
     property_update_function = 
     function update_fluid_domain_region!(du, u, p, t, system, geo, cell_id)
         update_fluid_properties!(du, u, p, t, system, geo, cell_id)
+
+        if cell_id == get_cellset(geo, "fluid_domain")[end]
+            @show u.density[cell_id]
+            @show u.temperature[cell_id]
+            @show u.pressure[cell_id]
+        end
     end,
     region_function = 
     function fluid_domain_region!(du, u, p, t, system, geo, cell_id)
@@ -492,7 +498,7 @@ add_region!(
     end
 )
 
-u0_mid_section_mass = mass_density(nitrous_oxide_model, 1.0u"atm", 298.0u"K", [1.0]) * (geo.cell_volumes[get_cellset(geo, "mid_section")][1]u"m^3") |> u"kg"
+u0_mid_section_mass = mass_density(nitrous_oxide_model, 20.0u"atm", 298.0u"K", [1.0]) * (geo.cell_volumes[get_cellset(geo, "mid_section")][1]u"m^3") |> u"kg"
 
 #Although this is less accurate, we're using a pure EOS model here, so we can't have anything other than nitrous oxide in it
 mid_section_initial_conditions = ComponentVector(
@@ -1049,10 +1055,13 @@ add_patch!(config, "fluid_domain_to_nozzle_inlet";
         converging_area = system.converging_nozzle_surface_area
         diverging_area = system.diverging_nozzle_surface_area
 
-        du.heat[fluid_cell_id] -= h_converging * converging_area * (u.temperature[fluid_cell_id] - u.temperature[converging_cell_id])
+        #I'm not entirely sure if we even have to take away heat from the last fluid cell, I mean, the heat that the nozzle
+        #components take away would only be visible for the fluid that's inside them which is currently not modeled
+
+        #du.heat[fluid_cell_id] -= h_converging * converging_area * (u.temperature[fluid_cell_id] - u.temperature[converging_cell_id])
         du.heat[converging_cell_id] += h_converging * converging_area * (u.temperature[fluid_cell_id] - u.temperature[converging_cell_id])
 
-        du.heat[fluid_cell_id] -= h_diverging * diverging_area * (u.temperature[fluid_cell_id] - u.temperature[diverging_cell_id])
+        #du.heat[fluid_cell_id] -= h_diverging * diverging_area * (u.temperature[fluid_cell_id] - u.temperature[diverging_cell_id])
         du.heat[diverging_cell_id] += h_diverging * diverging_area * (u.temperature[fluid_cell_id] - u.temperature[diverging_cell_id])
     end
 )
