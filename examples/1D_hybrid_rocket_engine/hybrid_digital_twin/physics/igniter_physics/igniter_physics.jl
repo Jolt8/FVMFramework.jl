@@ -16,10 +16,6 @@ m_igniter,0: initial puck mass (kg), system.initial_igniter_mass; t_burn: ignite
 The switch-off at t_burn is a jump, so igniter_burn_time is in tstops to land a step exactly on it.
 """
 function igniter_mass_burn_rate(u, p, t, system)
-    if !system.hot_fire
-        return zero(u.igniter_mass[1])
-    end
-
     if t >= p.igniter_burn_time || u.igniter_mass[1] <= 0
         return zero(u.igniter_mass[1])
     end
@@ -50,7 +46,6 @@ function burn_igniter_puck!(du, u, p, t, system, geo, pre_chamber_cell_id)
     igniter_burn_rate = igniter_mass_burn_rate(u, p, t, system)
 
     du.igniter_mass[1] -= igniter_burn_rate
-
 
     # Gas product yields per kg of igniter burned
     water_yield = 0.17
