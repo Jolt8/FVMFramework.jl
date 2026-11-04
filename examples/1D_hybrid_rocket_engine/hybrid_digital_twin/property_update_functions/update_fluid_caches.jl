@@ -1,11 +1,14 @@
 function mw_avg!(du, u, p, t, system, geo, cell_id)
-    inv_mw = 0.0
+    # A Ref, like species_idx in the moles vector: a plain variable reassigned inside the do-block closure gets
+    # wrapped in an untyped Core.Box, which allocates and dispatches dynamically on every species.
+    # zero(u.mw_avg[cell_id]) starts it at the right number type (Float64, Dual, or tracer).
+    inverse_mw_sum = Ref(zero(u.mw_avg[cell_id]))
 
     for_fields!(u.mass_fractions, u.molecular_weights) do species, u_mass_fractions, u_molecular_weights
-        inv_mw += u_mass_fractions[species[cell_id]] / u_molecular_weights[species[cell_id]]
+        inverse_mw_sum[] += u_mass_fractions[species[cell_id]] / u_molecular_weights[species[cell_id]]
     end
 
-    u.mw_avg[cell_id] = 1.0 / inv_mw
+    u.mw_avg[cell_id] = 1.0 / inverse_mw_sum[]
 end
 
 
