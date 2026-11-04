@@ -1193,7 +1193,7 @@ callbacks = CallbackSet(
 
 #Revise.includet(joinpath(@__DIR__, "state_is_invalid/state_is_invalid.jl"))
 
-state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
+#state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
 
 @time startup_sol = solve(
     startup_prob,
@@ -1205,6 +1205,6 @@ state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
     #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
     #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
     callback = callbacks,
-    isoutofdomain = state_is_invalid_closure,
-    tstops = ustrip.(upreferred.(config.data.tstops))
+    tstops = ustrip.(upreferred.(config.data.tstops)),
+    dtmax = 1e-7
 )
