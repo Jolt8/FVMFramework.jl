@@ -325,8 +325,9 @@ function injector_valve_flow!(
 
     injected_residual_specific_enthalpy = mid_section_specific_enthalpy - clapeyron_ideal_gas_specific_enthalpy
 
-    # Pure nitrous oxide is the first species in system.model (ReidIdeal); 1e5 Pa is a placeholder since ideal-gas cp doesn't depend on pressure
-    pure_nitrous_oxide_composition = SVector(1.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    # Pure nitrous oxide is the first species in system.model (ReidIdeal); 1e5 Pa is a placeholder since ideal-gas cp doesn't depend on pressure.
+    # One entry per species in system.model (7 since carbon monoxide was added); a short vector reads past its end inside Clapeyron.
+    pure_nitrous_oxide_composition = SVector(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
     nitrous_oxide_ideal_gas_cp = mass_isobaric_heat_capacity(system.model, 1e5, mid_section_temperature, pure_nitrous_oxide_composition)
 
