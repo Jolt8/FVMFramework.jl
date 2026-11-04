@@ -87,7 +87,6 @@ fuel_port_geometry = build_fuel_port_geometry(geo, rom_data)
 
 rom_data["cells"][127]
 
-
 n_cells = geo.n_cells
 
 u_proto = ComponentVector(
@@ -145,8 +144,9 @@ config.data = merge(config.data, (
     model = model,
     fuel_port_geometry = fuel_port_geometry,
     tstops = [],
-    cold_flow = true,
-    hot_fire = false
+    cold_flow = false,
+    hot_fire = true,
+    burn_igniter = true
 ))
 
 add_setup_syms!(
@@ -258,6 +258,9 @@ add_setup_syms!(
         minimum_pre_chamber_temperature = 230.0u"K", #temperature threshold where the latent heat of vaporization is ignored in injector_deliver_train_physics
         valve_open_time = 0.1u"s",
         
+        # Port Flow Parameters:
+        port_darcy_friction_factor = 0.02, #Darcy friction factor of the fuel port wall (smooth tube at Re ~ 1e5); used by pressure_driven_mass_flux
+
         # Nozzle Parameters:
         nozzle_discharge_coefficient = 0.98,
         ambient_pressure = 1.0u"atm",
@@ -403,11 +406,9 @@ air_properties = ComponentVector(
 #Ideal gas law for the air:  ρ = P * MW_mix / (R_u * T),   1 / MW_mix = Σ Y_i / MW_i
 initial_ambient_pressure = config.optimized_parameters.ambient_pressure
 
-air_inverse_molecular_weight = 0.0u"mol/g"
-
-for species_name in propertynames(air_initial_conditions.mass_fractions)
-    air_inverse_molecular_weight += air_initial_conditions.mass_fractions[species_name] / air_properties.molecular_weights[species_name]
-end
+#Written as one sum rather than a loop that adds to a global: the loop only works in the REPL (soft scope)
+#and throws UndefVarError when the file is run as a script
+air_inverse_molecular_weight = sum(air_initial_conditions.mass_fractions[species_name] / air_properties.molecular_weights[species_name] for species_name in propertynames(air_initial_conditions.mass_fractions))
 
 air_initial_conditions.density = initial_ambient_pressure / (air_inverse_molecular_weight * 8.314462618u"J/(mol*K)" * room_temp) |> u"kg/m^3"
 
@@ -432,7 +433,9 @@ add_region!(
     region_function = 
     function pre_chamber_region!(du, u, p, t, system, geo, cell_id)
         #The igniter adds its heat to du.heat, so it has to run before cap_heat_flux_to_temp_change! converts du.heat to temperature
-        burn_igniter_puck!(du, u, p, t, system, geo, cell_id)
+        if system.burn_igniter == true
+            burn_igniter_puck!(du, u, p, t, system, geo, cell_id)
+        end
         cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
     end
 )
@@ -532,15 +535,21 @@ add_region!(
     properties = nitrous_oxide_properties,
     property_update_function = 
     function update_mid_section_region!(du, u, p, t, system, geo, cell_id)
-        update_mid_section_properties!(du, u, p, t, system, geo, cell_id)
+        #The mid section's states are frozen (see injector_valve_flow!), so there's nothing to flash. Its pressure cache is
+        #set by injector_valve_flow! as a diagnostic. Skipping the flash also saves three Clapeyron flashes per RHS call.
+        #update_mid_section_properties!(du, u, p, t, system, geo, cell_id) #old version, mid section as a dynamic cell
     end,
-    region_function = 
+    region_function =
     function mid_section_region!(du, u, p, t, system, geo, cell_id)
-        cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
+        #Frozen: its temperature no longer evolves, so it acts as a fixed-temperature wall for the two bulkhead heat
+        #patches. Its contact area is tiny, so the heat it exchanges with the bulkheads is negligible.
+        #cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id) #old version, mid section as a dynamic cell
     end
 )
 
 function update_solid_properties!(du, u, p, t, system, geo, cell_id)
+    system.additional_data.fuel_port_geometry
+    system.fuel_port_geometry
     properties = ComponentVector(system.properties_vec, system.properties_axes)
 
     #u.k[cell_id] = properties.k[cell_id] #not needed right now, but will be in the future
@@ -719,7 +728,10 @@ add_patch!(config;
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
     )
-        adjustable_valve_flow!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        #The valve and injector are now one series-orifice flow from the tank straight to the pre-chamber, computed in
+        #injector_valve_flow! (the mid_section_to_pre_chamber! patch). As its own dynamic cell, the 0.47 cm^3 mid section
+        #forced 1e-8 s steps after the valve opened, for dynamics that never show up in thrust or chamber pressure.
+        #adjustable_valve_flow!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b) #old version, mid section as a dynamic cell
     end
 )
 
@@ -1135,16 +1147,22 @@ add_patch!(config;
 
 n_species = length(propertynames(config.u_proto.mass_fractions))
 
-system_moles_vec_cache = create_species_vector_cache(config.geo.n_cells, n_species)
-system_mole_fractions_vec_cache = create_species_vector_cache(config.geo.n_cells, n_species)
+#Same chunk size finish_fvm_config uses for the du/u DiffCaches
+jacobian_chunk_size = ForwardDiff.pickchunksize(length(Vector(config.u_proto)))
 
 config.data = merge(config.data, (
     n_species = n_species,
-    moles_vec = system_moles_vec_cache,
-    mole_fractions_vec = system_mole_fractions_vec_cache,
+    moles_vec = CellSpeciesVectors(config.geo.n_cells, n_species, jacobian_chunk_size),
+    mole_fractions_vec = CellSpeciesVectors(config.geo.n_cells, n_species, jacobian_chunk_size),
 ))
 
 function solve_system!(du, u, p, t, system, geo)
+    #Point moles_vec and mole_fractions_vec at the buffers matching this call's number type (Float64, Dual, or tracer).
+    #u.density comes from u_vec and first(p) carries any parameter duals, same idea as first(u_vec) + first(p) in unpack_fvm_state.
+    
+    select_cell_species_buffer!(system.moles_vec, u.density[1] + first(p))
+    select_cell_species_buffer!(system.mole_fractions_vec, u.density[1] + first(p))
+
     #Current cell volumes from the port radius. Has to come first: every property update and flux below divides by them.
     update_fuel_port_geometry!(du, u, p, t, system, geo)
 
@@ -1172,8 +1190,7 @@ system_data = (;
 
 du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, system_data, check_units = false);
 
-#Selects the moles_vec / mole_fractions_vec buffers that match the current number type (Float64, Dual, tracer) before solving
-f_closure_implicit = (du, u, p, t) -> fvm_operator_with_species_vectors!(du, u, p, t, system, geo, solve_system!)
+f_closure_implicit = (du, u, p, t) -> fvm_operator!(du, u, p, t, system, geo, solve_system!)
 
 p_guess = ustrip.(upreferred.(deepcopy(config.optimized_parameters)))
 
@@ -1184,10 +1201,19 @@ jac_sparsity = ADTypes.jacobian_sparsity(
 )
 
 t0 = 0.0
-switch_time = 0.001
+switch_time = 0.002
 tMax = 10.0
 
-ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity))
+#Dense Jacobian for now. jac_sparsity above comes from LOCAL sparsity detection at t = 0, which only records the
+#couplings active at that exact state: the valve is closed (injector flow = 0 * everything) and the nozzle is off
+#(chamber at ambient). Once the valve opens, the flowing state has 5525 Jacobian nonzeros and 3406 of them are
+#missing from the t = 0 pattern, so the sparse Jacobian was wrong and Newton failed on almost every step
+#(~1e-7 s steps). With the dense Jacobian the cold flow runs 0.1 s -> 0.2 s in ~16 s and 168 steps.
+#To go back to sparse, the pattern has to cover every regime: e.g. the union of local patterns at t = 0 and at
+#states with the valve open, the nozzle flowing, and (for hot fires) the regression and combustion active.
+ode_func = ODEFunction(f_closure_implicit)
+
+#ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity)) #old version, sparsity pattern from t = 0 only
 startup_prob = ODEProblem(ode_func, u0_vec, (t0, switch_time), p_guess)
 
 Revise.includet(joinpath(@__DIR__, "callbacks", "stop_sol_callbacks.jl"))
@@ -1202,16 +1228,44 @@ Revise.includet(joinpath(@__DIR__, "state_is_invalid", "state_is_invalid.jl"))
 
 state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
 
-@time startup_sol = solve(
+#Implicit from the start. The laminar port flux equalizes pressure between neighbouring port cells on a ~1 ns
+#timescale (Jacobian entries ~1e11), so an explicit method like Tsit5 needs nanosecond steps and blows up on its
+#first trial step. FBDF steps over that stiffness. The small first dt keeps the initial step from being sized
+#by the hundreds of states that barely move.
+VSCodeServer.@profview sol = solve(
     startup_prob,
-    Tsit5(),
+    #FBDF(linsolve = SparspakFactorization(), autodiff = ADTypes.AutoForwardDiff()),
+    #dt = 1e-6,
+    #Tsit5(), #old version, explicit
     #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
-    #FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()),
+    #Dense ForwardDiff Jacobian with the default dense LU (see the note above ode_func)
+    #FBDF(autodiff = ADTypes.AutoForwardDiff()),
+    Tsit5(),
+    dt = 1e-6,
+    #FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()), #needs a sparsity pattern that covers every regime
     #AutoTsit5(FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff())),
-    #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoFiniteDiff()),
+    #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoForwardDiff()),
     #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
     #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
     callback = callbacks,
     isoutofdomain = state_is_invalid_closure,
     tstops = ustrip.(upreferred.(config.data.tstops))
 )
+
+desired_shown_steps = 250
+save_fraction = desired_shown_steps / length(sol.t)
+
+reduced_sol = (
+    u = [[sol.u[i] for i in 1:(Int(ceil(1/save_fraction))):length(sol.u)]..., sol.u[end]],
+    t = [sol.t[1:(Int(ceil(1/save_fraction))):length(sol.t)]..., sol.t[end]]
+)
+
+du_named, u_named = regenerate_fvm_state(reduced_sol, system, solve_system!, config.geo, p_guess, save_properties_and_caches = true, track_progress = true);
+
+using Plots
+
+pre_chamber_cell_id = get_cellset(config.geo, "pre_chamber")[1]
+plot(reduced_sol.t, [u_named[i].temperature[pre_chamber_cell_id] for i in eachindex(reduced_sol.t)])
+plot(reduced_sol.t .* u"s", [u_named[i].neglected_injector_cooling_power[pre_chamber_cell_id]u"W" |> u"kW" for i in eachindex(reduced_sol.t)])
+
+plot(reduced_sol.t, [u_named[i].igniter_mass[1] for i in eachindex(reduced_sol.t)])
