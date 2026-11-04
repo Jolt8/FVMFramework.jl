@@ -37,7 +37,10 @@ function build_fuel_port_geometry(geo, rom_data)
     for fluid_cell_id in sorted_fluid_domain_cells
         rom_fluid_cell = rom_data["cells"][fluid_cell_id]
 
-        axial_length = rom_fluid_cell["z_max"] - rom_fluid_cell["z_min"]
+        # Float64 and Int conversions below: rom_data comes from JSON, so a value written as 0 instead of 0.0 parses as an Int.
+        # One mismatched station would give the stations vector a non-concrete element type, and every station read
+        # in the RHS would then be dynamically dispatched.
+        axial_length = Float64(rom_fluid_cell["z_max"] - rom_fluid_cell["z_min"])
 
         # The fuel grain cell for this station is the fuel_grain neighbour across the fluid cell's cylindrical wall
         fuel_grain_cell_id = 0
@@ -58,7 +61,7 @@ function build_fuel_port_geometry(geo, rom_data)
 
         rom_fuel_grain_cell = rom_data["cells"][fuel_grain_cell_id]
 
-        grain_outer_radius = rom_fuel_grain_cell["r_outer"]
+        grain_outer_radius = Float64(rom_fuel_grain_cell["r_outer"])
 
         # The liner cell across the grain's outer wall. Its radius never changes, but the grain's
         # half-cell distance to it does, so the conduction across that face is recomputed every call.
@@ -102,10 +105,10 @@ function build_fuel_port_geometry(geo, rom_data)
             upper_station_index = station_index + 1,
             fluid_face_lower = fluid_face_lower,
             fluid_face_upper = fluid_face_upper,
-            fluid_centroid_distance = fluid_centroid_distance,
+            fluid_centroid_distance = Float64(fluid_centroid_distance),
             grain_face_lower = grain_face_lower,
             grain_face_upper = grain_face_upper,
-            grain_centroid_distance = grain_centroid_distance,
+            grain_centroid_distance = Float64(grain_centroid_distance),
         ))
     end
 
@@ -118,7 +121,7 @@ function build_fuel_port_geometry(geo, rom_data)
     end
 
     # The pre-chamber is a full-diameter gas cell. Its radius sets the contraction loss into the port.
-    pre_chamber_radius = rom_data["cells"][pre_chamber_cell_id]["r_outer"]
+    pre_chamber_radius = Float64(rom_data["cells"][pre_chamber_cell_id]["r_outer"])
 
     return (
         stations = [station for station in stations],
