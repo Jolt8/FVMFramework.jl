@@ -32,6 +32,14 @@ function ideal_gas_heat_capacities!(du, u, p, t, system, geo, cell_id)
     # Replace with NASA 7-coefficient polynomials before trusting chamber temperatures.
     maximum_reid_polynomial_temperature = 1000.0
 
+    # Clapeyron takes log(T) inside the ideal-gas Helmholtz energy, so a negative trial temperature from a rejected
+    # Newton iterate would throw and end the run. NaN makes the solver reject the iterate instead (!(T > 0) also catches NaN).
+    if !(u.temperature[cell_id] > 0)
+        u.cp[cell_id] = oftype(u.temperature[cell_id], NaN)
+        u.cv[cell_id] = oftype(u.temperature[cell_id], NaN)
+        return nothing
+    end
+
     property_temperature = min(u.temperature[cell_id], maximum_reid_polynomial_temperature)
 
     cell_mole_fractions = system.mole_fractions_vec[cell_id]
