@@ -2,25 +2,37 @@ function nozzle_outlet_simple!(
     du, u, p, t, system, geo, 
     idx_a, face_a, idx_b, face_b,
 )
-    (
-        dist,
-        face_area_a, face_normal_a, face_distance_a, vol_a,
-        face_area_b, face_normal_b, face_distance_b, vol_b
-    ) = interface_geometry(geo, idx_a, face_a, idx_b, face_b)
-
+    # This is a boundary face: idx_b and face_b are both 0, so there is no neighbour to look up geometry for
+    # (interface_geometry would index cell 0). The throat area comes from the CAD data instead.
     nozzle_throat_area = system.cad_data.nozzle_throat_area
 
     gamma = u.cp[idx_a] / u.cv[idx_a]
 
-    mach_number = sqrt(
-        (2 / (gamma - 1)) * 
-        ((u.pressure[idx_a] / p.ambient_pressure)^((gamma - 1) / gamma) - 1)
-    )
+    # Specific gas constant of the mixture in the cell: R = R_u / MW (J/(kg*K)), with mw_avg in kg/mol
+    universal_gas_constant = 8.314462618
 
-    mass_flow = p.nozzle_throat_area * 
-        u.pressure[idx_a] / sqrt(u.temperature[idx_a]) * 
-        sqrt(gamma / R_gas[idx_a]) *
-        mach_number * (1 + ((gamma - 1) / 2) * mach_number^2)^(-(gamma + 1) / (2 * (gamma - 1)))
+    specific_gas_constant = universal_gas_constant / u.mw_avg[idx_a]
+
+    chamber_pressure = u.pressure[idx_a]
+
+    # The port cell is treated as the stagnation state ahead of the throat. Below ambient pressure nothing
+    # flows out (backflow into the motor isn't modelled), and the square root below would be undefined.
+    if chamber_pressure <= p.ambient_pressure
+        return nothing
+    end
+
+    # Isentropic throat Mach number for expansion from chamber pressure down to ambient. It can't exceed 1 at
+    # the throat: once the pressure ratio passes the critical ratio, ((γ + 1) / 2)^(γ / (γ - 1)) ≈ 1.8, the throat
+    # chokes and the Mach number there stays at 1. Without the cap, the formula below would give a falling mass
+    # flow as the chamber pressure rises.
+    unchoked_throat_mach_number_squared = (2 / (gamma - 1)) * ((chamber_pressure / p.ambient_pressure)^((gamma - 1) / gamma) - 1)
+
+    throat_mach_number = min(sqrt(unchoked_throat_mach_number_squared), 1.0)
+
+    mass_flow = p.nozzle_discharge_coefficient * nozzle_throat_area *
+        chamber_pressure / sqrt(u.temperature[idx_a]) *
+        sqrt(gamma / specific_gas_constant) *
+        throat_mach_number * (1 + ((gamma - 1) / 2) * throat_mach_number^2)^(-(gamma + 1) / (2 * (gamma - 1)))
 
 
     #=
