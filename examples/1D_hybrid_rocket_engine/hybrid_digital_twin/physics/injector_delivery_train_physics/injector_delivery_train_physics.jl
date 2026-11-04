@@ -139,14 +139,41 @@ function two_phase_mass_isochoric_heat_capacity(model, volume, temperature, amou
     return (hot_specific_internal_energy - cold_specific_internal_energy) / (2 * temperature_step)
 end
 
+"""
+Mark a nitrous oxide cell's properties as invalid (NaN) instead of flashing a non-physical state.
+
+The solver evaluates trial states it may later reject. If a trial step drains a cell to zero or negative mass,
+pure_component_vt_flash would throw and end the whole solve. Writing NaN instead makes every flux that uses this
+cell NaN, so the step's error estimate is NaN and the solver rejects it and retries with a smaller step.
+Nothing is clamped, so an invalid state can never be carried forward silently.
+"""
+function set_nitrous_oxide_properties_invalid!(u, cell_id)
+    not_a_number = oftype(u.density[cell_id], NaN)
+
+    u.pressure[cell_id] = not_a_number
+    u.nitrous_oxide_vapor_quality[cell_id] = not_a_number
+    u.outflow_density[cell_id] = not_a_number
+    u.specific_internal_energy[cell_id] = not_a_number
+    u.specific_enthalpy[cell_id] = not_a_number
+    u.cp[cell_id] = not_a_number
+    u.cv[cell_id] = not_a_number
+end
+
 function update_tank_properties!(du, u, p, t, system, geo, cell_id)
     model = system.nitrous_oxide_model
 
     vol = geo.cell_volumes[cell_id]
-    
+
     tank_mass = u.density[cell_id] * vol
 
     tank_n_moles = tank_mass / u.molecular_weights.nitrous_oxide[cell_id]
+
+    # A rejected trial step can drain the cell; flag it instead of letting the flash throw.
+    # Written as !(x > 0) so NaN is caught too (NaN <= 0 is false).
+    if !(tank_n_moles > 0) || !(u.temperature[cell_id] > 0)
+        set_nitrous_oxide_properties_invalid!(u, cell_id)
+        return nothing
+    end
 
     tank_flash = pure_component_vt_flash(
         model,
@@ -193,6 +220,14 @@ function update_mid_section_properties!(du, u, p, t, system, geo, cell_id)
 
     mid_section_n_moles = mid_section_mass / u.molecular_weights.nitrous_oxide[cell_id]
 
+    # The mid section holds under a milligram of vapor before the valve opens, so a trial step that's too long can
+    # empty it. Flag that state instead of letting the flash throw, so the solver rejects the step and shortens it.
+    # Written as !(x > 0) so NaN is caught too (NaN <= 0 is false).
+    if !(mid_section_n_moles > 0) || !(u.temperature[cell_id] > 0)
+        set_nitrous_oxide_properties_invalid!(u, cell_id)
+        return nothing
+    end
+
     mid_section_flash = pure_component_vt_flash(
         model,
         vol,
@@ -216,20 +251,62 @@ function update_mid_section_properties!(du, u, p, t, system, geo, cell_id)
     #u.cv[cell_id] = phase_weighted_mass_property(mass_isochoric_heat_capacity, model, mid_section_flash) #old version, misses the latent-heat term
 end
 
+"""
+Square root of an orifice pressure drop, with a finite slope at zero:
+
+    sqrt_regularized(ΔP) = ΔP / (ΔP^2 + ΔP_reg^2)^(1/4)
+
+ΔP: pressure drop across the orifice (Pa); ΔP_reg: regularization pressure (Pa).
+
+Orifice laws give ṁ ∝ sqrt(ΔP), whose slope is infinite at ΔP = 0. That is exactly where the feed train sits before
+the valve opens and wherever two cells equalize, and an infinite slope in the Jacobian stalls the implicit solver's
+Newton iterations. This form equals sqrt(ΔP) to within 0.5% once ΔP > 7 ΔP_reg, and is linear below ΔP_reg.
+With ΔP_reg = 1 kPa it is exact for every real operating point (pressure drops of bar to tens of bar).
+"""
+function regularized_square_root_of_pressure_drop(pressure_drop)
+    regularization_pressure = 1000.0
+
+    return pressure_drop / (pressure_drop^2 + regularization_pressure^2)^0.25
+end
+
+"""
+Fraction the tank valve is open at time t: closed until valve_open_time, then valve_opening.
+
+Computed from t on every call rather than stored in p. Writing it into p from inside the RHS (the old
+open_injector_valve!) overwrote the valve_opening parameter, and because the valve patch runs before the injector
+patch, the valve always saw the value set during the previous RHS call. The jump at valve_open_time is in tstops.
+"""
+function tank_valve_opening_fraction(p, t)
+    if t > p.valve_open_time
+        return p.valve_opening
+    else
+        return zero(p.valve_opening)
+    end
+end
+
 function adjustable_valve_flow!(
     du, u, p, t, system, geo,
     tank_cell_id, face_a, mid_section_cell_id, face_b,
 )
-    if u.pressure[tank_cell_id] - u.pressure[mid_section_cell_id] <= 0
+    valve_pressure_drop = u.pressure[tank_cell_id] - u.pressure[mid_section_cell_id]
+
+    # No backflow into the tank: the feed train only ever carries nitrous from the tank toward the chamber
+    if valve_pressure_drop <= 0
         return 0.0
     end
-    
-    #Notice that valve_opening uses system.valve_opening, this is because we're going to be adjusting this over time
+
     #The flow is set by the phase actually leaving the tank (liquid while any remains), not the tank's bulk density
+    #    ṁ = opening * K_v * sqrt(ρ_out * ΔP)       (from Q = opening * K_v * sqrt(ΔP / ρ_out) and ṁ = ρ_out Q)
+    #ṁ: mass flow (kg/s); K_v: valve_flow_capacity_factor (m^2); ρ_out: density of the phase leaving the tank (kg/m^3)
+    tank_outflow_density = u.outflow_density[tank_cell_id]
 
-    volumetric_flow = p.valve_opening * p.valve_flow_capacity_factor * sqrt((u.pressure[tank_cell_id] - u.pressure[mid_section_cell_id]) / u.outflow_density[tank_cell_id])
+    valve_opening = tank_valve_opening_fraction(p, t)
 
-    mass_flow = volumetric_flow * u.outflow_density[tank_cell_id]
+    mass_flow = valve_opening * p.valve_flow_capacity_factor * sqrt(tank_outflow_density) * regularized_square_root_of_pressure_drop(valve_pressure_drop)
+
+    #Old version (exact sqrt has an infinite slope at ΔP = 0, and the opening came from a value written into p):
+    #volumetric_flow = p.valve_opening * p.valve_flow_capacity_factor * sqrt((u.pressure[tank_cell_id] - u.pressure[mid_section_cell_id]) / u.outflow_density[tank_cell_id])
+    #mass_flow = volumetric_flow * u.outflow_density[tank_cell_id]
 
     tank_volume = geo.cell_volumes[tank_cell_id]
     mid_section_volume = geo.cell_volumes[mid_section_cell_id]
@@ -255,27 +332,21 @@ function adjustable_valve_flow!(
     return mass_flow
 end
 
-function open_injector_valve!(du, u, p, t, system, geo)
-    if t > p.valve_open_time
-        p.valve_opening = 1.0
-    else
-        p.valve_opening = 0.0
-    end
-end
-
 function injector_valve_flow!(
     du, u, p, t, system, geo,
     mid_section_cell_id, face_a, pre_chamber_cell_id, face_b,
 )
-    open_injector_valve!(du, u, p, t, system, geo)
-    
+
     # Reset the diagnostic first, so it reads zero (not a stale value) whenever there is no injection
     u.neglected_injector_cooling_power[pre_chamber_cell_id] = 0.0
 
     post_injector_cell_ids = get_cellset(geo, "pre_chamber")[1]
     chamber_pressure = sum([u.pressure[cell_id] for cell_id in post_injector_cell_ids]) / length(post_injector_cell_ids)
 
-    if u.pressure[mid_section_cell_id] - chamber_pressure <= 0
+    injector_pressure_drop = u.pressure[mid_section_cell_id] - chamber_pressure
+
+    # No backflow: chamber gas never flows back into the pure-nitrous feed train
+    if injector_pressure_drop <= 0
         return 0.0
     end
 
@@ -283,9 +354,13 @@ function injector_valve_flow!(
 
     injector_orifice_area = system.cad_data.injector_orifice_area
 
-    volumetric_flow = p.injector_discharge_coefficient * injector_orifice_area * sqrt((2 * (u.pressure[mid_section_cell_id] - chamber_pressure)) / mid_section_outflow_density)
+    #    ṁ = C_d * A * sqrt(2 * ρ * ΔP)       (single-phase incompressible orifice)
+    #C_d: injector_discharge_coefficient (-); A: orifice area (m^2); ρ: density leaving the mid section (kg/m^3); ΔP: injector pressure drop (Pa)
+    oxidizer_mass_flow = p.injector_discharge_coefficient * injector_orifice_area * sqrt(2 * mid_section_outflow_density) * regularized_square_root_of_pressure_drop(injector_pressure_drop)
 
-    oxidizer_mass_flow = volumetric_flow * mid_section_outflow_density
+    #Old version (exact sqrt, with an infinite slope at ΔP = 0):
+    #volumetric_flow = p.injector_discharge_coefficient * injector_orifice_area * sqrt((2 * (u.pressure[mid_section_cell_id] - chamber_pressure)) / mid_section_outflow_density)
+    #oxidizer_mass_flow = volumetric_flow * mid_section_outflow_density
 
     # The fuel regression law needs the injected oxidizer flow (G_ox = ṁ_ox / port area), so it's stored here.
     # It stays zero, as the cache is reset every call, whenever the early return above stops the injection.
