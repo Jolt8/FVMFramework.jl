@@ -345,6 +345,13 @@ function fuel_grain_to_liner_conduction!(du, u, p, t, system, geo, fuel_grain_ce
 
     fuel_port_radius = u.fuel_port_radius[fuel_grain_cell_id]
 
+    # A rejected trial state can carry a non-positive port radius, where log() would throw and end the run.
+    # NaN makes the solver reject it instead (!(r > 0) also catches NaN).
+    if !(fuel_port_radius > 0)
+        du.heat[fuel_grain_cell_id] += oftype(fuel_port_radius, NaN)
+        return nothing
+    end
+
     grain_half_cell_distance = (station.grain_outer_radius / 2) * log(station.grain_outer_radius / fuel_port_radius)
 
     grain_face_area = geo.cell_face_areas[fuel_grain_cell_id, station.grain_outer_face]
