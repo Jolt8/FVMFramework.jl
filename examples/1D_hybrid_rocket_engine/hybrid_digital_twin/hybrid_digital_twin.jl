@@ -397,11 +397,14 @@ air_properties = ComponentVector(
     R_gas = 8.314u"J/(mol*K)"
 )
 
-initial_igniter_puck_mass = config.optimized_parameters.igniter_density * config.data.cad_data.igniter_puck_volume
+#Uses the unitful cad_data: config.data.cad_data has its units stripped, which would turn this mass into a density
+initial_igniter_puck_mass = config.optimized_parameters.igniter_density * cad_data.igniter_puck_volume |> u"kg"
 config.u_proto.igniter_mass = [initial_igniter_puck_mass]
 config.data = merge(config.data, (
-    initial_igniter_mass = initial_igniter_puck_mass,
+    initial_igniter_mass = ustrip(upreferred(initial_igniter_puck_mass)), #stripped like the rest of system data, since the RHS works in plain SI numbers
 ))
+
+Revise.includet(joinpath(@__DIR__, "physics", "igniter_physics", "igniter_physics.jl"))
 
 add_region!(
     config, "pre_chamber";
@@ -414,6 +417,8 @@ add_region!(
     end,
     region_function = 
     function pre_chamber_region!(du, u, p, t, system, geo, cell_id)
+        #The igniter adds its heat to du.heat, so it has to run before cap_heat_flux_to_temp_change! converts du.heat to temperature
+        burn_igniter_puck!(du, u, p, t, system, geo, cell_id)
         cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
     end
 )
@@ -694,7 +699,7 @@ add_region!(
 add_patch!(config;
     owner = "tank",
     connection = "mid_section",
-    patch_function = function tank_to_mid_section_flux!(
+    patch_function = function tank_to_mid_section!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
     )
@@ -706,7 +711,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "mid_section",
     connection = "injector_bulkhead_top",
-    patch_function = function mid_seciton_to_injector_bulkhead_top_flux!(
+    patch_function = function mid_section_to_injector_bulkhead_top!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
     )
@@ -724,7 +729,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "mid_section",
     connection = "injector_bulkhead_bottom",
-    patch_function = function mid_section_to_injector_bulkhead_bottom_flux!(
+    patch_function = function mid_section_to_injector_bulkhead_bottom!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b,
     )
@@ -742,7 +747,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "injector_bulkhead_top",
     connection = "injector_bulkhead_bottom",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function injector_bulkhead_top_to_injector_bulkhead_bottom!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b
     )
@@ -753,7 +758,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "mid_section",
     connection = "pre_chamber",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function mid_section_to_pre_chamber!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b
     )
@@ -768,7 +773,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "pre_chamber",
     connection = "injector_bulkhead_bottom",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function pre_chamber_to_injector_bulkhead_bottom!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b
     )
@@ -781,7 +786,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "phenolic_liner_top",
     connection = "injector_bulkhead_bottom",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function phenolic_liner_top_to_injector_bulkhead_bottom!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b
     )
@@ -792,7 +797,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "aluminum_housing_top",
     connection = "injector_bulkhead_bottom",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function aluminum_housing_top_to_injector_bulkhead_bottom!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b
     )
@@ -809,7 +814,7 @@ Revise.includet(joinpath(@__DIR__, "physics", "chamber_convective_heat_transfer"
 add_patch!(config;
     owner = "pre_chamber",
     connection = "phenolic_liner_top",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function pre_chamber_to_phenolic_liner_top!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b
     )
@@ -823,7 +828,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "phenolic_liner_top",
     connection = "aluminum_housing_top",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function phenolic_liner_top_to_aluminum_housing_top!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b
     )
@@ -836,7 +841,7 @@ Revise.includet(joinpath(@__DIR__, "physics", "pressure_driven_mass_flux", "pres
 add_patch!(config;
     owner = "pre_chamber",
     connection = "fluid_domain", #1-n cells,
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function pre_chamber_to_fluid_domain!(
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b
     )
@@ -979,7 +984,7 @@ end
 add_patch!(config;
     owner = "fluid_domain",
     connection = "fuel_grain",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function fluid_domain_to_fuel_grain!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
@@ -995,7 +1000,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "fuel_grain",
     connection = "phenolic_liner",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function fuel_grain_to_phenolic_liner!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
@@ -1008,7 +1013,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "phenolic_liner",
     connection = "aluminum_housing",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function phenolic_liner_to_aluminum_housing!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
@@ -1022,7 +1027,7 @@ Revise.includet(joinpath(@__DIR__, "physics", "nozzle_outlet", "nozzle_outlet_cl
 Revise.includet(joinpath(@__DIR__, "physics", "nozzle_outlet", "nozzle_outlet_simple.jl"))
 
 add_patch!(config, "fluid_domain_to_nozzle_inlet";
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function fluid_domain_to_nozzle_inlet!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
@@ -1058,7 +1063,7 @@ add_patch!(config, "fluid_domain_to_nozzle_inlet";
 add_patch!(config;
     owner = "nozzle_top",
     connection = "aluminum_housing_near_nozzle_top",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function nozzle_top_to_aluminum_housing_near_nozzle_top!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
@@ -1069,7 +1074,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "nozzle_top",
     connection = "nozzle_bottom",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function nozzle_top_to_nozzle_bottom!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
@@ -1080,7 +1085,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "nozzle_bottom",
     connection = "aluminum_housing_near_nozzle_bottom",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function nozzle_bottom_to_aluminum_housing_near_nozzle_bottom!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
@@ -1091,7 +1096,7 @@ add_patch!(config;
 add_patch!(config;
     owner = "nozzle_bottom",
     connection = "nozzle_retainer",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function nozzle_bottom_to_nozzle_retainer!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
@@ -1104,14 +1109,10 @@ get_facetset(config.geo, "aluminum_housing_near_nozzle_bottom", "nozzle_retainer
 add_patch!(config;
     owner = "aluminum_housing_near_nozzle_bottom",
     connection = "nozzle_retainer",
-    patch_function = function fuel_wall_patch_flux!(
+    patch_function = function aluminum_housing_near_nozzle_bottom_to_nozzle_retainer!(
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
-        @show idx_a
-        @show face_a
-        @show idx_b
-        @show face_b
         heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
