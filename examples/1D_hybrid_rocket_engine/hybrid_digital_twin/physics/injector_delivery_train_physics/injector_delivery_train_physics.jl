@@ -332,6 +332,29 @@ function adjustable_valve_flow!(
     return mass_flow
 end
 
+"""
+Nitrous flow from the tank, through the valve and the injector in series, into the pre-chamber.
+
+The mid section between the valve and the injector holds only 0.47 cm^3. Modelled as its own cell, it filled in
+about half a millisecond after the valve opened and then sat at the edge of the vapor dome, forcing 1e-8 to 1e-7 s
+steps with repeated Newton failures. Its dynamics last microseconds, the burn lasts seconds, and none of it shows
+up in thrust, chamber pressure or O/F. So the two orifices are treated as quasi-steady and in series instead:
+the same mass flow passes both, and the mid-section pressure is whatever makes that true.
+
+    valve:      ΔP_valve    = ṁ^2 / (K_v^2 ρ)               (from ṁ = K_v sqrt(ρ ΔP_valve))
+    injector:   ΔP_injector = ṁ^2 / (2 ρ (C_d A)^2)         (from ṁ = C_d A sqrt(2 ρ ΔP_injector))
+    together:   ΔP_total = ΔP_valve + ΔP_injector
+         →      ṁ = K_v * sqrt(2) * C_d A * sqrt(ρ ΔP_total) / sqrt(2 (C_d A)^2 + K_v^2)
+
+ṁ: oxidizer mass flow (kg/s); K_v: valve_flow_capacity_factor times the opening fraction (m^2), zero while the valve
+is closed, which gives ṁ = 0 without dividing by zero; C_d A: injector discharge coefficient times orifice area (m^2);
+ρ: density of the phase leaving the tank (kg/m^3), assumed not to change through the line (incompressible orifices);
+ΔP_total: tank pressure minus pre-chamber pressure (Pa).
+
+The flow is isenthalpic (throttling), so the stream arrives in the pre-chamber with the tank outflow's enthalpy.
+The mid-section cell stays in the geometry with frozen states; its pressure cache is overwritten with the series
+pressure P_mid = P_pre-chamber + ΔP_injector so it can still be plotted and compared with a pressure transducer.
+"""
 function injector_valve_flow!(
     du, u, p, t, system, geo,
     mid_section_cell_id, face_a, pre_chamber_cell_id, face_b,
@@ -340,40 +363,51 @@ function injector_valve_flow!(
     # Reset the diagnostic first, so it reads zero (not a stale value) whenever there is no injection
     u.neglected_injector_cooling_power[pre_chamber_cell_id] = 0.0
 
-    post_injector_cell_ids = get_cellset(geo, "pre_chamber")[1]
-    chamber_pressure = sum([u.pressure[cell_id] for cell_id in post_injector_cell_ids]) / length(post_injector_cell_ids)
+    tank_cell_id = get_cellset(geo, "tank")[1]
 
-    injector_pressure_drop = u.pressure[mid_section_cell_id] - chamber_pressure
+    chamber_pressure = u.pressure[pre_chamber_cell_id]
+
+    feed_pressure_drop = u.pressure[tank_cell_id] - chamber_pressure
+
+    # The mid section sits at chamber pressure while nothing flows (until the valve flow below overwrites it)
+    u.pressure[mid_section_cell_id] = chamber_pressure
 
     # No backflow: chamber gas never flows back into the pure-nitrous feed train
-    if injector_pressure_drop <= 0
+    if feed_pressure_drop <= 0
         return 0.0
     end
 
-    mid_section_outflow_density = u.outflow_density[mid_section_cell_id]
+    tank_outflow_density = u.outflow_density[tank_cell_id]
 
     injector_orifice_area = system.cad_data.injector_orifice_area
 
-    #    ṁ = C_d * A * sqrt(2 * ρ * ΔP)       (single-phase incompressible orifice)
-    #C_d: injector_discharge_coefficient (-); A: orifice area (m^2); ρ: density leaving the mid section (kg/m^3); ΔP: injector pressure drop (Pa)
-    oxidizer_mass_flow = p.injector_discharge_coefficient * injector_orifice_area * sqrt(2 * mid_section_outflow_density) * regularized_square_root_of_pressure_drop(injector_pressure_drop)
+    injector_effective_area = p.injector_discharge_coefficient * injector_orifice_area
 
-    #Old version (exact sqrt, with an infinite slope at ΔP = 0):
-    #volumetric_flow = p.injector_discharge_coefficient * injector_orifice_area * sqrt((2 * (u.pressure[mid_section_cell_id] - chamber_pressure)) / mid_section_outflow_density)
-    #oxidizer_mass_flow = volumetric_flow * mid_section_outflow_density
+    valve_effective_area = tank_valve_opening_fraction(p, t) * p.valve_flow_capacity_factor
+
+    oxidizer_mass_flow = valve_effective_area * sqrt(2.0) * injector_effective_area * sqrt(tank_outflow_density) * regularized_square_root_of_pressure_drop(feed_pressure_drop) / sqrt(2 * injector_effective_area^2 + valve_effective_area^2)
+
+    # Mid-section pressure diagnostic: chamber pressure plus the injector's share of the pressure drop
+    injector_pressure_drop = oxidizer_mass_flow^2 / (2 * tank_outflow_density * injector_effective_area^2)
+
+    u.pressure[mid_section_cell_id] = chamber_pressure + injector_pressure_drop
+
+    #Old version (the mid section was its own dynamic cell, fed by adjustable_valve_flow! and drained here):
+    #injector_pressure_drop = u.pressure[mid_section_cell_id] - chamber_pressure
+    #oxidizer_mass_flow = p.injector_discharge_coefficient * injector_orifice_area * sqrt(2 * mid_section_outflow_density) * regularized_square_root_of_pressure_drop(injector_pressure_drop)
 
     # The fuel regression law needs the injected oxidizer flow (G_ox = ṁ_ox / port area), so it's stored here.
     # It stays zero, as the cache is reset every call, whenever the early return above stops the injection.
     u.injector_oxidizer_mass_flow[pre_chamber_cell_id] = oxidizer_mass_flow
 
-    mid_section_volume = geo.cell_volumes[mid_section_cell_id]
+    tank_volume = geo.cell_volumes[tank_cell_id]
     pre_chamber_volume = geo.cell_volumes[pre_chamber_cell_id]
 
-    mid_section_mass = u.density[mid_section_cell_id] * mid_section_volume
+    tank_mass = u.density[tank_cell_id] * tank_volume
     pre_chamber_mass = u.density[pre_chamber_cell_id] * pre_chamber_volume
 
     # Mass conservation, written for the density states of two fixed-volume cells
-    du.density[mid_section_cell_id] += -oxidizer_mass_flow / mid_section_volume
+    du.density[tank_cell_id] += -oxidizer_mass_flow / tank_volume
     du.density[pre_chamber_cell_id] += oxidizer_mass_flow / pre_chamber_volume
 
 
@@ -381,30 +415,31 @@ function injector_valve_flow!(
     # The pre-chamber works on the ideal-gas sensible basis used by the chamber fluxes (h = cp T, e = cv T),
     # while the mid section uses Clapeyron's absolute values. The two references don't match, so the
     # injected enthalpy is moved onto the chamber basis by splitting it into an ideal-gas part and a residual:
-    #     h_injected = cp_N2O,ideal(T_mid) * T_mid + (h_mid - h_N2O,ideal(T_mid))
-    # The residual (h_mid - h_ideal) doesn't depend on the reference state. For liquid nitrous it is strongly
+    #     h_injected = cp_N2O,ideal(T_tank) * T_tank + (h_tank,out - h_N2O,ideal(T_tank))
+    # The residual (h - h_ideal) doesn't depend on the reference state. For liquid nitrous it is strongly
     # negative (about -236 kJ/kg for saturated liquid at 293 K with PR): it is the energy the injected
-    # liquid has to absorb to become gas.
-    mid_section_specific_enthalpy = u.specific_enthalpy[mid_section_cell_id]
+    # liquid has to absorb to become gas. Throttling through the valve and injector keeps the enthalpy
+    # constant, so the tank outflow's enthalpy is what arrives.
+    tank_outflow_specific_enthalpy = u.specific_enthalpy[tank_cell_id]
 
-    mid_section_temperature = u.temperature[mid_section_cell_id]
-    mid_section_pressure = u.pressure[mid_section_cell_id]
+    tank_temperature = u.temperature[tank_cell_id]
+    tank_pressure = u.pressure[tank_cell_id]
 
-    nitrous_oxide_molar_mass = u.molecular_weights.nitrous_oxide[mid_section_cell_id]
+    nitrous_oxide_molar_mass = u.molecular_weights.nitrous_oxide[tank_cell_id]
 
     nitrous_oxide_ideal_gas_model = Clapeyron.idealmodel(system.nitrous_oxide_model)
 
-    clapeyron_ideal_gas_specific_enthalpy = enthalpy(nitrous_oxide_ideal_gas_model, mid_section_pressure, mid_section_temperature) / nitrous_oxide_molar_mass
+    clapeyron_ideal_gas_specific_enthalpy = enthalpy(nitrous_oxide_ideal_gas_model, tank_pressure, tank_temperature) / nitrous_oxide_molar_mass
 
-    injected_residual_specific_enthalpy = mid_section_specific_enthalpy - clapeyron_ideal_gas_specific_enthalpy
+    injected_residual_specific_enthalpy = tank_outflow_specific_enthalpy - clapeyron_ideal_gas_specific_enthalpy
 
     # Pure nitrous oxide is the first species in system.model (ReidIdeal); 1e5 Pa is a placeholder since ideal-gas cp doesn't depend on pressure.
     # One entry per species in system.model (7 since carbon monoxide was added); a short vector reads past its end inside Clapeyron.
     pure_nitrous_oxide_composition = SVector(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 
-    nitrous_oxide_ideal_gas_cp = mass_isobaric_heat_capacity(system.model, 1e5, mid_section_temperature, pure_nitrous_oxide_composition)
+    nitrous_oxide_ideal_gas_cp = mass_isobaric_heat_capacity(system.model, 1e5, tank_temperature, pure_nitrous_oxide_composition)
 
-    injected_sensible_specific_enthalpy = nitrous_oxide_ideal_gas_cp * mid_section_temperature + injected_residual_specific_enthalpy
+    injected_sensible_specific_enthalpy = nitrous_oxide_ideal_gas_cp * tank_temperature + injected_residual_specific_enthalpy
 
 
     # Species. All injected nitrous oxide joins the pre-chamber gas immediately (instant vaporization):
@@ -418,13 +453,14 @@ function injector_valve_flow!(
     du.mass_fractions.nitrous_oxide[pre_chamber_cell_id] += oxidizer_mass_flow / pre_chamber_mass
 
 
-    # Energy of the donor (mid section). Same derivation as the valve:
-    #     M de/dt = -ṁ (h_mid - e_mid)
-    mid_section_specific_internal_energy = u.specific_internal_energy[mid_section_cell_id]
+    # Energy of the donor (tank):
+    #     M de/dt = -ṁ (h_out - e_tank)
+    # with de = cv dT, where cv is the two-phase cv from the tank property update
+    tank_specific_internal_energy = u.specific_internal_energy[tank_cell_id]
 
-    mid_section_internal_energy_rate = -oxidizer_mass_flow * (mid_section_specific_enthalpy - mid_section_specific_internal_energy)
+    tank_internal_energy_rate = -oxidizer_mass_flow * (tank_outflow_specific_enthalpy - tank_specific_internal_energy)
 
-    du.temperature[mid_section_cell_id] += mid_section_internal_energy_rate / (mid_section_mass * u.cv[mid_section_cell_id])
+    du.temperature[tank_cell_id] += tank_internal_energy_rate / (tank_mass * u.cv[tank_cell_id])
 
 
     # Energy of the receiver (pre-chamber):
@@ -434,11 +470,22 @@ function injector_valve_flow!(
 
     pre_chamber_sensible_specific_internal_energy = u.cv[pre_chamber_cell_id] * pre_chamber_temperature
 
-    pre_chamber_internal_energy_rate = oxidizer_mass_flow * (injected_sensible_specific_enthalpy - pre_chamber_sensible_specific_internal_energy)
+    # The injected enthalpy is split into the stream arriving as vapor at the tank temperature and the residual
+    # (latent heat plus the real-gas term) that it takes to get there:
+    #     ṁ (h_injected - e_pre) = ṁ (cp_N2O T_tank - e_pre)   +   ṁ h_residual
+    #                              vapor inflow (always applied)   latent cooling (floored below)
+    vapor_inflow_power = oxidizer_mass_flow * (nitrous_oxide_ideal_gas_cp * tank_temperature - pre_chamber_sensible_specific_internal_energy)
+
+    latent_cooling_power = oxidizer_mass_flow * injected_residual_specific_enthalpy
 
     # Temperature floor. The pre-chamber is a single ideal-gas cell with no fuel, so instant vaporization alone
     # would drag it far below anything physical (a real head end holds a cold spray near T_sat, roughly
-    # 230-260 K at chamber pressure). Below 240 K the cooling is ramped off, reaching zero at 230 K.
+    # 230-260 K at chamber pressure). Below 240 K the latent cooling is ramped off, reaching zero at 230 K.
+    #
+    # Only the latent part is floored. The earlier version cut the whole injector energy term, which also removed
+    # the heating from nitrous being pushed into the cell; the cell then kept venting into the port with nothing
+    # balancing the flow-work cooling and fell to ~47 K, and the solver crawled. With the vapor inflow kept, steady
+    # injection with no latent cooling would hold the cell near the tank temperature, so the floor can hold.
     #
     # This is a deliberate energy shortcut: the latent heat that is cut off is simply not charged. Once the
     # floor is active the model is treating some liquid as if it vaporized for free, which biases the chamber
@@ -446,24 +493,28 @@ function injector_valve_flow!(
     minimum_pre_chamber_temperature = 230.0
     floor_ramp_width = 10.0
 
-    if pre_chamber_internal_energy_rate < 0
+    if latent_cooling_power < 0
         ramp_position = clamp((pre_chamber_temperature - minimum_pre_chamber_temperature) / floor_ramp_width, 0.0, 1.0)
 
         # Smoothstep: 0 at the floor, 1 at floor + ramp width, with zero slope at both ends so the solver sees no kink
         cooling_fraction = ramp_position^2 * (3.0 - 2.0 * ramp_position)
 
         # TODO: this is energy the model is not accounting for. Track it so it stays visible until the floor is replaced.
-        # The power is what the full cooling would have been minus what was actually applied (W); 
-        neglected_cooling_power = -(1.0 - cooling_fraction) * pre_chamber_internal_energy_rate
+        # The power is what the full latent cooling would have been minus what was actually applied (W)
+        neglected_cooling_power = -(1.0 - cooling_fraction) * latent_cooling_power
 
         u.neglected_injector_cooling_power[pre_chamber_cell_id] = neglected_cooling_power
 
-        pre_chamber_internal_energy_rate = cooling_fraction * pre_chamber_internal_energy_rate
+        latent_cooling_power = cooling_fraction * latent_cooling_power
     end
+
+    pre_chamber_internal_energy_rate = vapor_inflow_power + latent_cooling_power
+
+    #Old version (floored the whole injector energy term, including the vapor inflow's heating):
+    #pre_chamber_internal_energy_rate = oxidizer_mass_flow * (injected_sensible_specific_enthalpy - pre_chamber_sensible_specific_internal_energy)
+    #then pre_chamber_internal_energy_rate = cooling_fraction * pre_chamber_internal_energy_rate whenever it was negative
 
     du.temperature[pre_chamber_cell_id] += pre_chamber_internal_energy_rate / (pre_chamber_mass * u.cv[pre_chamber_cell_id])
 
-    injector_orifice_area = system.cad_data.injector_orifice_area
-
-    u.injector_velocity[pre_chamber_cell_id] = oxidizer_mass_flow / (mid_section_outflow_density * injector_orifice_area)
+    u.injector_velocity[pre_chamber_cell_id] = oxidizer_mass_flow / (tank_outflow_density * injector_orifice_area)
 end
