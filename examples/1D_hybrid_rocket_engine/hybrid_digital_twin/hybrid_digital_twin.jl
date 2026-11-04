@@ -397,6 +397,20 @@ air_properties = ComponentVector(
     R_gas = 8.314u"J/(mol*K)"
 )
 
+#Every gas cell starts at the same pressure, ambient_pressure, so nothing flows before the valve opens.
+#Before, the air density (1.1225 kg/m^3, about 0.954 bar) and the mid section (N2O at 1 atm) disagreed by 4.6 kPa,
+#and that difference drained the mid section's 0.86 mg of vapor through the injector until a step overshot to negative mass.
+#Ideal gas law for the air:  ρ = P * MW_mix / (R_u * T),   1 / MW_mix = Σ Y_i / MW_i
+initial_ambient_pressure = config.optimized_parameters.ambient_pressure
+
+air_inverse_molecular_weight = 0.0u"mol/g"
+
+for species_name in propertynames(air_initial_conditions.mass_fractions)
+    air_inverse_molecular_weight += air_initial_conditions.mass_fractions[species_name] / air_properties.molecular_weights[species_name]
+end
+
+air_initial_conditions.density = initial_ambient_pressure / (air_inverse_molecular_weight * 8.314462618u"J/(mol*K)" * room_temp) |> u"kg/m^3"
+
 #Uses the unitful cad_data: config.data.cad_data has its units stripped, which would turn this mass into a density
 initial_igniter_puck_mass = config.optimized_parameters.igniter_density * cad_data.igniter_puck_volume |> u"kg"
 config.u_proto.igniter_mass = [initial_igniter_puck_mass]
@@ -431,12 +445,6 @@ add_region!(
     property_update_function = 
     function update_fluid_domain_region!(du, u, p, t, system, geo, cell_id)
         update_fluid_properties!(du, u, p, t, system, geo, cell_id)
-
-        if cell_id == get_cellset(geo, "fluid_domain")[end]
-            @show u.density[cell_id]
-            @show u.temperature[cell_id]
-            @show u.pressure[cell_id]
-        end
     end,
     region_function = 
     function fluid_domain_region!(du, u, p, t, system, geo, cell_id)
@@ -498,7 +506,9 @@ add_region!(
     end
 )
 
-u0_mid_section_mass = mass_density(nitrous_oxide_model, 1.0u"atm", 298.0u"K", [1.0]) * (geo.cell_volumes[get_cellset(geo, "mid_section")][1]u"m^3") |> u"kg"
+#Same pressure and temperature as the chamber air, so the injector starts with no pressure drop across it
+#(was 1 atm and 298 K, while the cell's temperature state starts at room_temp)
+u0_mid_section_mass = mass_density(nitrous_oxide_model, initial_ambient_pressure, room_temp, [1.0]) * (geo.cell_volumes[get_cellset(geo, "mid_section")][1]u"m^3") |> u"kg"
 
 #Although this is less accurate, we're using a pure EOS model here, so we can't have anything other than nitrous oxide in it
 mid_section_initial_conditions = ComponentVector(
@@ -1055,13 +1065,10 @@ add_patch!(config, "fluid_domain_to_nozzle_inlet";
         converging_area = system.converging_nozzle_surface_area
         diverging_area = system.diverging_nozzle_surface_area
 
-        #I'm not entirely sure if we even have to take away heat from the last fluid cell, I mean, the heat that the nozzle
-        #components take away would only be visible for the fluid that's inside them which is currently not modeled
-
-        #du.heat[fluid_cell_id] -= h_converging * converging_area * (u.temperature[fluid_cell_id] - u.temperature[converging_cell_id])
+        du.heat[fluid_cell_id] -= h_converging * converging_area * (u.temperature[fluid_cell_id] - u.temperature[converging_cell_id])
         du.heat[converging_cell_id] += h_converging * converging_area * (u.temperature[fluid_cell_id] - u.temperature[converging_cell_id])
 
-        #du.heat[fluid_cell_id] -= h_diverging * diverging_area * (u.temperature[fluid_cell_id] - u.temperature[diverging_cell_id])
+        du.heat[fluid_cell_id] -= h_diverging * diverging_area * (u.temperature[fluid_cell_id] - u.temperature[diverging_cell_id])
         du.heat[diverging_cell_id] += h_diverging * diverging_area * (u.temperature[fluid_cell_id] - u.temperature[diverging_cell_id])
     end
 )
@@ -1191,7 +1198,7 @@ callbacks = CallbackSet(
     min_chamber_pressure_termination_cb
 )
 
-#Revise.includet(joinpath(@__DIR__, "state_is_invalid/state_is_invalid.jl"))
+Revise.includet(joinpath(@__DIR__, "state_is_invalid", "state_is_invalid.jl"))
 
 #state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
 

@@ -74,6 +74,18 @@ function pressure_driven_mass_flux_custom_geometry!(
     # inertial term is small, and reduces to U = |ΔP| / R when K_L = 0.
     upwind_density = u.density[upwind_cell]
 
+    # A trial stage the solver will reject can hand this flux a cell with no mass. sqrt() would throw on the
+    # negative inertial term and end the run, so the flux is marked NaN instead: the step's error estimate becomes
+    # NaN and the solver rejects it and retries with a smaller step. Nothing is clamped.
+    if !(upwind_density > 0)
+        not_a_number = oftype(upwind_density, NaN)
+
+        du.density[idx_a] += not_a_number
+        du.density[idx_b] += not_a_number
+
+        return nothing
+    end
+
     inertial_term = 2.0 * upwind_density * minor_loss_coefficient * pressure_difference_magnitude
 
     face_velocity = 2.0 * pressure_difference_magnitude / (viscous_resistance + sqrt(viscous_resistance^2 + inertial_term))
