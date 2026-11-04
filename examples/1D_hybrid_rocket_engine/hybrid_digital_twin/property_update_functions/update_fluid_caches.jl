@@ -42,14 +42,23 @@ function ideal_gas_heat_capacities!(du, u, p, t, system, geo, cell_id)
 
     property_temperature = min(u.temperature[cell_id], maximum_reid_polynomial_temperature)
 
-    cell_mole_fractions = system.mole_fractions_vec[cell_id]
+    #Same number type sample as update_cell_mole_fractions_vec!, so this reads the buffer that was just written
+    number_type_sample = u.density[cell_id] + first(p)
+
+    cell_mole_fractions = system.mole_fractions_vec[cell_id, number_type_sample]
+    update_cell_moles_vec!(du, u, p, t, system, geo, cell_id)
 
     u.cp[cell_id] = mass_isobaric_heat_capacity(system.model, u.pressure[cell_id], property_temperature, cell_mole_fractions)
     u.cv[cell_id] = mass_isochoric_heat_capacity(system.model, u.pressure[cell_id], property_temperature, cell_mole_fractions)
 end
 
 function clapeyron_eos!(du, u, p, t, system, geo, cell_id)
-    result = vt_flash(system.model, geo.cell_volumes[cell_id], u.temperature[cell_id], system.moles_vec[cell_id], system.clapeyron_method)
+    number_type_sample = u.density[cell_id] + first(p)
+
+    cell_moles = system.moles_vec[cell_id, number_type_sample]
+    update_cell_mole_fractions_vec!(du, u, p, t, system, geo, cell_id)
+
+    result = vt_flash(system.model, geo.cell_volumes[cell_id], u.temperature[cell_id], cell_moles, system.clapeyron_method)
 
     #Clapeyron's property functions take (model, result). The mass_ versions return J/(kg*K) to match the cp and cv caches.
     #The aggregate cp/cv calls error when more than one phase is present, so the phase-weighted helper is used.
