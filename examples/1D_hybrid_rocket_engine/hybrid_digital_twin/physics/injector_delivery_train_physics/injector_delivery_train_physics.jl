@@ -18,10 +18,8 @@ This helper is intentionally limited to one subcritical component. A
 supercritical or multicomponent feed needs a separate implementation.
 """
 function pure_component_vt_flash(model, volume, temperature, amount)
-    volume > zero(volume) ||
-        throw(DomainError(volume, "flash volume must be positive"))
-    amount > zero(amount) ||
-        throw(DomainError(amount, "flash amount must be positive"))
+    volume > zero(volume) || throw(DomainError(volume, "flash volume must be positive"))
+    amount > zero(amount) || throw(DomainError(amount, "flash amount must be positive"))
 
     saturation_pressure_value, liquid_molar_volume, vapor_molar_volume = saturation_pressure(model, temperature)
     bulk_molar_volume = volume / amount
