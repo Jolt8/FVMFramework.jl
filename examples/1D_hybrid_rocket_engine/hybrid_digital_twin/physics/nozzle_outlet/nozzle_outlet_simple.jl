@@ -15,6 +15,14 @@ function nozzle_outlet_simple!(
 
     chamber_pressure = u.pressure[idx_a]
 
+    # A Newton iterate the solver will reject can hand this cell a negative temperature or gas constant, and the
+    # square roots below would throw and end the run. Marking the outflow NaN makes the solver reject the iterate and
+    # shorten the step instead. Written as !(x > 0) so NaN is caught too.
+    if !(u.temperature[idx_a] > 0) || !(gamma / specific_gas_constant > 0)
+        du.density[idx_a] += oftype(chamber_pressure, NaN)
+        return nothing
+    end
+
     # The port cell is treated as the stagnation state ahead of the throat. Below ambient pressure nothing
     # flows out (backflow into the motor isn't modelled), and the square root below would be undefined.
     if chamber_pressure <= p.ambient_pressure
@@ -27,7 +35,19 @@ function nozzle_outlet_simple!(
     # flow as the chamber pressure rises.
     unchoked_throat_mach_number_squared = (2 / (gamma - 1)) * ((chamber_pressure / p.ambient_pressure)^((gamma - 1) / gamma) - 1)
 
-    throat_mach_number = min(sqrt(unchoked_throat_mach_number_squared), 1.0)
+    # sqrt(M^2) has an infinite slope at M^2 = 0, which is exactly where the chamber sits before the valve opens
+    # (chamber pressure = ambient). ForwardDiff turns that into NaN across the whole Jacobian row and the implicit
+    # solver stops before its first step. The same regularization as the orifice equations is used:
+    #     M = M^2 / ((M^2)^2 + ε^2)^(1/4)
+    # which equals sqrt(M^2) to within 0.5% once M^2 > 7ε, and is linear below ε. ε = 0.01 corresponds to a chamber
+    # only about 0.7 kPa above ambient (M^2 ≈ (2/γ) ΔP / P_ambient), so it never touches a real operating point.
+    mach_number_squared_regularization = 0.01
+
+    regularized_throat_mach_number = unchoked_throat_mach_number_squared / (unchoked_throat_mach_number_squared^2 + mach_number_squared_regularization^2)^0.25
+
+    throat_mach_number = min(regularized_throat_mach_number, 1.0)
+
+    #throat_mach_number = min(sqrt(unchoked_throat_mach_number_squared), 1.0) #old version, infinite slope at chamber pressure = ambient
 
     mass_flow = p.nozzle_discharge_coefficient * nozzle_throat_area *
         chamber_pressure / sqrt(u.temperature[idx_a]) *
