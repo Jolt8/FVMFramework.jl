@@ -79,6 +79,12 @@ add_virtual_face!(rom_data;
 
 geo = build_rom_fvm_geometry(rom_data);
 
+#Which fluid_domain and fuel_grain cells form each axial station of the port, plus the station lengths and radii.
+#The moving volumes and areas are recomputed from the port radius state every RHS call (update_fuel_port_geometry!).
+Revise.includet(joinpath(@__DIR__, "physics", "fuel_grain_regression", "fuel_grain_regression.jl"))
+
+fuel_port_geometry = build_fuel_port_geometry(geo, rom_data)
+
 rom_data["cells"][127]
 
 
@@ -137,6 +143,7 @@ config.data = merge(config.data, (
     clapeyron_method = method, 
     nitrous_oxide_model = nitrous_oxide_model, 
     model = model,
+    fuel_port_geometry = fuel_port_geometry,
     tstops = [],
     cold_flow = true,
     hot_fire = false
@@ -146,7 +153,16 @@ add_setup_syms!(
     config;
     cache_syms_and_units = (
         # Variables that will be capped to a change in a state vector later:
-        heat = u"J", 
+        heat = u"J",
+
+        #Current volume of every cell. Fixed cells copy geo.cell_volumes; the port gas and fuel grain cells are
+        #recomputed from the port radius in update_fuel_port_geometry!. Use this instead of geo.cell_volumes.
+        cell_volume = u"m^3",
+
+        #Fuel regression:
+        injector_oxidizer_mass_flow = u"kg/s", #stored at the pre-chamber cell by injector_valve_flow!; drives the regression law
+        fuel_regression_rate = u"m/s", #diagnostic, stored at each fuel grain cell
+        pyrolyzed_fuel_mass_flow = u"kg/s", #diagnostic, stored at each port gas cell
         nitrous_oxide_vapor_quality = u"kg/kg",
         
         #used for collecting heat fluxes (this is capped to temperature change)
@@ -232,7 +248,8 @@ add_setup_syms!(
         regression_coefficient_a = 1.1573e-4, #units are m^(2n+1) * kg^(-n) * s^(-1)
         regression_exponent_n = 0.331,
         fuel_heat_of_pyrolysis = 2.3u"MJ/kg",
-        min_fuel_regression_temperature = 800.0u"K",
+        min_fuel_regression_temperature = 800.0u"K", #gas temperature next to the fuel where regression starts ramping on (full at +100 K)
+        fuel_surface_temperature = 750.0u"K", #temperature the pyrolyzed fuel gas leaves the surface at (typical HDPE pyrolysis surface: 700-800 K)
 
         # Injector System Parameters:
         injector_discharge_coefficient = 0.7,
@@ -252,7 +269,8 @@ add_setup_syms!(
         igniter_volume = cad_data.igniter_puck_volume |> u"m^3",
 
         # Stop Parameters
-        min_fuel_port_radius = (cad_data.phenolic_liner_inner_diameter - 2 * cad_data.fuel_grain_desired_fuel_web_thickness) / 2,
+        #Largest port radius allowed before the burn stops, leaving the desired web of fuel to protect the liner
+        max_fuel_port_radius = (cad_data.phenolic_liner_inner_diameter - 2 * cad_data.fuel_grain_desired_fuel_web_thickness) / 2,
         min_chamber_pressure = 100_000u"Pa", # Solver stops once the pressure drops below this value (also requires 2 seconds to pass before this is allowed to stop the solver)
 
         # Convection Parameters:
@@ -271,7 +289,8 @@ push!(config.data.tstops, config.optimized_parameters.igniter_burn_time)
 function cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
     #Every cell has a fixed volume, so heat raises internal energy at constant volume: M * cv * dT/dt = Q.
     #Solids set cv = cp in update_solid_properties!, so this also covers them.
-    du.temperature[cell_id] += du.heat[cell_id] / (geo.cell_volumes[cell_id] * u.density[cell_id] * u.cv[cell_id])
+    #u.cell_volume is the current volume, so this stays correct for the port gas and fuel grain cells as the port grows
+    du.temperature[cell_id] += du.heat[cell_id] / (u.cell_volume[cell_id] * u.density[cell_id] * u.cv[cell_id])
 
     #Old version (uses cp, which overstates the heat capacity of gas cells by gamma):
     #du.temperature[cell_id] += du.heat[cell_id] / (geo.cell_volumes[cell_id] * u.density[cell_id] * u.cp[cell_id])
@@ -823,13 +842,27 @@ add_patch!(config;
     )
         #this is where the most complicated CFD closure will likely need to be to determine the mass flux between these two regions
 
-        #face_area_a, face_area_b, and vol_b will change over time based on the position of the fuel grain port radius
+        #idx_a is the pre-chamber and idx_b is the port cell at the head end of the grain.
+        #The pre-chamber side uses the full pre-chamber cross section and the port side uses the current port area,
+        #so the flux sees the contraction loss into the port, which shrinks as the port opens up.
+        pre_chamber_cell_id = idx_a
+        head_end_port_cell_id = idx_b
+
+        head_end_station = system.fuel_port_geometry.stations[system.fuel_port_geometry.station_index_by_cell[head_end_port_cell_id]]
+
+        head_end_port_radius = u.fuel_port_radius[head_end_station.fuel_grain_cell_id]
+
+        pre_chamber_cross_section_area = pi * system.fuel_port_geometry.pre_chamber_radius^2
+        head_end_port_cross_section_area = pi * head_end_port_radius^2
+
+        centroid_distance = geo.cell_neighbor_distances[pre_chamber_cell_id, face_a]
+
         pressure_driven_mass_flux_custom_geometry!(
             du, u, p, t, system, geo,
-            idx_a, face_a, idx_b, face_b,
-            dist, 
-            face_area_a, vol_a, 
-            face_area_b, vol_b
+            pre_chamber_cell_id, face_a, head_end_port_cell_id, face_b,
+            centroid_distance,
+            pre_chamber_cross_section_area, u.cell_volume[pre_chamber_cell_id],
+            head_end_port_cross_section_area, u.cell_volume[head_end_port_cell_id]
         )
     end
 )
@@ -841,84 +874,95 @@ add_patch!(config;
 #Axial fluxes along n cells
 #start
 
-#these will be added to solve_system!
+#these are called from solve_system!
+#The stations and the faces between them come from build_fuel_port_geometry, ordered by axial position,
+#so each axial face connects a lower station to the station directly above it.
 function fluid_domain_axial_flux!(du, u, p, t, system, geo)
-    fluid_domain_cells = get_cellset(geo, "fluid_domain")
+    stations = system.fuel_port_geometry.stations
 
-    #if we use this, we'll have n-1 axial fuel port id states
-    axial_idx = 1
+    for axial_face in system.fuel_port_geometry.axial_faces
+        lower_station = stations[axial_face.lower_station_index]
+        upper_station = stations[axial_face.upper_station_index]
 
-    #this requires that fluid_domain cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
-    for upstream_cell_id in fluid_domain_cells[1:end-1]
-        downstream_cell_id = upstream_cell_id + 1
-        fuel_grain_cell_id = get_cellset(geo, "fuel_grain")[axial_idx]
-        #some flux function here
+        lower_port_cell_id = lower_station.fluid_cell_id
+        upper_port_cell_id = upper_station.fluid_cell_id
 
-        #all geometry variables here will change over time
+        #Each side of the face sees its own port cross section. When the two stations have regressed by
+        #different amounts, the flux sees the step between them as a small expansion or contraction.
+        lower_port_radius = u.fuel_port_radius[lower_station.fuel_grain_cell_id]
+        upper_port_radius = u.fuel_port_radius[upper_station.fuel_grain_cell_id]
+
+        lower_port_cross_section_area = pi * lower_port_radius^2
+        upper_port_cross_section_area = pi * upper_port_radius^2
+
         pressure_driven_mass_flux_custom_geometry!(
             du, u, p, t, system, geo,
-            upstream_cell_id, face_a, fuel_grain_cell_id, face_b,
-            dist, 
-            face_area_a, vol_a, 
-            face_area_b, vol_b
+            lower_port_cell_id, axial_face.fluid_face_lower, upper_port_cell_id, axial_face.fluid_face_upper,
+            axial_face.fluid_centroid_distance,
+            lower_port_cross_section_area, u.cell_volume[lower_port_cell_id],
+            upper_port_cross_section_area, u.cell_volume[upper_port_cell_id]
         )
-
-        axial_idx += 1
     end
 end
 
 function fuel_grain_axial_flux!(du, u, p, t, system, geo)
-    fuel_grain_cells = get_cellset(geo, "fuel_grain")
+    stations = system.fuel_port_geometry.stations
 
-    axial_idx = 1
+    for axial_face in system.fuel_port_geometry.axial_faces
+        lower_station = stations[axial_face.lower_station_index]
+        upper_station = stations[axial_face.upper_station_index]
 
-    #this requires that fuel_grain cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
-    for upstream_cell in fuel_grain_cells[1:end-1]
-        downstream_cell = upstream_cell_id + 1
-        fuel_grain_cell_id = get_cellset(geo, "fuel_grain")[axial_idx]
-        #some flux function here
+        lower_fuel_grain_cell_id = lower_station.fuel_grain_cell_id
+        upper_fuel_grain_cell_id = upper_station.fuel_grain_cell_id
 
-        #you would probably need the max port radius which is cad_data.phenolic_liner_inner_diameter / 2
+        #The two grain annuli only touch where both still have fuel, so the shared face is the annulus
+        #between the larger of the two port radii and the grain's outer radius
+        lower_port_radius = u.fuel_port_radius[lower_fuel_grain_cell_id]
+        upper_port_radius = u.fuel_port_radius[upper_fuel_grain_cell_id]
+
+        larger_port_radius = max(lower_port_radius, upper_port_radius)
+
+        shared_annulus_area = pi * (lower_station.grain_outer_radius^2 - larger_port_radius^2)
+
+        #Axial half-cell distances don't change as the grain regresses radially
+        lower_half_cell_distance = geo.cell_face_distances[lower_fuel_grain_cell_id, axial_face.grain_face_lower]
+        upper_half_cell_distance = geo.cell_face_distances[upper_fuel_grain_cell_id, axial_face.grain_face_upper]
 
         heat_diffusion_series_resistance_custom_geometry!(
             du, u, p, t, system, geo,
-            idx_a, face_a,
-            idx_b, face_b,
-            face_area_a, face_distance_a,
-            face_area_b, face_distance_b,
+            lower_fuel_grain_cell_id, axial_face.grain_face_lower,
+            upper_fuel_grain_cell_id, axial_face.grain_face_upper,
+            shared_annulus_area, lower_half_cell_distance,
+            shared_annulus_area, upper_half_cell_distance,
         )
-
-        axial_idx += 1
     end
 end
 
+#The liner and housing don't move, so their axial conduction uses the CAD geometry directly.
+#Their cell sets are ordered by axial position, so each cell's upper neighbour is the next cell in the set.
 function phenolic_liner_axial_flux!(du, u, p, t, system, geo)
     phenolic_liner_cells = get_cellset(geo, "phenolic_liner")
 
-    axial_idx = 1
+    for cell_index in 1:(length(phenolic_liner_cells) - 1)
+        lower_cell_id = phenolic_liner_cells[cell_index]
+        upper_cell_id = phenolic_liner_cells[cell_index + 1]
 
-    #this requires that phenolic_liner cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
-    for upstream_cell in phenolic_liner_cells[1:end-1]
-        downstream_cell = upstream_cell_id + 1
-        fuel_grain_cell_id = get_cellset(geo, "fuel_grain")[axial_idx]
-        #some flux function here
+        lower_face, upper_face, centroid_distance = find_shared_face(geo, lower_cell_id, upper_cell_id)
 
-        axial_idx += 1
+        heat_diffusion_series_resistance!(du, u, p, t, system, geo, lower_cell_id, lower_face, upper_cell_id, upper_face)
     end
 end
 
 function aluminum_housing_axial_flux!(du, u, p, t, system, geo)
     aluminum_housing_cells = get_cellset(geo, "aluminum_housing")
 
-    axial_idx = 1
+    for cell_index in 1:(length(aluminum_housing_cells) - 1)
+        lower_cell_id = aluminum_housing_cells[cell_index]
+        upper_cell_id = aluminum_housing_cells[cell_index + 1]
 
-    #this requires that aluminum_housing cells are ordered so that the downstream cell adjacent to the current cell has an id of upstream_cell_id + 1
-    for upstream_cell in aluminum_housing_cells[1:end-1]
-        downstream_cell = upstream_cell_id + 1
-        fuel_grain_cell_id = get_cellset(geo, "fuel_grain")[axial_idx]
-        #some flux function here
+        lower_face, upper_face, centroid_distance = find_shared_face(geo, lower_cell_id, upper_cell_id)
 
-        axial_idx += 1
+        heat_diffusion_series_resistance!(du, u, p, t, system, geo, lower_cell_id, lower_face, upper_cell_id, upper_face)
     end
 end
 
@@ -939,29 +983,12 @@ add_patch!(config;
         du, u, p, t, system, geo, 
         idx_a, face_a, idx_b, face_b
     )
-        axial_idx = findfirst(==(idx_a), geo.cell_sets["fluid_domain"])
-        fuel_grain_cell_id = get_cellset(geo, "fuel_grain")[axial_idx]
-        #some flux function 
-        #this requires geometry updating
-
-        #this is where the actual fuel regression should happen (probably)
-
-        
-        # We switch to regressing the fuel when the **GAS** temperature (not the fuel grain temperature) is above a certain threshold
-        if u.temperature[idx_a] < min_fuel_regression_temperature || system.cold_flow == true
-            chamber_convective_heat_flux_custom_geometry!(
-                du, u, p, t, system, geo, 
-                idx_a, face_a, idx_b, face_b,
-                face_area
-            )
-        else
-            fuel_grain_regression!(
-                du, u, p, t, system, geo, 
-                idx_a, face_a, idx_b, face_b,
-                face_area, dist,
-                vol_a, vol_b,
-            )
-        end
+        #idx_a is the port gas cell and idx_b is the fuel grain cell around it.
+        #Only convection happens here. The regression itself (fuel injection, port growth) runs once per station
+        #in regress_fuel_grain!, after the injector patch has set the oxidizer flow it needs.
+        #Convection uses the current burning surface area and fades out as regression switches on,
+        #because the gasification term in regress_fuel_grain! takes over the heat reaching the surface.
+        fuel_port_wall_convection!(du, u, p, t, system, geo, idx_a, idx_b)
     end
 )
 
@@ -973,8 +1000,8 @@ add_patch!(config;
         idx_a, face_a, idx_b, face_b
     )
         #idx_a is the fuel_grain_cell_id here!
-        #some flux function 
-        #this requires geometry updating
+        #The grain's half-cell distance to this face shrinks as the grain thins, so it's recomputed from the port radius
+        fuel_grain_to_liner_conduction!(du, u, p, t, system, geo, idx_a, idx_b)
     end
 )
 
@@ -1094,18 +1121,23 @@ config.data = merge(config.data, (
 ))
 
 function solve_system!(du, u, p, t, system, geo)
-    #You could put the fuel regression logic here or in the patch between the fluid_domain and the fuel_grain
+    #Current cell volumes from the port radius. Has to come first: every property update and flux below divides by them.
+    update_fuel_port_geometry!(du, u, p, t, system, geo)
 
     #Moles and mole fractions are already updated per cell inside update_region_groups!
     #(fluid_property_update_ideal! / fluid_property_update_clapeyron!), after mw_avg!
     update_region_groups!(du, u, p, t, system, geo)
 
     axial_flux_functions!(du, u, p, t, system, geo)
-    
+
     #update_MUSCL_gradients!(u, wls_stencil)
     solve_connection_groups!(du, u, p, t, system, geo)
     solve_patch_groups!(du, u, p, t, system, geo)
-    regress_fuel_layers!(du, u, p, t, system, geo)
+
+    #After the patches, because it needs the oxidizer flow that injector_valve_flow! stores,
+    #and before the region functions, because they turn du.heat into temperature changes
+    regress_fuel_grain!(du, u, p, t, system, geo)
+
     solve_region_groups!(du, u, p, t, system, geo)
 end
 

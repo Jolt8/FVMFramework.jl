@@ -289,6 +289,10 @@ function injector_valve_flow!(
 
     oxidizer_mass_flow = volumetric_flow * mid_section_outflow_density
 
+    # The fuel regression law needs the injected oxidizer flow (G_ox = ṁ_ox / port area), so it's stored here.
+    # It stays zero, as the cache is reset every call, whenever the early return above stops the injection.
+    u.injector_oxidizer_mass_flow[pre_chamber_cell_id] = oxidizer_mass_flow
+
     mid_section_volume = geo.cell_volumes[mid_section_cell_id]
     pre_chamber_volume = geo.cell_volumes[pre_chamber_cell_id]
 

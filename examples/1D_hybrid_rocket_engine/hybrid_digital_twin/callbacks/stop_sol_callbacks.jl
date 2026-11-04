@@ -4,14 +4,17 @@ function port_diameter_limit_expanded(u, t, integrator, system)
     u_named = ComponentVector(u, system.state_axes)
     p_named = ComponentVector(integrator.p, system.p_axes)
 
-    # Stop the solver if any fuel port radius is below the desired residual thickness to protect the motor
-    min_fuel_port_radius = 0.0
+    # Stop the solver once the largest port radius at any station reaches the radius that still leaves the desired
+    # web of fuel against the liner. Only the fuel grain cells hold a port radius; every other cell's entry is zero,
+    # so the stations are looped over instead of the whole vector.
+    largest_fuel_port_radius = 0.0
 
-    for i in eachindex(u_named.fuel_port_radius)
-        min_fuel_port_radius = min(min_fuel_port_radius, u_named.fuel_port_radius[i])
+    for station in system.fuel_port_geometry.stations
+        largest_fuel_port_radius = max(largest_fuel_port_radius, u_named.fuel_port_radius[station.fuel_grain_cell_id])
     end
 
-    return min_fuel_port_radius - p_named.min_fuel_port_radius
+    # Negative while there's fuel to spare, crossing zero upward when the web limit is reached
+    return largest_fuel_port_radius - p_named.max_fuel_port_radius
 end
 
 port_diameter_limit = (u, t, integrator) -> port_diameter_limit_expanded(u, t, integrator, system)

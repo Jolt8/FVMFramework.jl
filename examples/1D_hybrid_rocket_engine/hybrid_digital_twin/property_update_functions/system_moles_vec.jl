@@ -175,7 +175,8 @@ function update_cell_moles_vec!(du, u, p, t, system, geo, cell_id)
     # an untyped Core.Box, which allocates and dispatches dynamically on every species
     species_idx = Ref(1)
 
-    cell_mass = u.density[cell_id] * geo.cell_volumes[cell_id]
+    # u.cell_volume, not geo.cell_volumes, so the port gas cells use their current (growing) volume
+    cell_mass = u.density[cell_id] * u.cell_volume[cell_id]
 
     cell_moles = system.moles_vec[cell_id]
 

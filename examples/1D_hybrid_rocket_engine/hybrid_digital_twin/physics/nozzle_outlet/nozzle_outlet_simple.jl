@@ -32,7 +32,8 @@ function nozzle_outlet_simple!(
     )
     =#
 
-    du.density[idx_a] -= mass_flow / geo.cell_volumes[idx_a]
+    # idx_a is the port cell at the nozzle end, whose volume grows as the port regresses
+    du.density[idx_a] -= mass_flow / u.cell_volume[idx_a]
 
     # Energy, on a sensible basis (e = cv * T, h = cp * T). Heats of reaction are added
     # separately by the combustion functions.
