@@ -323,6 +323,7 @@ end
 function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
     #manual_fluid_cache_updates!(du, u, p, t, system, geo, cell_id)
     fluid_property_update_ideal!(du, u, p, t, system, geo, cell_id)
+    #fluid_property_update_clapeyron!(du, u, p, t, system, geo, cell_id)
 end
 
 Revise.includet(joinpath(@__DIR__, "physics", "fuel_oxidizer_reaction_physics", "combustion_reaction_model", "simple_arrhenius_reaction_model.jl"))
@@ -548,8 +549,6 @@ add_region!(
 )
 
 function update_solid_properties!(du, u, p, t, system, geo, cell_id)
-    system.additional_data.fuel_port_geometry
-    system.fuel_port_geometry
     properties = ComponentVector(system.properties_vec, system.properties_axes)
 
     #u.k[cell_id] = properties.k[cell_id] #not needed right now, but will be in the future
@@ -1157,9 +1156,9 @@ config.data = merge(config.data, (
 ))
 
 function solve_system!(du, u, p, t, system, geo)
-    #Point moles_vec and mole_fractions_vec at the buffers matching this call's number type (Float64, Dual, or tracer).
-    #u.density comes from u_vec and first(p) carries any parameter duals, same idea as first(u_vec) + first(p) in unpack_fvm_state.
-    
+    #Only does anything during sparsity detection: the tracer get_tmp returns a new #undef array every call, so one
+    #buffer is stored here for the whole RHS call. Float64 and Dual calls look up their persistent buffer at each use.
+    #Same number type as the per-cell samples (u.density[cell_id] + first(p)) used when reading and writing the buffers.
     select_cell_species_buffer!(system.moles_vec, u.density[1] + first(p))
     select_cell_species_buffer!(system.mole_fractions_vec, u.density[1] + first(p))
 
@@ -1226,7 +1225,7 @@ callbacks = CallbackSet(
 
 Revise.includet(joinpath(@__DIR__, "state_is_invalid", "state_is_invalid.jl"))
 
-#state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
+state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
 
 #Implicit from the start. The laminar port flux equalizes pressure between neighbouring port cells on a ~1 ns
 #timescale (Jacobian entries ~1e11), so an explicit method like Tsit5 needs nanosecond steps and blows up on its
