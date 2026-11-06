@@ -47,8 +47,6 @@ function ideal_gas_heat_capacities!(du, u, p, t, system, geo, cell_id)
 end
 
 function clapeyron_eos!(du, u, p, t, system, geo, cell_id)
-    number_type_sample = u.density[cell_id] + first(p)
-
     result = vt_flash(system.model, geo.cell_volumes[cell_id], u.temperature[cell_id], system.moles_vec[cell_id], system.clapeyron_method)
 
     #Clapeyron's property functions take (model, result). The mass_ versions return J/(kg*K) to match the cp and cv caches.
