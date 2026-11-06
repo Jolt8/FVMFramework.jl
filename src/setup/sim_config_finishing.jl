@@ -233,7 +233,7 @@ function finish_fvm_config(config, connection_map_function, additional_data; che
 
     optimized_parameters_property_names = propertynames(config.optimized_parameters)
     #TODO: decide if optimized parameters should be only inputted as a single value or for all cells
-    optimized_parameters_values = [[getproperty(config.optimized_parameters, name)] for name in optimized_parameters_property_names]
+    optimized_parameters_values = [getproperty(config.optimized_parameters, name) for name in optimized_parameters_property_names]
 
     lengthened_optimized_parameters = ComponentVector(NamedTuple{optimized_parameters_property_names}(optimized_parameters_values))
 
