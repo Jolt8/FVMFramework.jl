@@ -2,6 +2,8 @@ Trying to come up with a broadly applicable and fast major-species/equilibrium c
 
 Firstly, I believe that a semi-empirical estimate for the turbulent kinetic energy and specific dissipation rate is required
 
+Note that this is not part of the model's closure, the model should assume that the specific dissipation rate that it gets is accurate
+
 There's a correlation for turbulent kinetic energy which is:
 
 k = (3 / 2) * (turbulence_intensity * velocity)^2
@@ -29,17 +31,28 @@ NOTE:
     Another approahc would be to have the chemical rate be dependent on pressure, temperature, and three empirical constants
 
 Two options for chemical rate:
-1. chemical_rate = (empirical_pre_exponential_factor * exp(empirical_exponential_factor * temperature))
-2. chemical_rate = (empirical_pre_exponential_factor * temperature^empirical_exponential_factor * exp(-emprical_activation_temperature / temperature))
+1. chemical_relaxation_rate = (empirical_pre_exponential_factor * exp(empirical_exponential_factor * temperature))
+2. chemical_relaxation_rate = (empirical_pre_exponential_factor * temperature^empirical_exponential_factor * exp(-emprical_activation_temperature / temperature))
+3. chemical_relaxation_rate = (empirical_pre_exponential_factor * exp(empirical_exponential_factor * ((temperature / temperature_ref - 1))))
+    - temperature_ref is fixed, not fitted
+4. chemical_relaxation_rate = (empirical_pre_exponential_factor * exp(empirical_exponential_factor * ((temperature / temperature_ref - 1))) * (pressure / pressure_ref)^empirical_pressure_exponential)
+    - temperature_ref and pressure_ref are fixed
+    - empirical_pressure_exponential is another fitted parameter
 
 I'm not a big fan of the second one
 I think adding another fitted parameter to the chemical rate is risky, I think if we wanted to add another empirical constant, we would likely use some pressure or density dependence
 
-mixing_rate = equilibrium_turbulence_limited_relaxation_factor
+mixing_relaxation_rate = equilibrium_turbulence_limited_relaxation_factor
 
-global_relaxation_rate = 1 / ((1 / chemical_rate) + (1 / mixing_rate))
+NOTE: I think we'd have to compare a min() verison of this with this model
+global_relaxation_rate = 1 / ((1 / chemical_relaxation_rate) + (1 / mixing_relaxation_rate))
+# OR
+global_relaxation_rate = min(chemical_relaxation_rate, mixing_relaxation_rate)
 
-then we just apply it like so: du.parameter -= global_relaxation_rate * (current_parameter - equilibrium_parameter)
+then we just apply it like so: du.species_mass_fraction -= global_relaxation_rate * (current_mass_fraction - equilibrium_mass_fraction)
+
+Then we also apply a change in internal energy (chemical energy converted to thermal energy)
+    - Pressure or temperature are never relaxed, they are always determined based on EOS
 
 This formulation thus requires these empirical correlations strongly (these are unavoidable):
 - turbulence_limited_reaction_rate_mix_parameter
