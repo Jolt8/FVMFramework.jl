@@ -144,9 +144,9 @@ config.data = merge(config.data, (
     model = model,
     fuel_port_geometry = fuel_port_geometry,
     tstops = [],
-    cold_flow = false,
-    hot_fire = true,
-    burn_igniter = true
+    cold_flow = true,
+    hot_fire = false,
+    burn_igniter = false
 ))
 
 add_setup_syms!(
@@ -1200,7 +1200,7 @@ jac_sparsity = ADTypes.jacobian_sparsity(
 )
 
 t0 = 0.0
-switch_time = 0.002
+switch_time = 10.0
 tMax = 10.0
 
 #Dense Jacobian for now. jac_sparsity above comes from LOCAL sparsity detection at t = 0, which only records the
@@ -1231,15 +1231,15 @@ state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
 #timescale (Jacobian entries ~1e11), so an explicit method like Tsit5 needs nanosecond steps and blows up on its
 #first trial step. FBDF steps over that stiffness. The small first dt keeps the initial step from being sized
 #by the hundreds of states that barely move.
-VSCodeServer.@profview sol = solve(
+@time sol = solve(
     startup_prob,
     #FBDF(linsolve = SparspakFactorization(), autodiff = ADTypes.AutoForwardDiff()),
     #dt = 1e-6,
-    #Tsit5(), #old version, explicit
+    Tsit5(), #old version, explicit
     #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
     #Dense ForwardDiff Jacobian with the default dense LU (see the note above ode_func)
     #FBDF(autodiff = ADTypes.AutoForwardDiff()),
-    Tsit5(),
+    #Tsit5(),
     dt = 1e-6,
     #FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()), #needs a sparsity pattern that covers every regime
     #AutoTsit5(FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff())),
