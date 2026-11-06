@@ -108,36 +108,21 @@ function connection_map_function(phys_a, phys_b)
     return no_flux!
 end
 
-u_proto = (
-    density = zeros(n_cells)u"kg/m^3",
-    mass_fractions = (
-        nitrous_oxide = zeros(n_cells)u"kg/kg",
-        ethylene = zeros(n_cells)u"kg/kg",
-        nitrogen = zeros(n_cells)u"kg/kg",
-        oxygen = zeros(n_cells)u"kg/kg",
-        carbon_dioxide = zeros(n_cells)u"kg/kg",
-        carbon_monoxide = zeros(n_cells)u"kg/kg",
-        water = zeros(n_cells)u"kg/kg",
-        hydrogen = zeros(n_cells)u"kg/kg"
-    ),
-    internal_energy_density = zeros(n_cells)u"J/m^3"
-)
-
 add_region!(
     config, "fluid_domain";
     type = Fluid(),
     initial_conditions = ComponentVector(
         density = 2.7u"kg/m^3",
-        mass_fractions = (
-            nitrous_oxide = 0.6,
-            ethylene = 0.4,
+        mass_fractions = normalize!(ComponentVector(
+            nitrous_oxide = 1.0u"kg/kg" * config.optimized_parameters.oxidizer_to_fuel_ratio,
+            ethylene = 1.0u"kg/kg",
             nitrogen = 0.0u"kg/kg",
             oxygen = 0.0u"kg/kg",
             carbon_dioxide = 0.0u"kg/kg",
             carbon_monoxide = 0.0u"kg/kg",
             water = 0.0u"kg/kg",
             hydrogen = 0.0u"kg/kg"
-        ),
+        )),
         internal_energy_density = 0.0u"J/m^3"
     ),
     properties = ComponentVector(
