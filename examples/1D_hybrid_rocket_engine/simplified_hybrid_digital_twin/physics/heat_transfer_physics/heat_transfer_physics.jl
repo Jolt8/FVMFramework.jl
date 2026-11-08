@@ -52,8 +52,7 @@ end
 
 function heat_diffusion_series_resistance!(
     du, u, p, t, system, geo,
-    idx_a, face_a,
-    idx_b, face_b
+    idx_a, face_a, idx_b, face_b
 )
     (
         dist,
