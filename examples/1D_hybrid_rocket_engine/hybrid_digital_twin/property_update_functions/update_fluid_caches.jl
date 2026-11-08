@@ -11,7 +11,6 @@ function mw_avg!(du, u, p, t, system, geo, cell_id)
     u.mw_avg[cell_id] = 1.0 / inverse_mw_sum[]
 end
 
-
 function molar_concentrations!(du, u, p, t, system, geo, cell_id)
     for_fields!(u.mass_fractions, u.molecular_weights, u.molar_concentrations) do species, u_mass_fractions, u_molecular_weights, u_molar_concentrations
         u_molar_concentrations[species[cell_id]] = (u.density[cell_id] * u_mass_fractions[species[cell_id]]) / u_molecular_weights[species[cell_id]]
@@ -59,7 +58,6 @@ function clapeyron_eos!(du, u, p, t, system, geo, cell_id)
 
     u.nitrous_oxide_vapor_quality[cell_id] = flash_vapor_quality(result)
 end
-
 
 function fluid_property_update_ideal!(du, u, p, t, system, geo, cell_id)
     mw_avg!(du, u, p, t, system, geo, cell_id)
