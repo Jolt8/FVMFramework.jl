@@ -8,7 +8,7 @@ function state_is_invalid(u, p, t, system)
 
     for cell_id in eachindex(u_named.density)
         cell_density = u_named.density[cell_id]
-        cell_temperature = u_named.temperature[cell_id]
+        cell_temperature = u_named.state_temperature[cell_id]
 
         if !isfinite(cell_density) || !isfinite(cell_temperature)
             return true
