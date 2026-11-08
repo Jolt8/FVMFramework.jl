@@ -1,6 +1,7 @@
 # Overload power_by_squaring to support tracer types inside Clapeyron's complex root solver
 #Base.power_by_squaring(x::Any, p::SparseConnectivityTracer.Dual) = p
-Base.power_by_squaring(x::SparseConnectivityTracer.Dual, p::SparseConnectivityTracer.Dual) = x+p
+#p is an integer exponent (e.g. the literal 2 in z^2) that Base's complex _cpow wrapped in a tracer, so it carries no sparsity info
+Base.power_by_squaring(x::SparseConnectivityTracer.Dual, p::SparseConnectivityTracer.Dual) = x^round(Int, SparseConnectivityTracer.primal(p))
 #Base.power_by_squaring(x::Any, p::SparseConnectivityTracer.Dual) = x^p #this is the only thing left that fails, the above works though
 
 # Overload ldexp for SparseConnectivityTracer.Dual
