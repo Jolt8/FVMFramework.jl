@@ -8,7 +8,7 @@ function min_chamber_pressure_limit_expanded(u, t, integrator, system, geo)
         return 1.0
     else
         # system.p_axes stores every parameter as a 1-element vector, hence the [1]
-        return 2.0 - u.density[pre_chamber_cell_id] #we'll just terminate when the density goes below a certain value :)
+        return 2.0 - u_named.density[pre_chamber_cell_id] #we'll just terminate when the density goes below a certain value :)
     end
 end
 

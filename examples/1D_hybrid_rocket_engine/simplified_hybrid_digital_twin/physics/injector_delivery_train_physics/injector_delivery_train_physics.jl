@@ -285,6 +285,10 @@ function get_spi_mass_flow(
 )
     #nitrous_oxide_liquid_density = mass_density(system.nitrous_oxide_model, mid_section_pressure, u.temperature[tank_cell_id])
 
+    if u.pressure[pre_chamber_cell_id] >= mid_section_pressure
+        return 0.0
+    end
+
     spi_mass_flow = p.injector_discharge_coefficient * p.injector_area * sqrt(2 * u.outflow_density[tank_cell_id] * (mid_section_pressure - u.pressure[pre_chamber_cell_id]))
 
     return spi_mass_flow
@@ -376,19 +380,31 @@ function injector_train_mass_flow!(
     tank_cell_id = get_cellset(geo, "tank")[1]
     pre_chamber_cell_id = get_cellset(geo, "pre_chamber")[1]
 
-    @show u.temperature[pre_chamber_cell_id]
-    @show u.pressure[pre_chamber_cell_id]
-    @show u.density[pre_chamber_cell_id]
-    @show u.pressure[tank_cell_id]
+    #No backflow into the feed train. A rejected trial step can also put the chamber above the tank,
+    #where (P_pre, P_tank) isn't a bracket and find_zero would throw instead of letting the solver retry.
+    if !(u.pressure[pre_chamber_cell_id] < u.pressure[tank_cell_id])
+        return nothing
+    end
 
-    true_mid_section_pressure = find_zero(
-        mid_section_pressure -> series_valve_mass_flow_resid(
-            mid_section_pressure,
-            du, u, p, t, system, geo,
-            tank_cell_id, pre_chamber_cell_id
-        ),
-        (u.pressure[pre_chamber_cell_id], u.pressure[tank_cell_id])
+    residual(mid_section_pressure) = series_valve_mass_flow_resid(
+        mid_section_pressure,
+        du, u, p, t, system, geo,
+        tank_cell_id, pre_chamber_cell_id
     )
+
+    #Find the root on plain numbers: find_zero on ForwardDiff Duals gave NaN Jacobian entries
+    lower_pressure = ForwardDiff.value(u.pressure[pre_chamber_cell_id])
+    upper_pressure = ForwardDiff.value(u.pressure[tank_cell_id])
+    plain_residual(mid_section_pressure) = ForwardDiff.value(residual(mid_section_pressure))
+
+    plain_mid_section_pressure = find_zero(plain_residual, (lower_pressure, upper_pressure))
+
+    #Implicit function theorem: r(P_mid, state) = 0  ->  dP_mid/dstate = -(dr/dstate) / (dr/dP_mid)
+    #residual() at the plain root carries dr/dstate in its partials (its value is ~0); dr/dP_mid by central difference
+    pressure_step = 1e-6 * (upper_pressure - lower_pressure)
+    residual_slope = (plain_residual(plain_mid_section_pressure + pressure_step) - plain_residual(plain_mid_section_pressure - pressure_step)) / (2 * pressure_step)
+
+    true_mid_section_pressure = plain_mid_section_pressure - residual(plain_mid_section_pressure) / residual_slope
 
     #We can now use the derived pressure in the cheapest valve mass flow equation
     true_mass_flow = adjustable_valve_flow(
@@ -400,20 +416,12 @@ function injector_train_mass_flow!(
     du.density[tank_cell_id] += -true_mass_flow / geo.cell_volumes[tank_cell_id]
     du.density[pre_chamber_cell_id] += true_mass_flow / geo.cell_volumes[pre_chamber_cell_id]
 
-    tank_internal_energy_rate = -true_mass_flow * (u.specific_enthalpy[tank_cell_id] - u.specific_internal_energy[tank_cell_id])
+    du.heat[tank_cell_id] -= true_mass_flow * (u.specific_enthalpy[tank_cell_id] - u.specific_internal_energy[tank_cell_id])
 
-    tank_mass = u.density[tank_cell_id] * geo.cell_volumes[tank_cell_id]
-    pre_chamber_mass = u.density[pre_chamber_cell_id] * geo.cell_volumes[pre_chamber_cell_id]
+    injected_specific_enthalpy = u.cp[pre_chamber_cell_id] * u.temperature[tank_cell_id]
+    pre_chamber_specific_internal_energy = u.cv[pre_chamber_cell_id] * u.temperature[pre_chamber_cell_id]
 
-    du.state_temperature[tank_cell_id] += tank_internal_energy_rate / (tank_mass * u.cv[tank_cell_id])
-    du.state_temperature[pre_chamber_cell_id] -= tank_internal_energy_rate / (pre_chamber_mass * u.cv[pre_chamber_cell_id])
+    du.heat[pre_chamber_cell_id] += true_mass_flow * (injected_specific_enthalpy - pre_chamber_specific_internal_energy)
 
     #I really don't want to separate latent heat cooling to decrease the pre_chamber temperature properly, so I'm just going to neglect it :P
 end
-
-
-
-
-
-
-

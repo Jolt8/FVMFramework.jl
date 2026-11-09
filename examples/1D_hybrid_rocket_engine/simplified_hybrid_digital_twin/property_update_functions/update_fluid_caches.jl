@@ -21,6 +21,8 @@ function converge_cea_pressure(cea_pressure, u, p, system, geo, cell_id)
     end
 
     update_cell_moles_and_mole_fractions_vec!(0, u, p, 0, system, geo, cell_id)
+
+    u.temperature[cell_id] = system.chamber_T_comb_interp(2_000_000, p.oxidizer_to_fuel_ratio, p.expansion_ratio)
     
     calculated_pressure = pressure(system.model, geo.cell_volumes[cell_id], u.temperature[cell_id], system.moles_vec[cell_id])
 
@@ -28,8 +30,13 @@ function converge_cea_pressure(cea_pressure, u, p, system, geo, cell_id)
 end
 
 function cea_property_update!(du, u, p, t, system, geo, cell_id)
-    converged_pressure = find_zero(cea_pressure -> converge_cea_pressure(cea_pressure, u, p, system, geo, cell_id), (100_000, 5_000_000))
+    #@show converge_cea_pressure(100_000, u, p, system, geo, cell_id)
+    #@show converge_cea_pressure(5_000_000, u, p, system, geo, cell_id)
+    #converged_pressure = find_zero(cea_pressure -> converge_cea_pressure(cea_pressure, u, p, system, geo, cell_id), (100_000, 5_000_000))
 
+    #screw it, we're just going to use an assumed chamber pressure
+    converged_pressure = p.chamber_pressure
+    
     u.pressure[cell_id] = converged_pressure
     
     u.cp[cell_id] = system.chamber_cp_interp(converged_pressure, p.oxidizer_to_fuel_ratio, p.expansion_ratio)

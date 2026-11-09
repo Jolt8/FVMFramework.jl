@@ -129,9 +129,9 @@ config.data = merge(config.data, (
     model = model,
     tstops = [],
     cold_flow = true,
-    hot_fire = false,
+    hot_fire = true,
     burn_igniter = false
-))
+));
 
 Revise.includet(joinpath(@__DIR__, "cea_retrieval", "CEA_lookup_table.jl"));
 
@@ -238,6 +238,7 @@ add_setup_syms!(
 
         # Other Parameters:
         cea_switch_time = 0.6u"s",
+        chamber_pressure = 20.0u"bar",
 
         # Stop Parameters
         #Largest port radius allowed before the burn stops, leaving the desired web of fuel to protect the liner
@@ -1074,7 +1075,7 @@ jac_sparsity = ADTypes.jacobian_sparsity(
 )
 
 t0 = 0.0
-switch_time = 10.0
+switch_time = 6.5
 tMax = 10.0
 
 #Dense Jacobian for now. jac_sparsity above comes from LOCAL sparsity detection at t = 0, which only records the
@@ -1130,6 +1131,8 @@ using Plots
 
 pre_chamber_cell_id = get_cellset(config.geo, "pre_chamber")[1]
 plot(reduced_sol.t, [u_named[i].temperature[pre_chamber_cell_id] for i in eachindex(reduced_sol.t)])
-plot(reduced_sol.t .* u"s", [u_named[i].neglected_injector_cooling_power[pre_chamber_cell_id]u"W" |> u"kW" for i in eachindex(reduced_sol.t)])
+#plot(reduced_sol.t .* u"s", [u_named[i].neglected_injector_cooling_power[pre_chamber_cell_id]u"W" |> u"kW" for i in eachindex(reduced_sol.t)])
 
-plot(reduced_sol.t, [u_named[i].igniter_mass[1] for i in eachindex(reduced_sol.t)])
+#plot(reduced_sol.t, [u_named[i].igniter_mass[1] for i in eachindex(reduced_sol.t)])
+
+plot(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "nozzle_top")[1]] for i in eachindex(reduced_sol.t)])
