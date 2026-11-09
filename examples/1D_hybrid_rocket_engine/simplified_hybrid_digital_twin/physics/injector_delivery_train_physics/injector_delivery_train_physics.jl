@@ -25,54 +25,65 @@ function pure_component_vt_flash(model, volume, temperature, amount)
     bulk_molar_volume = volume / amount
     pure_composition = SVector(one(amount))
 
-    if bulk_molar_volume < liquid_molar_volume
-        state_pressure = pressure(
-            model,
-            volume,
-            temperature,
-            SVector(amount),
-        )
+    if isnan(saturation_pressure_value) || bulk_molar_volume < liquid_molar_volume || bulk_molar_volume > vapor_molar_volume
+        state_pressure = pressure(model, volume, temperature, SVector(amount))
+        is_liquid = !isnan(saturation_pressure_value) && bulk_molar_volume < liquid_molar_volume
         return Clapeyron.FlashResult(
-            state_pressure,
-            temperature,
-            [pure_composition],
-            [amount],
-            [bulk_molar_volume],
-            zero(state_pressure);
+            state_pressure, temperature,
+            [pure_composition], [amount], [bulk_molar_volume], zero(state_pressure);
             sort = false,
-            vapour_phase_index = -1,
-        )
-    elseif bulk_molar_volume > vapor_molar_volume
-        state_pressure = pressure(
-            model,
-            volume,
-            temperature,
-            SVector(amount),
-        )
-        return Clapeyron.FlashResult(
-            state_pressure,
-            temperature,
-            [pure_composition],
-            [amount],
-            [bulk_molar_volume],
-            zero(state_pressure);
-            sort = false,
-            vapour_phase_index = 1,
+            vapour_phase_index = is_liquid ? -1 : 1,
         )
     else
-        vapor_quality =
-            (bulk_molar_volume - liquid_molar_volume) /
-            (vapor_molar_volume - liquid_molar_volume)
-        return Clapeyron.FlashResult(
-            saturation_pressure_value,
-            temperature,
-            [pure_composition, pure_composition],
-            [amount * (1 - vapor_quality), amount * vapor_quality],
-            [liquid_molar_volume, vapor_molar_volume],
-            zero(saturation_pressure_value);
-            sort = false,
-            vapour_phase_index = 2,
-        )
+        if bulk_molar_volume < liquid_molar_volume
+            state_pressure = pressure(
+                model,
+                volume,
+                temperature,
+                SVector(amount),
+            )
+            return Clapeyron.FlashResult(
+                state_pressure,
+                temperature,
+                [pure_composition],
+                [amount],
+                [bulk_molar_volume],
+                zero(state_pressure);
+                sort = false,
+                vapour_phase_index = -1,
+            )
+        elseif bulk_molar_volume > vapor_molar_volume
+            state_pressure = pressure(
+                model,
+                volume,
+                temperature,
+                SVector(amount),
+            )
+            return Clapeyron.FlashResult(
+                state_pressure,
+                temperature,
+                [pure_composition],
+                [amount],
+                [bulk_molar_volume],
+                zero(state_pressure);
+                sort = false,
+                vapour_phase_index = 1,
+            )
+        else
+            vapor_quality =
+                (bulk_molar_volume - liquid_molar_volume) /
+                (vapor_molar_volume - liquid_molar_volume)
+            return Clapeyron.FlashResult(
+                saturation_pressure_value,
+                temperature,
+                [pure_composition, pure_composition],
+                [amount * (1 - vapor_quality), amount * vapor_quality],
+                [liquid_molar_volume, vapor_molar_volume],
+                zero(saturation_pressure_value);
+                sort = false,
+                vapour_phase_index = 2,
+            )
+        end
     end
 end
 
@@ -274,7 +285,7 @@ function get_spi_mass_flow(
 )
     #nitrous_oxide_liquid_density = mass_density(system.nitrous_oxide_model, mid_section_pressure, u.temperature[tank_cell_id])
 
-    spi_mass_flow = p.injector_discharge_coefficient * p.injector_area * sqrt(2 * u.density[tank_cell_id] * (mid_section_pressure - u.pressure[pre_chamber_cell_id]))
+    spi_mass_flow = p.injector_discharge_coefficient * p.injector_area * sqrt(2 * u.outflow_density[tank_cell_id] * (mid_section_pressure - u.pressure[pre_chamber_cell_id]))
 
     return spi_mass_flow
 end
@@ -284,10 +295,9 @@ function get_hem_mass_flow(
     du, u, p, t, system, geo,
     tank_cell_id, pre_chamber_cell_id
 )
-    #NOTE: this may be inaccurate because we're assuming that the tank's temperature is the mid section's temperature
-    pre_injector_enthalpy = mass_enthalpy(system.nitrous_oxide_model, mid_section_pressure, u.temperature[tank_cell_id])
-    #Molar (one mole basis), which is what pure_component_ps_flash takes; ps_flash also expects molar, not mass, entropy
-    starting_molar_entropy = entropy(system.nitrous_oxide_model, mid_section_pressure, u.temperature[tank_cell_id])
+    pre_injector_enthalpy = u.specific_enthalpy[tank_cell_id]
+    injector_inlet_state = ph_flash(system.nitrous_oxide_model, mid_section_pressure, pre_injector_enthalpy * u.molecular_weights.nitrous_oxide[tank_cell_id])
+    starting_molar_entropy = entropy(system.nitrous_oxide_model, injector_inlet_state)
 
     #The isentropic expansion goes from the injector inlet down towards the chamber pressure; the mass flux peaks where it chokes
     n_pressure_steps = 30
@@ -296,7 +306,7 @@ function get_hem_mass_flow(
     for i in 1:n_pressure_steps
         chamber_pressure_test = mid_section_pressure + (u.pressure[pre_chamber_cell_id] - mid_section_pressure) * (i - 1) / (n_pressure_steps - 1)
 
-        post_injector_result = ps_flash(system.nitrous_oxide_model, chamber_pressure_test, starting_molar_entropy)
+        post_injector_result = pure_component_ps_flash(system.nitrous_oxide_model, chamber_pressure_test, starting_molar_entropy)
         post_injector_density = mass_density(system.nitrous_oxide_model, post_injector_result)
         post_injector_enthalpy = mass_enthalpy(system.nitrous_oxide_model, post_injector_result)
 
@@ -366,6 +376,11 @@ function injector_train_mass_flow!(
     tank_cell_id = get_cellset(geo, "tank")[1]
     pre_chamber_cell_id = get_cellset(geo, "pre_chamber")[1]
 
+    @show u.temperature[pre_chamber_cell_id]
+    @show u.pressure[pre_chamber_cell_id]
+    @show u.density[pre_chamber_cell_id]
+    @show u.pressure[tank_cell_id]
+
     true_mid_section_pressure = find_zero(
         mid_section_pressure -> series_valve_mass_flow_resid(
             mid_section_pressure,
@@ -385,11 +400,15 @@ function injector_train_mass_flow!(
     du.density[tank_cell_id] += -true_mass_flow / geo.cell_volumes[tank_cell_id]
     du.density[pre_chamber_cell_id] += true_mass_flow / geo.cell_volumes[pre_chamber_cell_id]
 
+    @show true_mass_flow / geo.cell_volumes[pre_chamber_cell_id]
+
     tank_internal_energy_rate = -true_mass_flow * (u.specific_enthalpy[tank_cell_id] - u.specific_internal_energy[tank_cell_id])
 
     tank_mass = u.density[tank_cell_id] * geo.cell_volumes[tank_cell_id]
 
     du.state_temperature[tank_cell_id] += tank_internal_energy_rate / (tank_mass * u.cv[tank_cell_id])
+
+    #I really don't want to separate latent heat cooling to decrease the pre_chamber temperature properly, so I'm just going to neglect it :P
 end
 
 

@@ -286,7 +286,7 @@ end
 
 function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
     #manual_fluid_cache_updates!(du, u, p, t, system, geo, cell_id)
-    if t < p.cea_switch_time && system.hot_fire == true
+    if t < p.cea_switch_time || system.hot_fire == false
         u.temperature[cell_id] = u.state_temperature[cell_id]
 
         manual_cache_updates!(du, u, p, t, system, geo, cell_id)
@@ -300,8 +300,8 @@ function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
         pre_cea_fluid_property_update_ideal!(du, u, p, t, system, geo, cell_id)
         #pre_cea_fluid_property_update_clapeyron!(du, u, p, t, system, geo, cell_id)
     else
-        #cea_fluid_property_update_ideal!(du, u, p, t, system, geo, cell_id)
-        cea_fluid_property_update_clapeyron!(du, u, p, t, system, geo, cell_id)
+        cea_fluid_property_update!(du, u, p, t, system, geo, cell_id)
+        #cea_fluid_property_update_clapeyron!(du, u, p, t, system, geo, cell_id)
     end
     #fluid_property_update_clapeyron!(du, u, p, t, system, geo, cell_id)
 end
@@ -1108,17 +1108,9 @@ state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
     startup_prob,
     #FBDF(linsolve = SparspakFactorization(), autodiff = ADTypes.AutoForwardDiff()),
     #dt = 1e-6,
-    Tsit5(), #old version, explicit
-    #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
-    #Dense ForwardDiff Jacobian with the default dense LU (see the note above ode_func)
-    #FBDF(autodiff = ADTypes.AutoForwardDiff()),
-    #Tsit5(),
+    #Tsit5(), #old version, explicit
+    FBDF(autodiff = ADTypes.AutoForwardDiff()),
     dt = 1e-6,
-    #FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()), #needs a sparsity pattern that covers every regime
-    #AutoTsit5(FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff())),
-    #FBDF(linsolve = KrylovJL_GMRES(), autodiff = AutoForwardDiff()),
-    #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
-    #FBDF(linsolve = KrylovJL_GMRES(), nlsolve = NLNewton(relax = 0.7), precs = iluzero, concrete_jac = true),
     callback = callbacks,
     isoutofdomain = state_is_invalid_closure,
     tstops = ustrip.(upreferred.(config.data.tstops))
