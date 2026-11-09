@@ -1034,7 +1034,7 @@ config.data = merge(config.data, (
     n_species = n_species,
     moles_vec = CellSpeciesVectors(config.geo.n_cells, n_species, jacobian_chunk_size),
     mole_fractions_vec = CellSpeciesVectors(config.geo.n_cells, n_species, jacobian_chunk_size),
-))
+));
 
 function solve_system!(du, u, p, t, system, geo)
     #Only does anything during sparsity detection: the tracer get_tmp returns a new #undef array every call, so one
@@ -1059,7 +1059,7 @@ end
 #The leading semicolon keeps the field names; without it, splatting a NamedTuple gives a plain Tuple of values
 system_data = (;
     config.data...,
-)
+);
 
 du0_vec, u0_vec, system, geo = finish_fvm_config(config, connection_map_function, system_data, check_units = false);
 

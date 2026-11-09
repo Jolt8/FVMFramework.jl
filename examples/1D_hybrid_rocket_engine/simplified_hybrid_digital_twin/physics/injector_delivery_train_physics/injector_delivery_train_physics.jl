@@ -400,13 +400,13 @@ function injector_train_mass_flow!(
     du.density[tank_cell_id] += -true_mass_flow / geo.cell_volumes[tank_cell_id]
     du.density[pre_chamber_cell_id] += true_mass_flow / geo.cell_volumes[pre_chamber_cell_id]
 
-    @show true_mass_flow / geo.cell_volumes[pre_chamber_cell_id]
-
     tank_internal_energy_rate = -true_mass_flow * (u.specific_enthalpy[tank_cell_id] - u.specific_internal_energy[tank_cell_id])
 
     tank_mass = u.density[tank_cell_id] * geo.cell_volumes[tank_cell_id]
+    pre_chamber_mass = u.density[pre_chamber_cell_id] * geo.cell_volumes[pre_chamber_cell_id]
 
     du.state_temperature[tank_cell_id] += tank_internal_energy_rate / (tank_mass * u.cv[tank_cell_id])
+    du.state_temperature[pre_chamber_cell_id] -= tank_internal_energy_rate / (pre_chamber_mass * u.cv[pre_chamber_cell_id])
 
     #I really don't want to separate latent heat cooling to decrease the pre_chamber temperature properly, so I'm just going to neglect it :P
 end
