@@ -60,4 +60,5 @@ function cea_fluid_property_update!(du, u, p, t, system, geo, cell_id)
     cea_property_update!(du, u, p, t, system, geo, cell_id)
     mw_avg!(du, u, p, t, system, geo, cell_id)
     update_cell_moles_and_mole_fractions_vec!(du, u, p, t, system, geo, cell_id)
+    pre_cea_ideal_eos!(du, u, p, t, system, geo, cell_id)  #P = ρ R_u T_comb / MW_CEA
 end

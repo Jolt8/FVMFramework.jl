@@ -397,6 +397,11 @@ function injector_train_mass_flow!(
     upper_pressure = ForwardDiff.value(u.pressure[tank_cell_id])
     plain_residual(mid_section_pressure) = ForwardDiff.value(residual(mid_section_pressure))
 
+    if !(plain_residual(lower_pressure) * plain_residual(upper_pressure) < 0)
+        du.density[pre_chamber_cell_id] += oftype(u.density[pre_chamber_cell_id], NaN)
+        return nothing
+    end
+
     plain_mid_section_pressure = find_zero(plain_residual, (lower_pressure, upper_pressure))
 
     #Implicit function theorem: r(P_mid, state) = 0  ->  dP_mid/dstate = -(dr/dstate) / (dr/dP_mid)

@@ -308,7 +308,9 @@ function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
 end
 
 function fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
-    
+    if t < p.cea_switch_time || system.hot_fire == false
+        cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
+    end
 end
 
 function normalize!(vec)
@@ -390,7 +392,9 @@ add_region!(
         if system.burn_igniter == true
             burn_igniter_puck!(du, u, p, t, system, geo, cell_id)
         end
-        cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
+        if t < p.cea_switch_time || system.hot_fire == false
+            cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
+        end
     end
 )
 
@@ -406,12 +410,6 @@ add_region!(
     region_function = 
     function fluid_domain_region!(du, u, p, t, system, geo, cell_id)
         fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
-
-        if cell_id == get_cellset(geo, "fluid_domain")[end]
-            #TODO: do some CFD to create a closure for the recirculation zone here
-            #recirculation_zone_closure(du, u, p, t, system, geo, cell_id)
-            cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
-        end
     end
 )
 
@@ -1075,7 +1073,7 @@ jac_sparsity = ADTypes.jacobian_sparsity(
 )
 
 t0 = 0.0
-switch_time = 6.5
+switch_time = 10.0
 tMax = 10.0
 
 #Dense Jacobian for now. jac_sparsity above comes from LOCAL sparsity detection at t = 0, which only records the
@@ -1135,4 +1133,11 @@ plot(reduced_sol.t, [u_named[i].temperature[pre_chamber_cell_id] for i in eachin
 
 #plot(reduced_sol.t, [u_named[i].igniter_mass[1] for i in eachindex(reduced_sol.t)])
 
-plot(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "nozzle_top")[1]] for i in eachindex(reduced_sol.t)])
+plot(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "injector_bulkhead_top")[1]] for i in eachindex(reduced_sol.t)])
+plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "injector_bulkhead_bottom")[1]] for i in eachindex(reduced_sol.t)])
+plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "aluminum_housing_top")[1]] for i in eachindex(reduced_sol.t)])
+plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "aluminum_housing_near_nozzle_top")[1]] for i in eachindex(reduced_sol.t)])
+plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "aluminum_housing_near_nozzle_bottom")[1]] for i in eachindex(reduced_sol.t)])
+plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "nozzle_top")[1]] for i in eachindex(reduced_sol.t)])
+plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "nozzle_bottom")[1]] for i in eachindex(reduced_sol.t)])
+plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "nozzle_retainer")[1]] for i in eachindex(reduced_sol.t)])
