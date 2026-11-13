@@ -11,8 +11,6 @@ function plot_sol_states(sol, u_axes, p_axes, oxidizer_model, chamber_model)
         
         update_state!(du_named, u_named, p_named, 0.0, oxidizer_model, chamber_model)
 
-        @show p_named.chamber_pressure
-
         push!(u_named_vec, u_named)
         push!(p_named_vec, p_named)
 
