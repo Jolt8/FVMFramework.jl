@@ -1192,6 +1192,9 @@ function update_fluid_domain_state_temperatures(sol, startup_u_end)
     return Vector(u0_named)
 end
 
+#TODO: Since we've confirmed setting the gas temperature to the combustion temperature after the CEA stops, 
+#we could technically get rid of this second solve.
+
 post_motor_burnout_prob = remake(
     startup_prob; 
     u0 = update_fluid_domain_state_temperatures(startup_sol, startup_sol.u[end]), 
