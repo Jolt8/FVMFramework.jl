@@ -44,5 +44,7 @@ chamber_mass_fractions = dict(
     )
 )
 
-print(len(chamber_mass_fractions))
-print(chamber_mass_fractions)
+print(cea.get_Tcomb(Pc = 2_000_000, MR = float('inf')))
+
+#print(len(chamber_mass_fractions))
+#print(chamber_mass_fractions)
