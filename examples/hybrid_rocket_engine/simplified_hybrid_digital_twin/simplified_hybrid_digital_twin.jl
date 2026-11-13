@@ -237,6 +237,7 @@ add_setup_syms!(
         igniter_volume = cad_data.igniter_puck_volume |> u"m^3",
 
         # Other Parameters:
+        motor_burn_time = 6.0u"s",
         cea_switch_time = 0.6u"s",
         chamber_pressure = 20.0u"bar",
 
@@ -266,6 +267,7 @@ struct IgniterPuck <: AbstractPhysics end
 push!(config.data.tstops, config.optimized_parameters.valve_open_time)
 push!(config.data.tstops, config.optimized_parameters.igniter_burn_time)
 push!(config.data.tstops, config.optimized_parameters.cea_switch_time)
+push!(config.data.tstops, config.optimized_parameters.motor_burn_time)
 
 Revise.includet(joinpath(@__DIR__, "property_update_functions", "system_moles_vec.jl"))
 Revise.includet(joinpath(@__DIR__, "property_update_functions", "pre_cea_update_fluid_caches.jl"))
@@ -285,21 +287,24 @@ function cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
     du.state_temperature[cell_id] += du.heat[cell_id] / (geo.cell_volumes[cell_id] * u.density[cell_id] * u.cv[cell_id])
 end
 
+function update_fluid_properties_non_cea!(du, u, p, t, system, geo, cell_id)
+    u.temperature[cell_id] = u.state_temperature[cell_id]
+
+    manual_cache_updates!(du, u, p, t, system, geo, cell_id)
+
+    properties = ComponentVector(system.properties_vec, system.properties_axes)
+
+    for_fields!(u.mass_fractions, properties.mass_fractions) do species, u_mass_fractions, properties_mass_fractions
+        u.mass_fractions[species[cell_id]] = properties_mass_fractions[species[cell_id]]
+    end
+
+    pre_cea_fluid_property_update_ideal!(du, u, p, t, system, geo, cell_id)
+end
+
 function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
     #manual_fluid_cache_updates!(du, u, p, t, system, geo, cell_id)
-    if t < p.cea_switch_time || system.hot_fire == false
-        u.temperature[cell_id] = u.state_temperature[cell_id]
-
-        manual_cache_updates!(du, u, p, t, system, geo, cell_id)
-
-        properties = ComponentVector(system.properties_vec, system.properties_axes)
-
-        for_fields!(u.mass_fractions, properties.mass_fractions) do species, u_mass_fractions, properties_mass_fractions
-            u.mass_fractions[species[cell_id]] = properties_mass_fractions[species[cell_id]]
-        end
-
-        pre_cea_fluid_property_update_ideal!(du, u, p, t, system, geo, cell_id)
-        #pre_cea_fluid_property_update_clapeyron!(du, u, p, t, system, geo, cell_id)
+    if t < p.cea_switch_time || system.hot_fire == false || t > p.motor_burn_time
+        update_fluid_properties_non_cea!(du, u, p, t, system, geo, cell_id)
     else
         cea_fluid_property_update!(du, u, p, t, system, geo, cell_id)
         #cea_fluid_property_update_clapeyron!(du, u, p, t, system, geo, cell_id)
@@ -308,7 +313,7 @@ function update_fluid_properties!(du, u, p, t, system, geo, cell_id)
 end
 
 function fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
-    if t < p.cea_switch_time || system.hot_fire == false
+    if t < p.cea_switch_time || system.hot_fire == false || t > p.motor_burn_time
         cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
     end
 end
@@ -377,6 +382,10 @@ config.data = merge(config.data, (
 
 Revise.includet(joinpath(@__DIR__, "physics", "igniter_physics", "igniter_physics.jl"))
 
+function motor_burned_out(du, u, p, t, system, geo)
+    return t > p.motor_burn_time
+end
+
 add_region!(
     config, "pre_chamber";
     type = Fluid(),
@@ -384,7 +393,8 @@ add_region!(
     properties = air_properties,
     property_update_function = 
     function update_pre_chamber_region!(du, u, p, t, system, geo, cell_id)
-        update_fluid_properties!(du, u, p, t, system, geo, cell_id)
+        update_fluid_properties_non_cea!(du, u, p, t, system, geo, cell_id)
+        #update_fluid_properties!(du, u, p, t, system, geo, cell_id)
     end,
     region_function = 
     function pre_chamber_region!(du, u, p, t, system, geo, cell_id)
@@ -392,8 +402,15 @@ add_region!(
         if system.burn_igniter == true
             burn_igniter_puck!(du, u, p, t, system, geo, cell_id)
         end
-        if t < p.cea_switch_time || system.hot_fire == false
+
+        #this isn't very rigorous, we prevent this cell from heating up or cooling down for most of the motor firing
+        if t < p.cea_switch_time || system.hot_fire == false || t > p.motor_burn_time 
             cap_heat_flux_to_temp_change!(du, u, p, t, system, geo, cell_id)
+        end
+
+        if motor_burned_out(du, u, p, t, system, geo)
+            du.density[cell_id] *= 0.0
+            du.state_temperature[cell_id] *= 0.0
         end
     end
 )
@@ -410,6 +427,11 @@ add_region!(
     region_function = 
     function fluid_domain_region!(du, u, p, t, system, geo, cell_id)
         fluid_domain_physics!(du, u, p, t, system, geo, cell_id)
+
+        if motor_burned_out(du, u, p, t, system, geo)
+            du.density[cell_id] *= 0.0
+            du.state_temperature[cell_id] *= 0.0
+        end
     end
 )
 
@@ -716,7 +738,7 @@ add_patch!(config;
         du, u, p, t, system, geo,
         idx_a, face_a, idx_b, face_b
     )
-        if t > p.valve_open_time
+        if t > p.valve_open_time && t < p.motor_burn_time
             injector_train_mass_flow!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b) 
         end
         #this would be the valve equation determining flow between the mid section and first chamber cell
@@ -734,8 +756,10 @@ add_patch!(config;
         idx_a, face_a, idx_b, face_b
     )
         #TODO: WE CANNOT IGNORE CONVECTION (IT WILL LIKELY BE OFF BY A FACTOR OF 1000x)!
-        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b) #this is pretty negligible
-        chamber_convective_heat_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        if motor_burned_out(du, u, p, t, system, geo) == false
+            heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b) #this is pretty negligible
+            chamber_convective_heat_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        end
     end
 )
 
@@ -760,6 +784,17 @@ add_patch!(config;
         heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
     end
 )
+
+add_patch!(config;
+    owner = "aluminum_housing_top",
+    connection = "aluminum_housing",
+    patch_function = function aluminum_housing_top_to_aluminum_housing!(
+        du, u, p, t, system, geo,
+        idx_a, face_a, idx_b, face_b
+    )
+        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+    end
+)
 #end
 
 #Radial fluxes across top cells
@@ -776,8 +811,10 @@ add_patch!(config;
     )
         #this one will likely need a CFD closure in the future to account for convection
         #TODO: WE CANNOT IGNORE CONVECTION (IT WILL LIKELY BE OFF BY A FACTOR OF 1000x)!
-        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
-        chamber_convective_heat_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        if motor_burned_out(du, u, p, t, system, geo) == false
+            heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+            chamber_convective_heat_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+        end
     end
 )
 
@@ -905,11 +942,12 @@ add_patch!(config;
         #we're going to assume that once the gas temperature next to the fuel grain goes above its regression temperature, it stops heating up further
         #since (like water boiling into steam) more heating just results in faster regression and doesn't meaningfully increase the temperature of the fuel grain
 
-        if u.temperature[idx_a] <= p.min_fuel_regression_temperature
+        if u.temperature[idx_a] <= p.min_fuel_regression_temperature && motor_burned_out(du, u, p, t, system, geo) == false
             heat_diffusion_series_resistance!(
                 du, u, p, t, system, geo,
                 idx_a, face_a, idx_b, face_b
             )
+            chamber_convective_heat_flux!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
         end
     end
 )
@@ -958,11 +996,13 @@ add_patch!(config, "fluid_domain_to_nozzle_inlet";
         converging_area = system.converging_nozzle_surface_area
         diverging_area = system.diverging_nozzle_surface_area
 
-        du.heat[fluid_cell_id] -= p.nozzle_converging_heat_transfer_coefficient * converging_area * (u.temperature[fluid_cell_id] - u.temperature[converging_cell_id])
-        du.heat[converging_cell_id] += p.nozzle_converging_heat_transfer_coefficient * converging_area * (u.temperature[fluid_cell_id] - u.temperature[converging_cell_id])
+        if motor_burned_out(du, u, p, t, system, geo) == false
+            du.heat[fluid_cell_id] -= p.nozzle_converging_heat_transfer_coefficient * converging_area * (u.temperature[fluid_cell_id] - u.temperature[converging_cell_id])
+            du.heat[converging_cell_id] += p.nozzle_converging_heat_transfer_coefficient * converging_area * (u.temperature[fluid_cell_id] - u.temperature[converging_cell_id])
 
-        du.heat[fluid_cell_id] -= p.nozzle_diverging_heat_transfer_coefficient * diverging_area * (u.temperature[fluid_cell_id] - u.temperature[diverging_cell_id])
-        du.heat[diverging_cell_id] += p.nozzle_diverging_heat_transfer_coefficient * diverging_area * (u.temperature[fluid_cell_id] - u.temperature[diverging_cell_id])
+            du.heat[fluid_cell_id] -= p.nozzle_diverging_heat_transfer_coefficient * diverging_area * (u.temperature[fluid_cell_id] - u.temperature[diverging_cell_id])
+            du.heat[diverging_cell_id] += p.nozzle_diverging_heat_transfer_coefficient * diverging_area * (u.temperature[fluid_cell_id] - u.temperature[diverging_cell_id])
+        end
     end
 )
 
@@ -1024,6 +1064,28 @@ add_patch!(config;
     end
 )
 
+add_patch!(config;
+    owner = "aluminum_housing_near_nozzle_top",
+    connection = "aluminum_housing_near_nozzle_bottom",
+    patch_function = function aluminum_housing_near_nozzle_top_to_aluminum_housing_near_nozzle_bottom!(
+        du, u, p, t, system, geo, 
+        idx_a, face_a, idx_b, face_b
+    )
+        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+    end
+)
+
+add_patch!(config;
+    owner = "aluminum_housing",
+    connection = "aluminum_housing_near_nozzle_top",
+    patch_function = function aluminum_housing_to_aluminum_housing_near_nozzle_top!(
+        du, u, p, t, system, geo, 
+        idx_a, face_a, idx_b, face_b
+    )
+        heat_diffusion_series_resistance!(du, u, p, t, system, geo, idx_a, face_a, idx_b, face_b)
+    end
+)
+
 n_species = length(propertynames(config.cache_syms_and_units.mass_fractions))
 
 #Same chunk size finish_fvm_config uses for the du/u DiffCaches
@@ -1073,7 +1135,6 @@ jac_sparsity = ADTypes.jacobian_sparsity(
 )
 
 t0 = 0.0
-switch_time = 10.0
 tMax = 10.0
 
 #Dense Jacobian for now. jac_sparsity above comes from LOCAL sparsity detection at t = 0, which only records the
@@ -1086,7 +1147,7 @@ tMax = 10.0
 ode_func = ODEFunction(f_closure_implicit)
 
 #ode_func = ODEFunction(f_closure_implicit, jac_prototype = float.(jac_sparsity)) #old version, sparsity pattern from t = 0 only
-startup_prob = ODEProblem(ode_func, u0_vec, (t0, switch_time), p_guess)
+startup_prob = ODEProblem(ode_func, u0_vec, (t0, ustrip(upreferred(config.optimized_parameters.motor_burn_time))), p_guess)
 
 Revise.includet(joinpath(@__DIR__, "callbacks", "stop_sol_callbacks.jl"))
 
@@ -1103,7 +1164,7 @@ state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
 #timescale (Jacobian entries ~1e11), so an explicit method like Tsit5 needs nanosecond steps and blows up on its
 #first trial step. FBDF steps over that stiffness. The small first dt keeps the initial step from being sized
 #by the hundreds of states that barely move.
-@time sol = solve(
+@time startup_sol = solve(
     startup_prob,
     #FBDF(linsolve = SparspakFactorization(), autodiff = ADTypes.AutoForwardDiff()),
     #dt = 1e-6,
@@ -1114,6 +1175,39 @@ state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
     isoutofdomain = state_is_invalid_closure,
     tstops = ustrip.(upreferred.(config.data.tstops))
 )
+
+function update_fluid_domain_state_temperatures(sol, startup_u_end)
+    u0 = deepcopy(startup_u_end)
+
+    du_named, u_named = regenerate_fvm_state(sol, system, solve_system!, config.geo, p_guess, save_properties_and_caches = true, track_progress = false);
+    
+    fluid_domain_cell_ids = get_cellset(geo, "fluid_domain")
+
+    u0_named = ComponentVector(u0, system.state_axes)
+
+    for cell_id in fluid_domain_cell_ids
+        u0_named.state_temperature[cell_id] = u_named[end].temperature[cell_id]
+    end
+
+    return Vector(u0_named)
+end
+
+post_motor_burnout_prob = remake(
+    startup_prob; 
+    u0 = update_fluid_domain_state_temperatures(startup_sol, startup_sol.u[end]), 
+    tspan = (ustrip(upreferred(config.optimized_parameters.motor_burn_time)), 50.0)
+)
+
+@time post_motor_burnout = solve(
+    post_motor_burnout_prob,
+    FBDF(autodiff = ADTypes.AutoForwardDiff()),
+    dt = 1e-6,
+    callback = callbacks,
+    isoutofdomain = state_is_invalid_closure,
+    tstops = ustrip.(upreferred.(config.data.tstops))
+)
+
+sol = (u = [startup_sol.u..., post_motor_burnout.u...], t = [startup_sol.t..., post_motor_burnout.t...])
 
 desired_shown_steps = 250
 save_fraction = desired_shown_steps / length(sol.t)
@@ -1133,11 +1227,62 @@ plot(reduced_sol.t, [u_named[i].temperature[pre_chamber_cell_id] for i in eachin
 
 #plot(reduced_sol.t, [u_named[i].igniter_mass[1] for i in eachindex(reduced_sol.t)])
 
-plot(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "injector_bulkhead_top")[1]] for i in eachindex(reduced_sol.t)])
-plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "injector_bulkhead_bottom")[1]] for i in eachindex(reduced_sol.t)])
-plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "aluminum_housing_top")[1]] for i in eachindex(reduced_sol.t)])
-plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "aluminum_housing_near_nozzle_top")[1]] for i in eachindex(reduced_sol.t)])
-plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "aluminum_housing_near_nozzle_bottom")[1]] for i in eachindex(reduced_sol.t)])
-plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "nozzle_top")[1]] for i in eachindex(reduced_sol.t)])
-plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "nozzle_bottom")[1]] for i in eachindex(reduced_sol.t)])
-plot!(reduced_sol.t, [u_named[i].state_temperature[get_cellset(config.geo, "nozzle_retainer")[1]] for i in eachindex(reduced_sol.t)])
+plot(
+    reduced_sol.t, 
+    [u_named[i].temperature[get_cellset(config.geo, "injector_bulkhead_top")[1]] * u"K" |> u"°C" for i in eachindex(reduced_sol.t)], 
+    label = "injector_bulkhead_top", 
+    title = "Temperaxtures of different regions over time in °C", 
+    #legend = :bottomright
+    legendfontsize = 7, 
+    xticks = (
+        [0:5:50; ustrip(upreferred(config.optimized_parameters.motor_burn_time))],
+        [string.(collect(0:5:50)); ]
+    )
+)
+plot!(reduced_sol.t, [u_named[i].temperature[get_cellset(config.geo, "injector_bulkhead_bottom")[1]] * u"K" |> u"°C" for i in eachindex(reduced_sol.t)], label = "injector_bulkhead_bottom")
+plot!(reduced_sol.t, [u_named[i].temperature[get_cellset(config.geo, "aluminum_housing_top")[1]] * u"K" |> u"°C" for i in eachindex(reduced_sol.t)], label = "aluminum_housing_top")
+plot!(reduced_sol.t, [u_named[i].temperature[get_cellset(config.geo, "phenolic_liner_top")[1]] * u"K" |> u"°C" for i in eachindex(reduced_sol.t)], label = "phenolic_liner_top")
+plot!(reduced_sol.t, [u_named[i].temperature[get_cellset(config.geo, "aluminum_housing_near_nozzle_top")[1]] * u"K" |> u"°C" for i in eachindex(reduced_sol.t)], label = "aluminum_housing_converging")
+plot!(reduced_sol.t, [u_named[i].temperature[get_cellset(config.geo, "aluminum_housing_near_nozzle_bottom")[1]] * u"K" |> u"°C" for i in eachindex(reduced_sol.t)], label = "aluminum_housing_diverging")
+plot!(reduced_sol.t, [u_named[i].temperature[get_cellset(config.geo, "nozzle_top")[1]] * u"K" |> u"°C" for i in eachindex(reduced_sol.t)], label = "nozzle_top")
+plot!(reduced_sol.t, [u_named[i].temperature[get_cellset(config.geo, "nozzle_bottom")[1]] * u"K" |> u"°C" for i in eachindex(reduced_sol.t)], label = "nozzle_bottom")
+plot!(reduced_sol.t, [u_named[i].temperature[get_cellset(config.geo, "nozzle_retainer")[1]] * u"K" |> u"°C" for i in eachindex(reduced_sol.t)], label = "nozzle_retainer")
+
+function plot_axial_region_temperatures(region_name)
+    region_cell_ids = get_cellset(geo, region_name)
+
+    start_idx = 1
+    stop_idx = length(reduced_sol.t)
+
+    plt = plot(reduced_sol.t[start_idx:stop_idx], [u_named[i].temperature[region_cell_ids[1]] * u"K" |> u"°C" for i in eachindex(reduced_sol.t)][start_idx:stop_idx])
+
+    for region_cell_id in region_cell_ids[2:end]
+        timesteps = reduced_sol.t[start_idx:stop_idx]
+        temperature_data = [u_named[i].temperature[region_cell_id] * u"K" |> u"°C" for i in eachindex(reduced_sol.t)][start_idx:stop_idx]
+
+        plt = plot!(timesteps, temperature_data)
+
+        sleep(0.3)
+
+        display(plt)
+    end
+
+    display(plt)
+end
+
+#pressure, oxidizer/fuel ratio, expansion ratio
+chamber_T_comb_interp(ustrip(10u"bar" |> u"Pa"), 7.0, 10.0)
+chamber_T_comb_interp(ustrip(20u"bar" |> u"Pa"), 7.0, 10.0)
+chamber_T_comb_interp(ustrip(30u"bar" |> u"Pa"), 7.0, 10.0)
+
+chamber_T_comb_interp(ustrip(20u"bar" |> u"Pa"), 1.0, 10.0)
+chamber_T_comb_interp(ustrip(20u"bar" |> u"Pa"), 5.0, 10.0)
+chamber_T_comb_interp(ustrip(20u"bar" |> u"Pa"), 13.0, 10.0)
+chamber_T_comb_interp(ustrip(20u"bar" |> u"Pa"), 15.0, 10.0)
+
+#plot_axial_region_temperatures("fluid_domain")
+plot_axial_region_temperatures("fuel_grain")
+plot_axial_region_temperatures("phenolic_liner")
+plot_axial_region_temperatures("aluminum_housing")
+
+u_named[end].state_temperature[get_cellset(geo, "aluminum_housing")[end]]
