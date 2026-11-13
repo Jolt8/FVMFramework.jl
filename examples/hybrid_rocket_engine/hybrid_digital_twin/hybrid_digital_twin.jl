@@ -1235,10 +1235,10 @@ state_is_invalid_closure = (u, p, t) -> state_is_invalid(u, p, t, system);
     startup_prob,
     #FBDF(linsolve = SparspakFactorization(), autodiff = ADTypes.AutoForwardDiff()),
     #dt = 1e-6,
-    Tsit5(), #old version, explicit
+    #Tsit5(), #old version, explicit
     #AutoTsit5(FBDF(linsolve = KrylovJL_GMRES(), precs = iluzero, concrete_jac = true)),
     #Dense ForwardDiff Jacobian with the default dense LU (see the note above ode_func)
-    #FBDF(autodiff = ADTypes.AutoForwardDiff()),
+    FBDF(autodiff = ADTypes.AutoForwardDiff()),
     #Tsit5(),
     dt = 1e-6,
     #FBDF(linsolve = SparspakFactorization(), autodiff = AutoForwardDiff()), #needs a sparsity pattern that covers every regime
