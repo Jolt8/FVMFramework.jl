@@ -1,0 +1,1 @@
+This plot shows the temperatures of different regions BEFORE the cea was turned off after the motor stops burning

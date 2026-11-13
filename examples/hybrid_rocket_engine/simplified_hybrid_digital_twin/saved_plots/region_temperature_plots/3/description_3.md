@@ -1,0 +1,6 @@
+Changes made to produce this plot:
+- Instead of setting the tempreature of the combustion gases to room temeprature after the motor is assumed to be burned out, the temperature of the combustion gases are set to what they were during the time when CEA is being used
+- This had little effect on the temperature of the combustion gases because the mass flux from the injector basically forces the combustion gases out so quickly that their temperatures do not matter
+- IN ADDITION (CHANGES), I also made it so that when the motor is considered to be burned out, the oxidizer mass flux into the chamber stops
+- This change made the pressure in the chamber drop to ambient almost immediatley, so a lot of evidence at least from this simulation points to post motor burnout temperatures not mattering that much and it seems like using the peak temperatures is a safe assumption
+- Thus, for thermal analysis, I believe its safe to simulate only the time from when the motor starts to when it finishes burning
