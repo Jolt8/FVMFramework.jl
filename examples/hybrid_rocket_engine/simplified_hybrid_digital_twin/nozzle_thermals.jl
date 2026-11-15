@@ -79,24 +79,27 @@ function get_diameter_at_nozzle_position(cad_data, nozzle_position, nozzle_throa
     end
 end
 
-function create_nozzle_positions(cad_data)
-    n_nozzle_positions = 1000
+function frustum_lateral_area(d_top, d_bottom, dz)
+    r_top = d_top / 2
+    r_bottom = d_bottom / 2
+    slant_length = sqrt((r_bottom - r_top)^2 + dz^2)
+    return pi * (r_top + r_bottom) * slant_length
+end
+
+function create_nozzle_positions(cad_data; n_converging = 100, n_diverging = 100)
+    nozzle_throat_position = cad_data.nozzle_length - cad_data.nozzle_diverging_length
+
+    # Separate grids for each cone so a segment edge lands exactly on the throat
+    converging_edges = collect(range(0.0u"mm", nozzle_throat_position, n_converging + 1))
+    diverging_edges  = collect(range(nozzle_throat_position, cad_data.nozzle_length, n_diverging + 1))
+    segment_edges    = vcat(converging_edges, diverging_edges[2:end]) # drop the duplicated throat edge
 
     nozzle_positions = NozzlePosition[]
 
-    nozzle_throat_position = cad_data.nozzle_length - cad_data.nozzle_diverging_length
-
-    nozzle_top_and_bottom_positions = collect(range(0.0u"mm", cad_data.nozzle_length, n_nozzle_positions + 1))
-
-    first_middle_position = (nozzle_top_and_bottom_positions[1] + nozzle_top_and_bottom_positions[2]) / 2
-    last_middle_position = (nozzle_top_and_bottom_positions[end-1] + nozzle_top_and_bottom_positions[end]) / 2
-
-    nozzle_middle_positions = collect(range(first_middle_position, last_middle_position, n_nozzle_positions))
-
-    for i in 1:n_nozzle_positions
-        top_position = nozzle_top_and_bottom_positions[i]
-        middle_position = nozzle_middle_positions[i]
-        bottom_position = nozzle_top_and_bottom_positions[i+1]
+    for i in 1:(n_converging + n_diverging)
+        top_position = segment_edges[i]
+        bottom_position = segment_edges[i+1]
+        middle_position = (top_position + bottom_position) / 2
 
         top_diameter = get_diameter_at_nozzle_position(cad_data, top_position, nozzle_throat_position)
         middle_diameter = get_diameter_at_nozzle_position(cad_data, middle_position, nozzle_throat_position)
@@ -110,7 +113,7 @@ function create_nozzle_positions(cad_data)
             half_angle = cad_data.diverging_half_angle
         end
 
-        wall_area = pi * (top_diameter + bottom_diameter) / 2 * abs(bottom_diameter - top_diameter) / (2 * sind(half_angle))
+        wall_area = frustum_lateral_area(top_diameter, bottom_diameter, bottom_position - top_position)
 
         push!(nozzle_positions, NozzlePosition(
             top_position,
@@ -131,7 +134,7 @@ end
 nozzle_positions = create_nozzle_positions(cad_data)
 
 system = (
-    use_frozen_cea_interps = true, 
+    use_frozen_cea_interps = false, 
     #equilibrium gives a much higher heat transfer coefficient, so we'll use that to be safe
     #I think if we use equilibrium to get a higher heat transfer coefficient, I would be comfortable dropping the 2x safety factor and swapping it out for like a 1.2x safety factor
 )
@@ -226,14 +229,14 @@ function get_bartz_heat_transfer_coefficient(
     recovery_factor = gas_prantdl^(1/3) #this should be accurate for turbulent flow in the nozzle
 
     adiabatic_gas_at_wall_temperature = (
-        gas_temperature * (
+        gas_stagnation_temperature * (
             (1 + recovery_factor * ((gas_gamma - 1) / 2) * mach_number^2) /
             (1 + ((gas_gamma - 1) / 2) * mach_number^2)
         )   
     )
 
     boundary_layer_correction_factor = (
-        (wall_temperature / (2 * gas_temperature)) *
+        (wall_temperature / (2 * gas_stagnation_temperature)) *
         (1 + ((gas_gamma - 1) / 2) * mach_number^2) + 1/2
     )^-0.68 * (
         1 + ((gas_gamma - 1) / 2) * mach_number^2
@@ -254,16 +257,21 @@ function get_bartz_heat_transfer_coefficient(
         boundary_layer_correction_factor
     )
 
-    @show gas_side_convective_heat_transfer_coefficient |> u"W/m^2/K"
+    gas_side_convective_heat_transfer_coefficient = ustrip(upreferred(gas_side_convective_heat_transfer_coefficient)) * u"W/(m^2*K)"
+    #since we're not using rational exponents, we can convert it to regular units easily, so we'll just strip it
 
-    heat_transfer_wattage_into_nozzle_walls = gas_side_convective_heat_transfer_coefficient * (gas_temperature - wall_temperature) * nozzle_position.wall_area
+    heat_flux_into_nozzle_walls = gas_side_convective_heat_transfer_coefficient * (adiabatic_gas_at_wall_temperature - wall_temperature)
+
+    heat_transfer_wattage_into_nozzle_walls = gas_side_convective_heat_transfer_coefficient * (adiabatic_gas_at_wall_temperature - wall_temperature) * nozzle_position.wall_area
 
     returned_values = ComponentVector(
         wall_area = nozzle_position.wall_area,
         heat_transfer_wattage_into_nozzle_walls = heat_transfer_wattage_into_nozzle_walls,
+        heat_flux_into_nozzle_walls = heat_flux_into_nozzle_walls,
         gas_side_convective_heat_transfer_coefficient = gas_side_convective_heat_transfer_coefficient,
 
         mach_number = mach_number,
+        adiabatic_gas_at_wall_temperature = adiabatic_gas_at_wall_temperature,
         gas_temperature = gas_temperature,
         boundary_layer_correction_factor = boundary_layer_correction_factor,
         
@@ -291,12 +299,18 @@ function plot_important_values()
     for name in propertynames(returned_values_vec[1])
         plt = plot(
             [nozzle_position.middle_position for nozzle_position in nozzle_positions], 
-            ustrip.(upreferred.([getproperty(returned_values, name) for returned_values in returned_values_vec])),
+            [getproperty(returned_values, name) for returned_values in returned_values_vec],
             title = String(name)
         )
 
         display(plt)
     end
+
+    total_heat_flux_into_nozzle = sum(ustrip.(upreferred.([getproperty(returned_values, :heat_transfer_wattage_into_nozzle_walls) for returned_values in returned_values_vec]))) * u"W"
+
+    @show total_heat_flux_into_nozzle
+
+    return nothing
 end
 
 plot_important_values()
