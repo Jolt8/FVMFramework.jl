@@ -66,6 +66,7 @@ struct NozzlePosition
     top_diameter::typeof(1.0u"m")
     middle_diameter::typeof(1.0u"m")
     bottom_diameter::typeof(1.0u"m")
+    is_converging::Bool
 end
 
 function get_diameter_at_nozzle_position(cad_data, nozzle_position, nozzle_throat_position)
@@ -95,6 +96,15 @@ function create_nozzle_positions(cad_data)
         middle_position = nozzle_middle_positions[i]
         bottom_position = nozzle_top_and_bottom_positions[i+1]
 
+        is_converging = false
+
+        if middle_position < nozzle_throat_position
+            is_converging = true
+        else
+            is_converging = false
+        end
+
+
         push!(nozzle_positions, NozzlePosition(
             top_position,
             middle_position,
@@ -102,6 +112,7 @@ function create_nozzle_positions(cad_data)
             get_diameter_at_nozzle_position(cad_data, top_position, nozzle_throat_position),
             get_diameter_at_nozzle_position(cad_data, middle_position, nozzle_throat_position),
             get_diameter_at_nozzle_position(cad_data, bottom_position, nozzle_throat_position),
+            is_converging
         ))
     end
 
@@ -164,9 +175,6 @@ function get_position_to_throat_area_based_on_mach_number(
 
     guessed_position_diameter = 2 * sqrt(position_area / pi)
 
-    @show mach_number
-    @show nozzle_position.middle_diameter - guessed_position_diameter
-
     return nozzle_position.middle_diameter - guessed_position_diameter
 end
 
@@ -183,16 +191,22 @@ function get_bartz_heat_transfer_coefficient(
         frozen = system.use_frozen_cea_interps
     )
 
-    mach_number = find_zero(mach_number -> get_position_to_throat_area_based_on_mach_number(mach_number, p, system, nozzle_position), (1e-9, 20.0))
+    if nozzle_position.is_converging
+        bounds = (1e-9, 1.0)
+    else
+        bounds = (1.0, 20.0)
+    end
+
+    mach_number = find_zero(mach_number -> get_position_to_throat_area_based_on_mach_number(mach_number, p, system, nozzle_position), bounds)
 
     gas_stagnation_temperature = chamber_T_comb_interp(cea_inputs...)
-    gas_prantdl = nozzle_prantdl_interp(cea_inputs...)
-    gas_gamma = nozzle_gas_gamma(cea_inputs...)
+    gas_prantdl = chamber_prandtl_interp(cea_inputs...)
+    gas_gamma = chamber_gamma_interp(cea_inputs...)
 
-    gas_temperature = gas_stagnation_temperature / (1 + ((gas_gamma - 1) / 2))
+    gas_temperature = gas_stagnation_temperature / (1 + ((gas_gamma - 1) / 2) * mach_number^2)
 
     #gas_pressure might be needed in the future for nozzle hoop stress
-    gas_pressure = chamber_pressure * (gas_temperature / gas_stagnation_temperature)^(gas_gamma / (gas_gamma - 1))
+    gas_pressure = p.chamber_pressure * (gas_temperature / gas_stagnation_temperature)^(gas_gamma / (gas_gamma - 1))
 
     recovery_factor = gas_prantdl^(1/3) #this should be a accurate for turbulent flow in the nozzle
 
@@ -210,15 +224,14 @@ function get_bartz_heat_transfer_coefficient(
         1 + ((gas_gamma - 1) / 2) * mach_number^2
     )^-0.12
 
-    gas_dynamic_viscosity = nozzle_mu_interp(cea_inputs...)
-    gas_cp = nozzle_cp_interp(cea_inputs...)
-    gas_prantdl = nozzle_prantdl_interp(cea_inputs...)
-    c_star_effective = p.combustion_efficiency * nozzle_cstar_interp(cea_inputs...)
+    gas_dynamic_viscosity = chamber_mu_interp(cea_inputs...)
+    gas_cp = chamber_cp_interp(cea_inputs...)
+    c_star_effective = p.combustion_efficiency * chamber_cstar_interp(cea_inputs...)
 
     radius_of_curvature_of_nozzle_wall_at_throat = 1.25 * (cad_data.nozzle_throat_diameter / 2) #this doesn't have a big effect on the predicted heat transfer
 
     gas_side_convective_heat_transfer_coefficient = (
-        (0.026 / cad_data.throat_diameter^0.2) *
+        (0.026 / cad_data.nozzle_throat_diameter^0.2) *
         ((gas_dynamic_viscosity^0.2 * gas_cp) / gas_prantdl^0.6) *
         (p.chamber_pressure / c_star_effective)^0.8 *
         (cad_data.nozzle_throat_diameter / radius_of_curvature_of_nozzle_wall_at_throat)^0.1 *
@@ -243,8 +256,8 @@ end
 
 using Plots
 
-plot([nozzle_position.middle_position for nozzle_position in nozzle_positions], gas_side_convective_heat_transfer_coefficients)
-plot([nozzle_position.middle_position for nozzle_position in nozzle_positions], gas_pressures)
+plot([nozzle_position.middle_position for nozzle_position in nozzle_positions], ustrip.(upreferred.(gas_side_convective_heat_transfer_coefficients)))
+plot([nozzle_position.middle_position for nozzle_position in nozzle_positions], ustrip.(upreferred.(gas_pressures)))
 
 
 
