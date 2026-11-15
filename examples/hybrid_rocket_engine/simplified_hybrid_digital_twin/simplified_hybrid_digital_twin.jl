@@ -637,7 +637,7 @@ graphite_initial_conditions = ComponentVector(
 )
 
 graphite_properties = ComponentVector(
-    cp = 710.0u"J/(kg*K)",
+    cp = 710.0u"J/(kg*K)", # literature, 300 K only; rises to ~2000 above 1500 K
     k = 130.0u"W/(m*K)"
 )
 

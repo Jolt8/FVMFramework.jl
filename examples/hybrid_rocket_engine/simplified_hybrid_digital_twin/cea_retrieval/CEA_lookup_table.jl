@@ -10,9 +10,10 @@ df = CSV.read(joinpath(@__DIR__, "cea_tables", "cea_table.csv"), DataFrame)
 pressures = sort(unique(df.P_chamber_pascals)) #Already in Pa
 of_ratios = sort(unique(df.OF_ratio))
 expansion_ratios = sort(unique(df.expansion_ratio))
+frozen_flags = sort(unique(df.frozen)) # 0 = shifting equilibrium, 1 = frozen
 
-# 3. Reshape the flat CSV columns into 3D arrays
-grid_size = (length(pressures), length(of_ratios), length(expansion_ratios))
+# 3. Reshape the flat CSV columns into 4D arrays (the last axis is the frozen flag)
+grid_size = (length(pressures), length(of_ratios), length(expansion_ratios), length(frozen_flags))
 
 chamber_cp_grid = fill(NaN, grid_size)
 chamber_mu_grid = fill(NaN, grid_size)
@@ -36,30 +37,32 @@ H2_grid = fill(NaN, grid_size)
 pressure_indices = Dict(value => index for (index, value) in enumerate(pressures))
 of_ratio_indices = Dict(value => index for (index, value) in enumerate(of_ratios))
 expansion_ratio_indices = Dict(value => index for (index, value) in enumerate(expansion_ratios))
+frozen_indices = Dict(value => index for (index, value) in enumerate(frozen_flags))
 
 for row in eachrow(df)
     p_idx = pressure_indices[row.P_chamber_pascals]
     of_idx = of_ratio_indices[row.OF_ratio]
     expansion_ratio_idx = expansion_ratio_indices[row.expansion_ratio]
+    frozen_idx = frozen_indices[row.frozen]
     
-    chamber_cp_grid[p_idx, of_idx, expansion_ratio_idx] = row.chamber_cp
-    chamber_mu_grid[p_idx, of_idx, expansion_ratio_idx] = row.chamber_mu
-    chamber_k_grid[p_idx, of_idx, expansion_ratio_idx] = row.chamber_k
-    chamber_prandtl_grid[p_idx, of_idx, expansion_ratio_idx] = row.chamber_prandtl
-    chamber_isp_vac_grid[p_idx, of_idx, expansion_ratio_idx] = row.chamber_isp_vac
-    chamber_cstar_grid[p_idx, of_idx, expansion_ratio_idx] = row.chamber_cstar
-    chamber_T_comb_grid[p_idx, of_idx, expansion_ratio_idx] = row.chamber_T_comb
-    chamber_mw_avg_grid[p_idx, of_idx, expansion_ratio_idx] = row.chamber_mw_avg
-    chamber_gamma_grid[p_idx, of_idx, expansion_ratio_idx] = row.chamber_gamma
+    chamber_cp_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.chamber_cp
+    chamber_mu_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.chamber_mu
+    chamber_k_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.chamber_k
+    chamber_prandtl_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.chamber_prandtl
+    chamber_isp_vac_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.chamber_isp_vac
+    chamber_cstar_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.chamber_cstar
+    chamber_T_comb_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.chamber_T_comb
+    chamber_mw_avg_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.chamber_mw_avg
+    chamber_gamma_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.chamber_gamma
 
-    N2O_grid[p_idx, of_idx, expansion_ratio_idx] = row.N2O
-    C2H4_grid[p_idx, of_idx, expansion_ratio_idx] = row.C2H4
-    N2_grid[p_idx, of_idx, expansion_ratio_idx] = row.N2
-    O2_grid[p_idx, of_idx, expansion_ratio_idx] = row.O2
-    CO2_grid[p_idx, of_idx, expansion_ratio_idx] = row.CO2
-    CO_grid[p_idx, of_idx, expansion_ratio_idx] = row.CO
-    H2O_grid[p_idx, of_idx, expansion_ratio_idx] = row.H2O
-    H2_grid[p_idx, of_idx, expansion_ratio_idx] = row.H2
+    N2O_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.N2O
+    C2H4_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.C2H4
+    N2_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.N2
+    O2_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.O2
+    CO2_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.CO2
+    CO_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.CO
+    H2O_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.H2O
+    H2_grid[p_idx, of_idx, expansion_ratio_idx, frozen_idx] = row.H2
 end
 
 any(isnan, chamber_cp_grid) && error("The CEA chamber_cp table is not a complete rectangular grid")
@@ -81,28 +84,32 @@ any(isnan, CO_grid) && error("The CEA CO table is not a complete rectangular gri
 any(isnan, H2O_grid) && error("The CEA H2O table is not a complete rectangular grid")
 any(isnan, H2_grid) && error("The CEA H2 table is not a complete rectangular grid")
 
-# 4. Create the 3D linear interpolators
+# 4. Create the 4D linear interpolators
 # Gridded(Linear()) is fast and ODE-friendly
-grid_axes = (pressures, of_ratios, expansion_ratios)
+grid_axes = (pressures, of_ratios, expansion_ratios, frozen_flags)
 
-chamber_cp_interp = interpolate(grid_axes, chamber_cp_grid, Gridded(Linear()))
-chamber_mu_interp = interpolate(grid_axes, chamber_mu_grid, Gridded(Linear()))
-chamber_k_interp = interpolate(grid_axes, chamber_k_grid, Gridded(Linear()))
-chamber_prandtl_interp = interpolate(grid_axes, chamber_prandtl_grid, Gridded(Linear()))
-chamber_isp_vac_interp = interpolate(grid_axes, chamber_isp_vac_grid, Gridded(Linear()))
-chamber_cstar_interp = interpolate(grid_axes, chamber_cstar_grid, Gridded(Linear()))
-chamber_T_comb_interp = interpolate(grid_axes, chamber_T_comb_grid, Gridded(Linear()))
-chamber_mw_avg_interp = interpolate(grid_axes, chamber_mw_avg_grid, Gridded(Linear()))
-chamber_gamma_interp = interpolate(grid_axes, chamber_gamma_grid, Gridded(Linear()))
+# Wraps a 4D interp so it is still called as interp(P, OF, eps) and the frozen flag is a keyword
+# frozen = false/true lands exactly on the 0/1 knot, so nothing is interpolated along that axis
+with_frozen_flag(interp) = (P, OF, eps; frozen = false) -> interp(P, OF, eps, Int(frozen))
 
-N2O_interp = interpolate(grid_axes, N2O_grid, Gridded(Linear()))
-C2H4_interp = interpolate(grid_axes, C2H4_grid, Gridded(Linear()))
-N2_interp = interpolate(grid_axes, N2_grid, Gridded(Linear()))
-O2_interp = interpolate(grid_axes, O2_grid, Gridded(Linear()))
-CO2_interp = interpolate(grid_axes, CO2_grid, Gridded(Linear()))
-CO_interp = interpolate(grid_axes, CO_grid, Gridded(Linear()))
-H2O_interp = interpolate(grid_axes, H2O_grid, Gridded(Linear()))
-H2_interp = interpolate(grid_axes, H2_grid, Gridded(Linear()))
+chamber_cp_interp = with_frozen_flag(interpolate(grid_axes, chamber_cp_grid, Gridded(Linear())))
+chamber_mu_interp = with_frozen_flag(interpolate(grid_axes, chamber_mu_grid, Gridded(Linear())))
+chamber_k_interp = with_frozen_flag(interpolate(grid_axes, chamber_k_grid, Gridded(Linear())))
+chamber_prandtl_interp = with_frozen_flag(interpolate(grid_axes, chamber_prandtl_grid, Gridded(Linear())))
+chamber_isp_vac_interp = with_frozen_flag(interpolate(grid_axes, chamber_isp_vac_grid, Gridded(Linear())))
+chamber_cstar_interp = with_frozen_flag(interpolate(grid_axes, chamber_cstar_grid, Gridded(Linear())))
+chamber_T_comb_interp = with_frozen_flag(interpolate(grid_axes, chamber_T_comb_grid, Gridded(Linear())))
+chamber_mw_avg_interp = with_frozen_flag(interpolate(grid_axes, chamber_mw_avg_grid, Gridded(Linear())))
+chamber_gamma_interp = with_frozen_flag(interpolate(grid_axes, chamber_gamma_grid, Gridded(Linear())))
+
+N2O_interp = with_frozen_flag(interpolate(grid_axes, N2O_grid, Gridded(Linear())))
+C2H4_interp = with_frozen_flag(interpolate(grid_axes, C2H4_grid, Gridded(Linear())))
+N2_interp = with_frozen_flag(interpolate(grid_axes, N2_grid, Gridded(Linear())))
+O2_interp = with_frozen_flag(interpolate(grid_axes, O2_grid, Gridded(Linear())))
+CO2_interp = with_frozen_flag(interpolate(grid_axes, CO2_grid, Gridded(Linear())))
+CO_interp = with_frozen_flag(interpolate(grid_axes, CO_grid, Gridded(Linear())))
+H2O_interp = with_frozen_flag(interpolate(grid_axes, H2O_grid, Gridded(Linear())))
+H2_interp = with_frozen_flag(interpolate(grid_axes, H2_grid, Gridded(Linear())))
 
 mass_fractions_interps_vec = [
     N2O_interp,

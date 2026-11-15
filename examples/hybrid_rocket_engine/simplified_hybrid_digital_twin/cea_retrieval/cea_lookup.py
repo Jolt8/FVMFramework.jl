@@ -33,6 +33,9 @@ cea = CEA_Obj(
 pressures = np.linspace((100_000), (10_000_000), 50) # Sweep chamber pressures
 of_ratios = np.linspace(1.0, 15.0, 100)     # Sweep O/F ratios
 expansion_ratios = np.linspace(3.0, 10.0, 15) # Match the current design bounds in 0.5 increments
+frozen_flags = [0, 1] # 0 = shifting equilibrium, 1 = frozen at the chamber
+
+R_universal = 8314.462618 # J/kmol-K, used for the frozen chamber gamma
 
 species_used = [
     "N2O",
@@ -62,41 +65,49 @@ os.makedirs(os.path.dirname(csv_path), exist_ok=True)
 
 with open(csv_path, "w", newline="") as f:
     writer = csv.writer(f)
-    writer.writerow(["P_chamber_pascals", "OF_ratio", "expansion_ratio", "chamber_cp", "chamber_mu", "chamber_k", "chamber_prandtl", "chamber_isp_vac", "chamber_cstar", "chamber_T_comb", "chamber_mw_avg", "chamber_gamma", "untracked_mass_fraction"] + species_used)
-    
-    for P in pressures:
-        for OF in of_ratios:
-            chamber_cp, chamber_mu, chamber_k, chamber_prandtl = cea.get_Chamber_Transport(Pc=P, MR=OF)
+    writer.writerow([
+        "P_chamber_pascals", "OF_ratio", "expansion_ratio", "frozen",
+        "chamber_cp", "chamber_mu", "chamber_k", "chamber_prandtl", "chamber_isp_vac", "chamber_cstar", "chamber_T_comb", "chamber_mw_avg", "chamber_gamma", "untracked_mass_fraction"] + species_used)
 
-            molecular_weights, mass_fractions = cea.get_SpeciesMassFractions(
-                Pc=P, MR=OF, min_fraction=0.0,
-                frozen=0, frozenAtThroat=0
-            )
+    for frozen in frozen_flags:
+        for P in pressures:
+            for OF in of_ratios:
+                chamber_cp, chamber_mu, chamber_k, chamber_prandtl = cea.get_Chamber_Transport(Pc=P, MR=OF, frozen=frozen)
 
-            chamber_mass_fractions = {
-                species: fractions[1]
-                for species, fractions in mass_fractions.items()
-            }
-
-            final_species_mass_fractions = [
-                chamber_mass_fractions.get(sp, chamber_mass_fractions.get(alt_sp, 0.0))
-                for sp, alt_sp in zip(species_used, alternative_species_used)
-            ]
-
-            selected_mass_fraction_sum = sum(final_species_mass_fractions)
-            if selected_mass_fraction_sum <= np.finfo(float).eps:
-                raise ValueError(
-                    "Selected CEA species have zero total mass fraction at "
-                    f"P={P} Pa and O/F={OF}."
+                molecular_weights, mass_fractions = cea.get_SpeciesMassFractions(
+                    Pc=P, MR=OF, min_fraction=0.0,
+                    frozen=frozen, frozenAtThroat=0
                 )
 
-            untracked_mass_fraction = 1.0 - selected_mass_fraction_sum
-            final_species_mass_fractions = [
-                mass_fraction / selected_mass_fraction_sum
-                for mass_fraction in final_species_mass_fractions
-            ]
-            
-            for eps in expansion_ratios:
-                chamber_isp_vac, chamber_cstar, chamber_T_comb, chamber_mw_avg, chamber_gamma = cea.get_IvacCstrTc_ChmMwGam(Pc=P, MR=OF, eps=eps)
+                chamber_mass_fractions = {
+                    species: fractions[1]
+                    for species, fractions in mass_fractions.items()
+                }
 
-                writer.writerow([P, OF, eps, chamber_cp, chamber_mu, chamber_k, chamber_prandtl, chamber_isp_vac, chamber_cstar, chamber_T_comb, chamber_mw_avg, chamber_gamma, untracked_mass_fraction] + final_species_mass_fractions)
+                final_species_mass_fractions = [
+                    chamber_mass_fractions.get(sp, chamber_mass_fractions.get(alt_sp, 0.0))
+                    for sp, alt_sp in zip(species_used, alternative_species_used)
+                ]
+
+                selected_mass_fraction_sum = sum(final_species_mass_fractions)
+                if selected_mass_fraction_sum <= np.finfo(float).eps:
+                    raise ValueError(
+                        "Selected CEA species have zero total mass fraction at "
+                        f"P={P} Pa and O/F={OF}."
+                    )
+
+                untracked_mass_fraction = 1.0 - selected_mass_fraction_sum
+                final_species_mass_fractions = [
+                    mass_fraction / selected_mass_fraction_sum
+                    for mass_fraction in final_species_mass_fractions
+                ]
+
+                for eps in expansion_ratios:
+                    # get_IvacCstrTc_ChmMwGam has no frozen option, so Isp/c*/Tc and MW/gamma are fetched separately
+                    chamber_isp_vac, chamber_cstar, chamber_T_comb = cea.get_IvacCstrTc(Pc=P, MR=OF, eps=eps, frozen=frozen, frozenAtThroat=0)
+                    chamber_mw_avg, chamber_gamma = cea.get_Chamber_MolWt_gamma(Pc=P, MR=OF, eps=eps)
+                    if frozen:
+                        # get_Chamber_MolWt_gamma always returns the equilibrium gamma, so rebuild it from the frozen cp
+                        chamber_gamma = chamber_cp / (chamber_cp - R_universal / chamber_mw_avg)
+
+                    writer.writerow([P, OF, eps, frozen, chamber_cp, chamber_mu, chamber_k, chamber_prandtl, chamber_isp_vac, chamber_cstar, chamber_T_comb, chamber_mw_avg, chamber_gamma, untracked_mass_fraction] + final_species_mass_fractions)
