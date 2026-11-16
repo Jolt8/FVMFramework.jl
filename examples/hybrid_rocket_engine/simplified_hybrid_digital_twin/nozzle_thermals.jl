@@ -40,9 +40,12 @@ Variables that are going to be continuously adjusted along the length of the noz
 
     Main design parameters:
         - The wall thickness between cooling channels and the internal flow passage
-        - Effective diameter of cooling channels
+            - On second thought, we probably want to go as thin as possible that gives some safety factor for both pressure and thermal stresses 
+        - Effective diameter of cooling channels (we can increase heat flux by narrowing the channels)
         - Cooling channel width, height and aspect ratio
+        - More unique forms of cooling channel geometry (perhaps internal fins if there's an easy way to predict their impact)
         - Pitch of cooling channels / coils of cooling channels per unit length
+        - Orifice diameter upstream of the cooling channels (controls pressure experienced in the pipe based on pump volumetric flow)
 
     Secondary design parameters:
         - The thickness between the cooling channels and the outside air (only really have to size to contain coolant pressure)
@@ -134,9 +137,7 @@ end
 nozzle_positions = create_nozzle_positions(cad_data)
 
 system = (
-    use_frozen_cea_interps = false, 
-    #equilibrium gives a much higher heat transfer coefficient, so we'll use that to be safe
-    #I think if we use equilibrium to get a higher heat transfer coefficient, I would be comfortable dropping the 2x safety factor and swapping it out for like a 1.2x safety factor
+    use_frozen_cea_interps = true, #equilibrium overpredicts way too much, we're always going to use frozen cea interps from now on
 )
 
 Revise.includet(joinpath(@__DIR__, "cea_retrieval", "CEA_lookup_table.jl"));
@@ -158,12 +159,23 @@ system = merge(system, (
 ));
 
 properties = ComponentVector(
-    chamber_pressure = 20.0u"bar",
+    #The chamber pressure might be higher than expected, so we'll add a safety factor
+    design_chamber_pressure = 20.0u"bar",
+    potential_chamber_pressure_overshoot_factor = 1.3,
+    chamber_pressure = 0.0u"bar",
+
     #higher O/F ratios drives chamber temperatures higher, we'll use a higher than normal value for safety
-    oxidizer_to_fuel_ratio = 9.0,
+    oxidizer_to_fuel_ratio = 9.0, #it would be wise to sweep this but probably just go with the O/F ratio between 1.0 and 9.0 that delivers the highest heat transfer
     expansion_ratio = cad_data.expansion_ratio,
     combustion_efficiency = 0.9, #this is pretty generous, but higher combustion efficiency leads to hotter combustion gases
+
+    #To give a generous safety factor, we'll say that the bartz correlation might underpredict by 1/1.5 times, so we'll multiply the value it gives by this parameter
+    bartz_correlation_safety_factor = 1.5 
 )
+
+function update_properties!(p)
+    p.chamber_pressure = p.design_chamber_pressure * p.potential_chamber_pressure_overshoot_factor
+end
 
 function get_position_to_throat_area_based_on_mach_number(
     mach_number,
@@ -194,11 +206,14 @@ function get_position_to_throat_area_based_on_mach_number(
 end
 
 function get_bartz_heat_transfer_coefficient(
-    p, system, nozzle_position, wall_temperature
+    p, system, nozzle_position, gas_side_wall_surface_temperature
 )
+    update_properties!(p)
+    
     cad_data = system.cad_data
 
     stripped_pressure = ustrip(p.chamber_pressure |> u"Pa")
+
     cea_inputs = (
         stripped_pressure,
         p.oxidizer_to_fuel_ratio,
@@ -236,7 +251,7 @@ function get_bartz_heat_transfer_coefficient(
     )
 
     boundary_layer_correction_factor = (
-        (wall_temperature / (2 * gas_stagnation_temperature)) *
+        (gas_side_wall_surface_temperature / (2 * gas_stagnation_temperature)) *
         (1 + ((gas_gamma - 1) / 2) * mach_number^2) + 1/2
     )^-0.68 * (
         1 + ((gas_gamma - 1) / 2) * mach_number^2
@@ -255,14 +270,14 @@ function get_bartz_heat_transfer_coefficient(
         (cad_data.nozzle_throat_diameter / radius_of_curvature_of_nozzle_wall_at_throat)^0.1 *
         (cad_data.nozzle_throat_area / (pi * (nozzle_position.middle_diameter / 2)^2))^0.9 *
         boundary_layer_correction_factor
-    )
+    ) * p.bartz_correlation_safety_factor
 
     gas_side_convective_heat_transfer_coefficient = ustrip(upreferred(gas_side_convective_heat_transfer_coefficient)) * u"W/(m^2*K)"
     #since we're not using rational exponents, we can convert it to regular units easily, so we'll just strip it
 
-    heat_flux_into_nozzle_walls = gas_side_convective_heat_transfer_coefficient * (adiabatic_gas_at_wall_temperature - wall_temperature)
+    heat_flux_into_nozzle_walls = gas_side_convective_heat_transfer_coefficient * (adiabatic_gas_at_wall_temperature - gas_side_wall_surface_temperature)
 
-    heat_transfer_wattage_into_nozzle_walls = gas_side_convective_heat_transfer_coefficient * (adiabatic_gas_at_wall_temperature - wall_temperature) * nozzle_position.wall_area
+    heat_transfer_wattage_into_nozzle_walls = gas_side_convective_heat_transfer_coefficient * (adiabatic_gas_at_wall_temperature - gas_side_wall_surface_temperature) * nozzle_position.wall_area
 
     returned_values = ComponentVector(
         wall_area = nozzle_position.wall_area,
