@@ -1,0 +1,625 @@
+{
+ "source_document": "C:/Users/wille/Desktop/hybrid-rocket-CAD/src/table_hybrid.FCStd",
+ "exported_at": "2026-11-02T14:53:14-06:00",
+ "unit_note": "values are in FreeCAD's internal units: mm, kg, s, A, K, mol, cd, degrees",
+ "easily_viewed_parameters": {
+  "injector_orifice_area": "4.0 mm^2",
+  "injector_orifice_diameter": "2.256758334191025 mm",
+  "injector_disk_thickness": "5.0 mm",
+  "injector_disk_diameter": "21.509999999999998 mm",
+  "npt_thread_tap_drill_hole_depth": "15.1 mm",
+  "npt_thread_wrench_height_makeup": "10.21 mm",
+  "npt_thread_base_clearance_from_bottom": "4.889999999999999 mm",
+  "npt_thread_tap_drill_hole_diameter": "11.11 mm",
+  "injector_assembly_height": "20.1 mm",
+  "injector_disk_screws_nominal_diameter": "1.0 mm",
+  "injector_disk_bulkhead_tap_drill_hole_diameter": "0.75 mm",
+  "injector_disk_blind_hole_diameter": "1.2 mm",
+  "injector_disk_screws_width_across_corners": "2.71 mm",
+  "injector_disk_screws_thread_pitch": "0.25 mm",
+  "injector_disk_bulkhead_n_screws": "6",
+  "injector_disk_screws_additional_wall_clearance": "1.0 mm",
+  "injector_disk_screws_engaged_height": "2.0 mm",
+  "injector_disk_screws_tap_drill_hole_depth": "2.75 mm",
+  "injector_disk_screw_center_distance_from_center": "9.155 mm",
+  "injector_disk_screws_head_height": "0.7 mm",
+  "injector_disk_screws_thread_height": "7.0 mm",
+  "injector_disk_screws_total_height": "7.7 mm",
+  "injector_disk_seal_width": "1.0 mm",
+  "injector_disk_seal_depth": "1.0 mm",
+  "injector_disk_seal_distance_from_orifice": "1.0 mm",
+  "injector_disk_seal_distance_from_bolts": "1.0 mm",
+  "pre_injector_wall_thickness_from_disk_diameter": "2.0 mm",
+  "pre_injector_volume_outer_wall_diameter": "25.509999999999998 mm",
+  "pre_injector_volume": "474.0529553105788 mm^3",
+  "aluminum_casing_inner_diameter": "34.93 mm",
+  "aluminum_casing_outer_diameter": "41.93 mm",
+  "aluminum_casing_unmachined_outer_diameter": "48.35 mm",
+  "aluminum_casing_wall_thickness": "3.5 mm",
+  "flange_thickness_from_casing_wall": "6.5 mm",
+  "flange_overhang_axial_length": "5.0 mm",
+  "flange_hole_diameter": "1.2 mm",
+  "flange_n_holes": "8",
+  "flange_bolts_width_across_corners": "2.71 mm",
+  "flange_bolt_center_distance_from_center": "22.82 mm",
+  "seal_groove_width": "2.0 mm",
+  "seal_groove_depth": "1.5 mm",
+  "seal_groove_distance_from_casing_inner_diameter": "2.0 mm",
+  "pre_combustion_chamber_length": "15.0 mm",
+  "pre_combustion_chamber_fuel_fraction": "0.3333333333333333",
+  "post_combustion_chamber_length": "10.0 mm",
+  "post_combustion_chamber_fuel_fraction": "1",
+  "aluminum_casing_length": "371.4616655540045 mm",
+  "phenolic_liner_outer_diameter": "34.93 mm",
+  "phenolic_liner_inner_diameter": "33.32 mm",
+  "phenolic_liner_length": "335.0 mm",
+  "phenolic_liner_wall_thickness": "0.8049999999999997 mm",
+  "fuel_grain_desired_fuel_web_thickness": "2.0 mm",
+  "additional_fuel_grain_void_diameter": "10.0 mm",
+  "initial_fuel_grain_void_diameter": "19.32 mm",
+  "burned_fuel_grain_length": "310.0 mm",
+  "fuel_grain_length": "325.0 mm",
+  "igniter_puck_diameter": "20.0 mm",
+  "igniter_puck_thickness": "4.0 mm",
+  "igniter_puck_distance_from_injector_bulkhead": "5.0 mm",
+  "igniter_puck_distance_from_fuel_grain_top": "1.0 mm",
+  "igniter_puck_volume": "1256.6370614359173 mm^3",
+  "nozzle_throat_diameter": "14.0 mm",
+  "expansion_ratio": "4",
+  "nozzle_throat_area": "153.93804002589985 mm^2",
+  "nozzle_exit_area": "615.7521601035994 mm^2",
+  "nozzle_inlet_diameter": "33.32 mm",
+  "nozzle_exit_diameter": "28.0 mm",
+  "converging_half_angle": "30.0 °",
+  "diverging_half_angle": "15.0 °",
+  "nozzle_length": "42.8559664540975 mm",
+  "nozzle_converging_length": "16.731610801115355 mm",
+  "nozzle_diverging_length": "26.124355652982143 mm",
+  "graphite_nozzle_phenolic_groove_height": "1.3943009000929458 mm",
+  "graphite_nozzle_aluminum_groove_height": "10.0 mm",
+  "nozzle_aluminum_distance_from_nozzle_wall": "1.0 mm",
+  "nozzle_aluminum_base_thickness": "2.465 mm",
+  "nozzle_aluminum_retainer_taper_half_angle": "15.0 °"
+ },
+ "parameters": {
+  "injector_orifice_area": {
+   "value": 4.0,
+   "unit": "mm^2",
+   "cell": "C2",
+   "sheet": "table_hybrid",
+   "contents": "=4 (mm ^ 2)"
+  },
+  "injector_orifice_diameter": {
+   "value": 2.256758334191025,
+   "unit": "mm",
+   "cell": "C3",
+   "sheet": "table_hybrid",
+   "contents": "=2 * sqrt(injector_orifice_area / pi)"
+  },
+  "injector_disk_thickness": {
+   "value": 5.0,
+   "unit": "mm",
+   "cell": "C4",
+   "sheet": "table_hybrid",
+   "contents": "=5 mm"
+  },
+  "injector_disk_diameter": {
+   "value": 21.509999999999998,
+   "unit": "mm",
+   "cell": "C5",
+   "sheet": "table_hybrid",
+   "contents": "=npt_thread_tap_drill_hole_diameter + 2 * injector_disk_seal_distance_from_orifice + 2 * injector_disk_seal_width + 2 * injector_disk_seal_distance_from_bolts + 2 * injector_disk_blind_hole_diameter + 2 * injector_disk_screws_additional_wall_clearance"
+  },
+  "npt_thread_tap_drill_hole_depth": {
+   "value": 15.1,
+   "unit": "mm",
+   "cell": "C7",
+   "sheet": "table_hybrid",
+   "contents": "=15.1 mm"
+  },
+  "npt_thread_wrench_height_makeup": {
+   "value": 10.21,
+   "unit": "mm",
+   "cell": "C8",
+   "sheet": "table_hybrid",
+   "contents": "=10.21 mm"
+  },
+  "npt_thread_base_clearance_from_bottom": {
+   "value": 4.889999999999999,
+   "unit": "mm",
+   "cell": "C11",
+   "sheet": "table_hybrid",
+   "contents": "=npt_thread_tap_drill_hole_depth - npt_thread_wrench_height_makeup"
+  },
+  "npt_thread_tap_drill_hole_diameter": {
+   "value": 11.11,
+   "unit": "mm",
+   "cell": "C12",
+   "sheet": "table_hybrid",
+   "contents": "=11.11 mm"
+  },
+  "injector_assembly_height": {
+   "value": 20.1,
+   "unit": "mm",
+   "cell": "C14",
+   "sheet": "table_hybrid",
+   "contents": "=npt_thread_tap_drill_hole_depth + injector_disk_thickness"
+  },
+  "injector_disk_screws_nominal_diameter": {
+   "value": 1.0,
+   "unit": "mm",
+   "cell": "C16",
+   "sheet": "table_hybrid",
+   "contents": "=1 mm"
+  },
+  "injector_disk_bulkhead_tap_drill_hole_diameter": {
+   "value": 0.75,
+   "unit": "mm",
+   "cell": "C17",
+   "sheet": "table_hybrid",
+   "contents": "=0.75 mm"
+  },
+  "injector_disk_blind_hole_diameter": {
+   "value": 1.2,
+   "unit": "mm",
+   "cell": "C18",
+   "sheet": "table_hybrid",
+   "contents": "=1.2 mm"
+  },
+  "injector_disk_screws_width_across_corners": {
+   "value": 2.71,
+   "unit": "mm",
+   "cell": "C19",
+   "sheet": "table_hybrid",
+   "contents": "=2.71 mm"
+  },
+  "injector_disk_screws_thread_pitch": {
+   "value": 0.25,
+   "unit": "mm",
+   "cell": "C20",
+   "sheet": "table_hybrid",
+   "contents": "=0.25 mm"
+  },
+  "injector_disk_bulkhead_n_screws": {
+   "value": 6,
+   "unit": "",
+   "cell": "C21",
+   "sheet": "table_hybrid",
+   "contents": "6"
+  },
+  "injector_disk_screws_additional_wall_clearance": {
+   "value": 1.0,
+   "unit": "mm",
+   "cell": "C22",
+   "sheet": "table_hybrid",
+   "contents": "=1 mm"
+  },
+  "injector_disk_screws_engaged_height": {
+   "value": 2.0,
+   "unit": "mm",
+   "cell": "C23",
+   "sheet": "table_hybrid",
+   "contents": "=2 * injector_disk_screws_nominal_diameter"
+  },
+  "injector_disk_screws_tap_drill_hole_depth": {
+   "value": 2.75,
+   "unit": "mm",
+   "cell": "C26",
+   "sheet": "table_hybrid",
+   "contents": "=injector_disk_screws_engaged_height + 3 * injector_disk_screws_thread_pitch"
+  },
+  "injector_disk_screw_center_distance_from_center": {
+   "value": 9.155,
+   "unit": "mm",
+   "cell": "C29",
+   "sheet": "table_hybrid",
+   "contents": "=npt_thread_tap_drill_hole_diameter / 2 + injector_disk_seal_distance_from_orifice + injector_disk_seal_width + injector_disk_seal_distance_from_bolts + injector_disk_blind_hole_diameter / 2"
+  },
+  "injector_disk_screws_head_height": {
+   "value": 0.7,
+   "unit": "mm",
+   "cell": "C31",
+   "sheet": "table_hybrid",
+   "contents": "=0.7 mm"
+  },
+  "injector_disk_screws_thread_height": {
+   "value": 7.0,
+   "unit": "mm",
+   "cell": "C32",
+   "sheet": "table_hybrid",
+   "contents": "=injector_disk_thickness + injector_disk_screws_engaged_height"
+  },
+  "injector_disk_screws_total_height": {
+   "value": 7.7,
+   "unit": "mm",
+   "cell": "C33",
+   "sheet": "table_hybrid",
+   "contents": "=injector_disk_screws_head_height + injector_disk_screws_thread_height"
+  },
+  "injector_disk_seal_width": {
+   "value": 1.0,
+   "unit": "mm",
+   "cell": "C35",
+   "sheet": "table_hybrid",
+   "contents": "=1 mm"
+  },
+  "injector_disk_seal_depth": {
+   "value": 1.0,
+   "unit": "mm",
+   "cell": "C36",
+   "sheet": "table_hybrid",
+   "contents": "=1 mm"
+  },
+  "injector_disk_seal_distance_from_orifice": {
+   "value": 1.0,
+   "unit": "mm",
+   "cell": "C37",
+   "sheet": "table_hybrid",
+   "contents": "=1 mm"
+  },
+  "injector_disk_seal_distance_from_bolts": {
+   "value": 1.0,
+   "unit": "mm",
+   "cell": "C38",
+   "sheet": "table_hybrid",
+   "contents": "=1 mm"
+  },
+  "pre_injector_wall_thickness_from_disk_diameter": {
+   "value": 2.0,
+   "unit": "mm",
+   "cell": "C40",
+   "sheet": "table_hybrid",
+   "contents": "=2 mm"
+  },
+  "pre_injector_volume_outer_wall_diameter": {
+   "value": 25.509999999999998,
+   "unit": "mm",
+   "cell": "C41",
+   "sheet": "table_hybrid",
+   "contents": "=injector_disk_diameter + 2 * pre_injector_wall_thickness_from_disk_diameter"
+  },
+  "pre_injector_volume": {
+   "value": 474.0529553105788,
+   "unit": "mm^3",
+   "cell": "C43",
+   "sheet": "table_hybrid",
+   "contents": "=pi * (npt_thread_tap_drill_hole_diameter / 2) ^ 2 * npt_thread_base_clearance_from_bottom"
+  },
+  "aluminum_casing_inner_diameter": {
+   "value": 34.93,
+   "unit": "mm",
+   "cell": "F2",
+   "sheet": "table_hybrid",
+   "contents": "=phenolic_liner_outer_diameter"
+  },
+  "aluminum_casing_outer_diameter": {
+   "value": 41.93,
+   "unit": "mm",
+   "cell": "F3",
+   "sheet": "table_hybrid",
+   "contents": "=aluminum_casing_inner_diameter + 2 * aluminum_casing_wall_thickness"
+  },
+  "aluminum_casing_unmachined_outer_diameter": {
+   "value": 48.35,
+   "unit": "mm",
+   "cell": "F4",
+   "sheet": "table_hybrid",
+   "contents": "=aluminum_casing_inner_diameter + 2 * seal_groove_distance_from_casing_inner_diameter + 2 * seal_groove_width + 2 * flange_bolts_width_across_corners"
+  },
+  "aluminum_casing_wall_thickness": {
+   "value": 3.5,
+   "unit": "mm",
+   "cell": "F6",
+   "sheet": "table_hybrid",
+   "contents": "=3.5 mm"
+  },
+  "flange_thickness_from_casing_wall": {
+   "value": 6.5,
+   "unit": "mm",
+   "cell": "F8",
+   "sheet": "table_hybrid",
+   "contents": "=6.5 mm"
+  },
+  "flange_overhang_axial_length": {
+   "value": 5.0,
+   "unit": "mm",
+   "cell": "F9",
+   "sheet": "table_hybrid",
+   "contents": "=5 mm"
+  },
+  "flange_hole_diameter": {
+   "value": 1.2,
+   "unit": "mm",
+   "cell": "F10",
+   "sheet": "table_hybrid",
+   "contents": "=1.2 mm"
+  },
+  "flange_n_holes": {
+   "value": 8,
+   "unit": "",
+   "cell": "F11",
+   "sheet": "table_hybrid",
+   "contents": "8"
+  },
+  "flange_bolts_width_across_corners": {
+   "value": 2.71,
+   "unit": "mm",
+   "cell": "F12",
+   "sheet": "table_hybrid",
+   "contents": "=2.71 mm"
+  },
+  "flange_bolt_center_distance_from_center": {
+   "value": 22.82,
+   "unit": "mm",
+   "cell": "F13",
+   "sheet": "table_hybrid",
+   "contents": "=aluminum_casing_inner_diameter / 2 + seal_groove_distance_from_casing_inner_diameter + seal_groove_width + flange_bolts_width_across_corners / 2"
+  },
+  "seal_groove_width": {
+   "value": 2.0,
+   "unit": "mm",
+   "cell": "F15",
+   "sheet": "table_hybrid",
+   "contents": "=2 mm"
+  },
+  "seal_groove_depth": {
+   "value": 1.5,
+   "unit": "mm",
+   "cell": "F16",
+   "sheet": "table_hybrid",
+   "contents": "=1.5 mm"
+  },
+  "seal_groove_distance_from_casing_inner_diameter": {
+   "value": 2.0,
+   "unit": "mm",
+   "cell": "F17",
+   "sheet": "table_hybrid",
+   "contents": "=2 mm"
+  },
+  "pre_combustion_chamber_length": {
+   "value": 15.0,
+   "unit": "mm",
+   "cell": "F19",
+   "sheet": "table_hybrid",
+   "contents": "=15 mm"
+  },
+  "pre_combustion_chamber_fuel_fraction": {
+   "value": 0.3333333333333333,
+   "unit": "",
+   "cell": "F20",
+   "sheet": "table_hybrid",
+   "contents": "=(pre_combustion_chamber_length - igniter_puck_distance_from_injector_bulkhead - igniter_puck_distance_from_fuel_grain_top - igniter_puck_thickness) / pre_combustion_chamber_length"
+  },
+  "post_combustion_chamber_length": {
+   "value": 10.0,
+   "unit": "mm",
+   "cell": "F21",
+   "sheet": "table_hybrid",
+   "contents": "=10 mm"
+  },
+  "post_combustion_chamber_fuel_fraction": {
+   "value": 1,
+   "unit": "",
+   "cell": "F22",
+   "sheet": "table_hybrid",
+   "contents": "1"
+  },
+  "aluminum_casing_length": {
+   "value": 371.4616655540045,
+   "unit": "mm",
+   "cell": "F23",
+   "sheet": "table_hybrid",
+   "contents": "=fuel_grain_length + nozzle_length - graphite_nozzle_phenolic_groove_height + (1 - pre_combustion_chamber_fuel_fraction) * pre_combustion_chamber_length + (1 - post_combustion_chamber_fuel_fraction) * post_combustion_chamber_length - flange_overhang_axial_length"
+  },
+  "phenolic_liner_outer_diameter": {
+   "value": 34.93,
+   "unit": "mm",
+   "cell": "I2",
+   "sheet": "table_hybrid",
+   "contents": "=34.93 mm"
+  },
+  "phenolic_liner_inner_diameter": {
+   "value": 33.32,
+   "unit": "mm",
+   "cell": "I3",
+   "sheet": "table_hybrid",
+   "contents": "=33.32 mm"
+  },
+  "phenolic_liner_length": {
+   "value": 335.0,
+   "unit": "mm",
+   "cell": "I5",
+   "sheet": "table_hybrid",
+   "contents": "=aluminum_casing_length - (nozzle_length - graphite_nozzle_phenolic_groove_height) + flange_overhang_axial_length"
+  },
+  "phenolic_liner_wall_thickness": {
+   "value": 0.8049999999999997,
+   "unit": "mm",
+   "cell": "I7",
+   "sheet": "table_hybrid",
+   "contents": "=(phenolic_liner_outer_diameter - phenolic_liner_inner_diameter) / 2"
+  },
+  "fuel_grain_desired_fuel_web_thickness": {
+   "value": 2.0,
+   "unit": "mm",
+   "cell": "L2",
+   "sheet": "table_hybrid",
+   "contents": "=2 mm"
+  },
+  "additional_fuel_grain_void_diameter": {
+   "value": 10.0,
+   "unit": "mm",
+   "cell": "L3",
+   "sheet": "table_hybrid",
+   "contents": "=10 mm"
+  },
+  "initial_fuel_grain_void_diameter": {
+   "value": 19.32,
+   "unit": "mm",
+   "cell": "L5",
+   "sheet": "table_hybrid",
+   "contents": "=phenolic_liner_inner_diameter - 2 * fuel_grain_desired_fuel_web_thickness - additional_fuel_grain_void_diameter"
+  },
+  "burned_fuel_grain_length": {
+   "value": 310.0,
+   "unit": "mm",
+   "cell": "L7",
+   "sheet": "table_hybrid",
+   "contents": "=310 mm"
+  },
+  "fuel_grain_length": {
+   "value": 325.0,
+   "unit": "mm",
+   "cell": "L8",
+   "sheet": "table_hybrid",
+   "contents": "=burned_fuel_grain_length + pre_combustion_chamber_length * pre_combustion_chamber_fuel_fraction + post_combustion_chamber_length * post_combustion_chamber_fuel_fraction"
+  },
+  "igniter_puck_diameter": {
+   "value": 20.0,
+   "unit": "mm",
+   "cell": "L12",
+   "sheet": "table_hybrid",
+   "contents": "=20 mm"
+  },
+  "igniter_puck_thickness": {
+   "value": 4.0,
+   "unit": "mm",
+   "cell": "L13",
+   "sheet": "table_hybrid",
+   "contents": "=4 mm"
+  },
+  "igniter_puck_distance_from_injector_bulkhead": {
+   "value": 5.0,
+   "unit": "mm",
+   "cell": "L14",
+   "sheet": "table_hybrid",
+   "contents": "=5 mm"
+  },
+  "igniter_puck_distance_from_fuel_grain_top": {
+   "value": 1.0,
+   "unit": "mm",
+   "cell": "L15",
+   "sheet": "table_hybrid",
+   "contents": "=1 mm"
+  },
+  "igniter_puck_volume": {
+   "value": 1256.6370614359173,
+   "unit": "mm^3",
+   "cell": "L17",
+   "sheet": "table_hybrid",
+   "contents": "=pi * (igniter_puck_diameter / 2) ^ 2 * igniter_puck_thickness"
+  },
+  "nozzle_throat_diameter": {
+   "value": 14.0,
+   "unit": "mm",
+   "cell": "O3",
+   "sheet": "table_hybrid",
+   "contents": "=14 mm"
+  },
+  "expansion_ratio": {
+   "value": 4,
+   "unit": "",
+   "cell": "O4",
+   "sheet": "table_hybrid",
+   "contents": "4"
+  },
+  "nozzle_throat_area": {
+   "value": 153.93804002589985,
+   "unit": "mm^2",
+   "cell": "O6",
+   "sheet": "table_hybrid",
+   "contents": "=pi * (nozzle_throat_diameter / 2) ^ 2"
+  },
+  "nozzle_exit_area": {
+   "value": 615.7521601035994,
+   "unit": "mm^2",
+   "cell": "O7",
+   "sheet": "table_hybrid",
+   "contents": "=expansion_ratio * nozzle_throat_area"
+  },
+  "nozzle_inlet_diameter": {
+   "value": 33.32,
+   "unit": "mm",
+   "cell": "O9",
+   "sheet": "table_hybrid",
+   "contents": "=nozzle_throat_diameter + 2 * nozzle_converging_length * tan(converging_half_angle)"
+  },
+  "nozzle_exit_diameter": {
+   "value": 28.0,
+   "unit": "mm",
+   "cell": "O10",
+   "sheet": "table_hybrid",
+   "contents": "=2 * sqrt(nozzle_exit_area / pi)"
+  },
+  "converging_half_angle": {
+   "value": 30.0,
+   "unit": "°",
+   "cell": "O12",
+   "sheet": "table_hybrid",
+   "contents": "=30 deg"
+  },
+  "diverging_half_angle": {
+   "value": 15.0,
+   "unit": "°",
+   "cell": "O13",
+   "sheet": "table_hybrid",
+   "contents": "=15 deg"
+  },
+  "nozzle_length": {
+   "value": 42.8559664540975,
+   "unit": "mm",
+   "cell": "O15",
+   "sheet": "table_hybrid",
+   "contents": "=(phenolic_liner_inner_diameter - nozzle_throat_diameter) / (2 * tan(converging_half_angle)) + (nozzle_exit_diameter - nozzle_throat_diameter) / (2 * tan(diverging_half_angle))"
+  },
+  "nozzle_converging_length": {
+   "value": 16.731610801115355,
+   "unit": "mm",
+   "cell": "O16",
+   "sheet": "table_hybrid",
+   "contents": "=(phenolic_liner_inner_diameter - nozzle_throat_diameter) / (2 * tan(converging_half_angle))"
+  },
+  "nozzle_diverging_length": {
+   "value": 26.124355652982143,
+   "unit": "mm",
+   "cell": "O17",
+   "sheet": "table_hybrid",
+   "contents": "=(nozzle_exit_diameter - nozzle_throat_diameter) / (2 * tan(diverging_half_angle))"
+  },
+  "graphite_nozzle_phenolic_groove_height": {
+   "value": 1.3943009000929458,
+   "unit": "mm",
+   "cell": "O20",
+   "sheet": "table_hybrid",
+   "contents": "=phenolic_liner_wall_thickness / tan(converging_half_angle)"
+  },
+  "graphite_nozzle_aluminum_groove_height": {
+   "value": 10.0,
+   "unit": "mm",
+   "cell": "O21",
+   "sheet": "table_hybrid",
+   "contents": "=10 mm"
+  },
+  "nozzle_aluminum_distance_from_nozzle_wall": {
+   "value": 1.0,
+   "unit": "mm",
+   "cell": "O22",
+   "sheet": "table_hybrid",
+   "contents": "=1 mm"
+  },
+  "nozzle_aluminum_base_thickness": {
+   "value": 2.465,
+   "unit": "mm",
+   "cell": "O27",
+   "sheet": "table_hybrid",
+   "contents": "=aluminum_casing_inner_diameter / 2 - nozzle_exit_diameter / 2 - nozzle_aluminum_distance_from_nozzle_wall"
+  },
+  "nozzle_aluminum_retainer_taper_half_angle": {
+   "value": 15.0,
+   "unit": "°",
+   "cell": "O28",
+   "sheet": "table_hybrid",
+   "contents": "=15 deg"
+  }
+ }
+}
