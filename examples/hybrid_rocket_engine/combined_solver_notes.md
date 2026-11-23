@@ -17,17 +17,16 @@ As an example:
 - In hindsight, this really was not the right choice for a few reasons:
     1. It adds an insane amount of extra complexity that made me rely on an LLM to get it working properly
     2. While I haven't confirmed this for sure, I don't think that the moving fuel grain would've had a significant impact on the information that we were trying to extract out of the model
-- Since I used an LLM to get this implemented faster, I really lost ownership of certain parts of this model and I lost interest in it
+
+Improvements:
+- Don't preemptively build a model that can interface with future collected data because it's almost always better to do something when it's actually needed rather than immediately because you think it might be useful in the future
+- While it's hard to do this, always critically evaluate whehther or not a mechanism that is complicated actually adds that much to the problem and don't get blinded by the belief that (more accurate physics == always better)
+
 
 ## LLM Policy
 - Use LLMs as much as you want for information retrieval and ideas/suggestions
 - Do not use LLMs for writing the core systems engineering models, but they can still probably be useful for creating some abstractions if you know for an absolute fact (and be very sure about this) that learning it is not worth your time
     - For example, an LLM wrote the FreeCAD workbench that allowed me to make the ROM model very easily
-
-Improvements:
-- Don't preemptively build a model that can interface iwth future collected data because it's almost always better to do something when it's actually needed rather than because you think it might be useful in the future
-- While it's hard to do this, always critically evaluate whehther or not a mechanism that is complicated actually adds that much to the problem and don't get blinded by the belief that (more accurate physics == always better)
-
 
 # Model 1: Design Script Notes
 
