@@ -80,11 +80,11 @@ struct NozzlePosition
     is_diverging::Bool
 end
 
-function get_diameter_at_nozzle_position(cad_data, nozzle_position, nozzle_throat_position)
-    if nozzle_position < nozzle_throat_position
-        return cad_data.nozzle_throat_diameter + 2 * (nozzle_throat_position - nozzle_position) * tand(cad_data.converging_half_angle)
+function get_diameter_at_nozzle_station(cad_data, nozzle_station, nozzle_throat_position)
+    if nozzle_station < nozzle_throat_position
+        return cad_data.nozzle_throat_diameter + 2 * (nozzle_throat_position - nozzle_station) * tand(cad_data.converging_half_angle)
     else
-        return cad_data.nozzle_throat_diameter + 2 * (nozzle_position - nozzle_throat_position) * tand(cad_data.diverging_half_angle)
+        return cad_data.nozzle_throat_diameter + 2 * (nozzle_station - nozzle_throat_position) * tand(cad_data.diverging_half_angle)
     end
 end
 
@@ -95,7 +95,7 @@ function frustum_lateral_area(d_top, d_bottom, dz)
     return pi * (r_top + r_bottom) * slant_length
 end
 
-function create_nozzle_positions(cad_data; n_converging = 100, n_diverging = 100)
+function create_nozzle_stations(cad_data; n_converging = 100, n_diverging = 100)
     nozzle_throat_position = cad_data.nozzle_length - cad_data.nozzle_diverging_length
 
     # Separate grids for each cone so a segment edge lands exactly on the throat
@@ -103,16 +103,16 @@ function create_nozzle_positions(cad_data; n_converging = 100, n_diverging = 100
     diverging_edges  = collect(range(nozzle_throat_position, cad_data.nozzle_length, n_diverging + 1))
     segment_edges    = vcat(converging_edges, diverging_edges[2:end]) # drop the duplicated throat edge
 
-    nozzle_positions = NozzlePosition[]
+    nozzle_stations = NozzlePosition[]
 
     for i in 1:(n_converging + n_diverging)
         top_position = segment_edges[i]
         bottom_position = segment_edges[i+1]
         middle_position = (top_position + bottom_position) / 2
 
-        top_diameter = get_diameter_at_nozzle_position(cad_data, top_position, nozzle_throat_position)
-        middle_diameter = get_diameter_at_nozzle_position(cad_data, middle_position, nozzle_throat_position)
-        bottom_diameter = get_diameter_at_nozzle_position(cad_data, bottom_position, nozzle_throat_position)
+        top_diameter = get_diameter_at_nozzle_station(cad_data, top_position, nozzle_throat_position)
+        middle_diameter = get_diameter_at_nozzle_station(cad_data, middle_position, nozzle_throat_position)
+        bottom_diameter = get_diameter_at_nozzle_station(cad_data, bottom_position, nozzle_throat_position)
 
         if middle_position < nozzle_throat_position
             is_converging = true
@@ -128,7 +128,7 @@ function create_nozzle_positions(cad_data; n_converging = 100, n_diverging = 100
 
         slant_length = sqrt((top_diameter / 2 - bottom_diameter / 2)^2 + (bottom_position - top_position)^2)
 
-        push!(nozzle_positions, NozzlePosition(
+        push!(nozzle_stations, NozzlePosition(
             top_position,
             middle_position,
             bottom_position,
@@ -143,10 +143,10 @@ function create_nozzle_positions(cad_data; n_converging = 100, n_diverging = 100
         ))
     end
 
-    return nozzle_positions
+    return nozzle_stations
 end
 
-nozzle_positions = create_nozzle_positions(cad_data)
+nozzle_stations = create_nozzle_stations(cad_data)
 
 Revise.includet(joinpath(@__DIR__, "cea_retrieval", "CEA_lookup_table.jl"));
 
@@ -273,7 +273,6 @@ uncertainties = (
         worst_case = :high
     ),
 
-    
     # Parameter Modifiers:
     wall_equivalent_sand_grain_roughness_uncertainty = (
         low = 1.0,
@@ -315,12 +314,21 @@ properties = ComponentVector(
     #Other properties that are cached and updated later
     rib_thickness = 0.0u"mm",
 
+    #Outlet orifice properties
+    outlet_orifice_discharge_coefficient = 0.61,
+    #most sharp edged orifices are within 0.01 of this value, so we'll just use it without making it an uncertain parameter
+    #I'm pretty sure that a sharp edged orifice is going to be the most preferrable design in our case because I've heard that it's more 
+    #predictable when the fluid flashes after expansion.
+
+    ambient_pressure = 1.0u"atm",
+
     #CACHED PROPERTIES:
     inlet_coolant_temperature = 21.0u"°C",
     coolant_temperature = 0.0u"K",
     coolant_cp = 0.0u"J/(kg*K)",
     coolant_dynamic_viscosity = 0.0u"Pa*s",
-    coolant_thermal_conductivity = 0.0u"W/(m*K)"
+    coolant_thermal_conductivity = 0.0u"W/(m*K)",
+    rough_friction_factor = 0.0
 )
 
 #=
@@ -347,8 +355,7 @@ optimized_parameters = (
     rib_thickness_fraction_of_channel_height = (
         min = 0.25,
         max = 0.75,
-        guess = 0.5,
-        type = :parameter
+        guess = 0.5
     ),
     #typically around 0.5 to 1.0 times the channel width (usually chosen as 1.0)
     #holy variable length batman! :)
@@ -366,6 +373,11 @@ optimized_parameters = (
         min = 0.05u"kg/s",
         max = 0.2u"kg/s",
         guess = 0.1u"kg/s"
+    ),
+    outlet_orifice_area = (
+        min = 1.0u"mm^2",
+        max = 10.0u"mm^2",
+        guess = 5.0u"mm^2",
     )
     # Wall thickness is kinda an optimized parameter, but it's determined by the pressure and thermal stresses during the solve 
     #and outputted later
@@ -386,7 +398,7 @@ end
 function get_position_to_throat_area_based_on_mach_number(
     mach_number,
     p, system,
-    nozzle_position
+    nozzle_station
 )
     stripped_pressure = ustrip(p.chamber_pressure |> u"Pa")
 
@@ -409,10 +421,10 @@ function get_position_to_throat_area_based_on_mach_number(
 
     guessed_position_diameter = 2 * sqrt(position_area / pi)
 
-    return nozzle_position.middle_diameter - guessed_position_diameter
+    return nozzle_station.middle_diameter - guessed_position_diameter
 end
 
-function get_bartz_heat_transfer_coefficient(p, system, nozzle_position, gas_side_wall_surface_temperature)
+function get_bartz_heat_transfer_coefficient(p, system, nozzle_station, gas_side_wall_surface_temperature)
     cad_data = system.cad_data
 
     stripped_pressure = ustrip(p.chamber_pressure |> u"Pa")
@@ -425,13 +437,13 @@ function get_bartz_heat_transfer_coefficient(p, system, nozzle_position, gas_sid
 
     cea_kwargs = (frozen = system.use_frozen_cea_interps,)
 
-    if nozzle_position.is_converging
+    if nozzle_station.is_converging
         bounds = (1e-9, 1.0)
     else
         bounds = (1.0, 20.0)
     end
 
-    mach_number = find_zero(mach_number -> get_position_to_throat_area_based_on_mach_number(mach_number, p, system, nozzle_position), bounds)
+    mach_number = find_zero(mach_number -> get_position_to_throat_area_based_on_mach_number(mach_number, p, system, nozzle_station), bounds)
 
     #standard assumption that the non_ideal_stagnation_temperature is roughly equal to p.combustion_efficiency^2 * ideal_stagnation_temperature 
     gas_stagnation_temperature = p.combustion_efficiency^2 * system.chamber_T_comb_interp(cea_inputs...; cea_kwargs...) * u"K"
@@ -471,7 +483,7 @@ function get_bartz_heat_transfer_coefficient(p, system, nozzle_position, gas_sid
         ((gas_dynamic_viscosity^0.2 * gas_cp) / gas_prantdl^0.6) *
         ((p.chamber_pressure |> u"Pa") / c_star_effective)^0.8 *
         (cad_data.nozzle_throat_diameter / radius_of_curvature_of_nozzle_wall_at_throat)^0.1 *
-        (cad_data.nozzle_throat_area / (pi * (nozzle_position.middle_diameter / 2)^2))^0.9 *
+        (cad_data.nozzle_throat_area / (pi * (nozzle_station.middle_diameter / 2)^2))^0.9 *
         boundary_layer_correction_factor
     )
 
@@ -484,10 +496,10 @@ function get_bartz_heat_transfer_coefficient(p, system, nozzle_position, gas_sid
 
     heat_flux_into_nozzle_walls = gas_side_convective_heat_transfer_coefficient * (adiabatic_gas_at_wall_temperature - gas_side_wall_surface_temperature)
 
-    heat_transfer_wattage_into_nozzle_walls = gas_side_convective_heat_transfer_coefficient * (adiabatic_gas_at_wall_temperature - gas_side_wall_surface_temperature) * nozzle_position.wall_area
+    heat_transfer_wattage_into_nozzle_walls = gas_side_convective_heat_transfer_coefficient * (adiabatic_gas_at_wall_temperature - gas_side_wall_surface_temperature) * nozzle_station.wall_area
 
     returned_values = ComponentVector(
-        wall_area = nozzle_position.wall_area,
+        wall_area = nozzle_station.wall_area,
         heat_transfer_wattage_into_nozzle_walls = heat_transfer_wattage_into_nozzle_walls,
         heat_flux_into_nozzle_walls = heat_flux_into_nozzle_walls,
         gas_side_convective_heat_transfer_coefficient = gas_side_convective_heat_transfer_coefficient,
@@ -504,7 +516,7 @@ function get_bartz_heat_transfer_coefficient(p, system, nozzle_position, gas_sid
     return returned_values
 end
 
-function get_nozzle_radiative_heat_flux(p, system, nozzle_position, gas_side_wall_surface_temperature, gas_stagnation_temperature)
+function get_nozzle_radiative_heat_flux(p, system, nozzle_station, gas_side_wall_surface_temperature, gas_stagnation_temperature)
     stefan_boltzman_constant = 5.670374419e-8 * u"W/(m^2*K^4)"
 
     radiative_heat_flux = ((p.wall_emissivity + 1) / 2) * gas_emissivity * stefan_boltzman_constant * (
@@ -517,10 +529,10 @@ function get_nozzle_radiative_heat_flux(p, system, nozzle_position, gas_side_wal
     return radiative_heat_flux
 end
 
-function overall_gas_side_heat_transfer(p, system, nozzle_position, gas_side_wall_surface_temperature)
-    bartz_correlation_returned_values = get_bartz_heat_transfer_coefficient(p, system, nozzle_position, gas_side_wall_surface_temperature)
+function overall_gas_side_heat_transfer(p, system, nozzle_station, gas_side_wall_surface_temperature)
+    bartz_correlation_returned_values = get_bartz_heat_transfer_coefficient(p, system, nozzle_station, gas_side_wall_surface_temperature)
     
-    radiative_heat_transfer = get_nozzle_radiative_heat_flux(p, system, nozzle_position, gas_side_wall_surface_temperature, bartz_correlation_returned_values.gas_stagnation_temperature)
+    radiative_heat_transfer = get_nozzle_radiative_heat_flux(p, system, nozzle_station, gas_side_wall_surface_temperature, bartz_correlation_returned_values.gas_stagnation_temperature)
 
     overall_heat_transfer = bartz_correlation_returned_values.heat_transfer_wattage_into_nozzle_walls + radiative_heat_transfer
 
@@ -574,16 +586,16 @@ function get_min_wall_thickness(
 end
 
 #this has to be called AFTER the wall thickness is determined
-function wall_conduction(p, system, nozzle_position, gas_side_wall_surface_temperature, coolant_side_wall_surface_temperature)
+function wall_conduction(p, system, nozzle_station, gas_side_wall_surface_temperature, coolant_side_wall_surface_temperature)
     return (p.wall_thermal_conductivity / p.wall_thickness) * (gas_side_wall_surface_temperature - coolant_side_wall_surface_temperature)
 end
 
-function get_helical_station_properties(
-    p, system, nozzle_position, coolant_temperature, coolant_pressure
+function get_helical_station(
+    p, system, nozzle_station, coolant_temperature, coolant_pressure
 )
     pitch = p.channel_width_parallel_to_nozzle + p.parallel_width_between_channel_walls
 
-    channel_centerline_radius = nozzle_position.middle_diameter / 2 + p.wall_thickness + p.channel_width_parallel_to_nozzle / 2
+    channel_centerline_radius = nozzle_station.middle_diameter / 2 + p.wall_thickness + p.channel_width_parallel_to_nozzle / 2
 
     channel_helix_angle_relative_to_circumference = arcsin(
         (p.number_of_channels * pitch) / 
@@ -592,7 +604,7 @@ function get_helical_station_properties(
 
     delta_channel_length_over_delta_slant_height = (2 * pi * channel_centerline_radius) / (p.number_of_channels * pitch)
 
-    channel_length_along_nozzle_position = delta_channel_length_over_delta_slant_height * nozzle_position.slant_length
+    channel_length_along_nozzle_station = delta_channel_length_over_delta_slant_height * nozzle_station.slant_length
 
     helix_curvature_radius = channel_centerline_ / (cos(channel_helix_angle_relative_to_circumference)^2)
 
@@ -613,12 +625,12 @@ function get_helical_station_properties(
         hydraulic_diameter / (2 * helix_curvature_radius)
     )
 
-    helical_station_properties = (
+    helical_station = (
         pitch = pitch,
         channel_centerline_radius = channel_centerline_radius,
         channel_helix_angle_relative_to_circumference = channel_helix_angle_relative_to_circumference,
         delta_channel_length_over_delta_slant_height = delta_channel_length_over_delta_slant_height,
-        channel_length_along_nozzle_position = channel_length_along_nozzle_position,
+        channel_length_along_nozzle_station = channel_length_along_nozzle_station,
         helix_curvature_radius = helix_curvature_radius,
         single_channel_flow_area = single_channel_flow_area,
         hydraulic_diameter = hydraulic_diameter,
@@ -629,17 +641,17 @@ function get_helical_station_properties(
         coolant_dean_number = coolant_dean_number,
     )
 
-    return helical_station_properties
+    return helical_station
 end
 
 function _gnielinski_nusselt_number(
     friction_factor,
-    p, system, nozzle_position, helical_station_properties
+    p, system, nozzle_station, helical_station
 )
     prandtl_number = p.coolant_dynamic_viscosity * p.coolant_cp / p.coolant_thermal_conductivity #represents prantdl number for the bulk fluid
 
     nusselt_number = (
-        ((friction_factor / 8) * (helical_station_properties.coolant_reynolds_number - 1000) * prandtl_number) /
+        ((friction_factor / 8) * (helical_station.coolant_reynolds_number - 1000) * prandtl_number) /
         (1 + 12.7 * sqrt(friction_factor / 8) * (prandtl_number^(2/3) - 1))
     )
 
@@ -648,17 +660,17 @@ end
 
 function gnielinski_nusselt_number_with_rough_pipe_friction(
     rough_friction_factor, smooth_friction_factor,
-    p, system, nozzle_position, helical_station_properties
+    p, system, nozzle_station, helical_station
 )
 
-    nusselt_number = _gnielinski_nusselt_number(rough_friction_factor, p, system, nozzle_position, helical_station_properties)
+    nusselt_number = _gnielinski_nusselt_number(rough_friction_factor, p, system, nozzle_station, helical_station)
 
     return nusselt_number
 end
 
 function gnielinski_nusselt_number_with_norris_correction(
     rough_friction_factor, smooth_friction_factor,
-    p, system, nozzle_position, helical_station_properties
+    p, system, nozzle_station, helical_station
 )
     prandtl_number = p.coolant_dynamic_viscosity * p.coolant_cp / p.coolant_thermal_conductivity
 
@@ -670,14 +682,14 @@ function gnielinski_nusselt_number_with_norris_correction(
 
     nusselt_number = _gnielinski_nusselt_number(
         smooth_friction_factor,
-        p, system, nozzle_position, helical_station_properties
+        p, system, nozzle_station, helical_station
     ) * (1 / Nu_rough_over_Nu_smooth)
 
     return nusselt_number
 end
 
-function get_heat_transfer(
-    p, system, nozzle_position, helical_station_properties,
+function get_coolant_side_heat_transfer(
+    p, system, nozzle_station, helical_station,
     gas_side_wall_surface_temperature, coolant_side_wall_surface_temperature,
     coolant_temperature, coolant_pressure,
 )
@@ -686,37 +698,37 @@ function get_heat_transfer(
 
     if system.use_curved_rough_friction_factor
         rough_friction_factor = curved_rough_friction_factor(
-            p, system, nozzle_position, helical_station_properties
+            p, system, nozzle_station, helical_station
         )
     else
         rough_friction_factor = get_colebrook_friction_factor(
-            p, system, nozzle_position, helical_station_properties
+            p, system, nozzle_station, helical_station
         )
     end
     
     if system.use_curved_rough_friction_factor
         smooth_friction_factor = get_smooth_curved_friction_factor(
-            p, system, nozzle_position, helical_station_properties
+            p, system, nozzle_station, helical_station
         )
     else
         smooth_friction_factor = get_smooth_friction_factor(
-            p, system, nozzle_position, helical_station_properties
+            p, system, nozzle_station, helical_station
         )
     end
 
     if system.single_phase_mode == :gnielinski_norris
         nusselt_number = gnielinski_nusselt_number_with_norris_correction(
             rough_friction_factor, smooth_friction_factor,
-            p, system, nozzle_position, helical_station_properties
+            p, system, nozzle_station, helical_station
         )
     elseif system.single_phase_mode == :gnielinski_rough_pipe
         nusselt_number = gnielinski_nusselt_number_with_rough_pipe_friction(
             rough_friction_factor, smooth_friction_factor,
-            p, system, nozzle_position, helical_station_properties
+            p, system, nozzle_station, helical_station
         )
     end
 
-    heat_transfer_coefficient = (nusselt_number * p.coolant_thermal_conductivity) / helical_station_properties.hydraulic_diameter
+    heat_transfer_coefficient = (nusselt_number * p.coolant_thermal_conductivity) / helical_station.hydraulic_diameter
 
     coolant_side_wall_temperature_cp = PropsSI("Cpmass", "T", ustrip(u"K", coolant_side_wall_surface_temperature), "P", ustrip(u"Pa", coolant_pressure), system.coolprop_fluid)
     coolant_side_wall_temperature_dynamic_viscosity = PropsSI("viscosity", "T", ustrip(u"K", coolant_side_wall_surface_temperature), "P", ustrip(u"Pa", coolant_pressure), system.coolprop_fluid)
@@ -729,12 +741,14 @@ function get_heat_transfer(
         heat_transfer_coefficient *= (prantdl_number / coolant_side_wall_temperature_prandtl_number)^0.11
     end
 
+    p.rough_friction_factor = rough_friction_factor #cache the rough friction factor for later
+
     return heat_transfer_coefficient
 end
 
 # Onset of nucleate boiling crelations START:
 function bergles_rohsenow_onset_of_nucleate_boiling_heat_flux(
-    p, system, nozzle_position, helical_station_properties,
+    p, system, nozzle_station, helical_station,
     gas_side_wall_surface_temperature, coolant_side_wall_surface_temperature,
     coolant_temperature, coolant_pressure
 )
@@ -750,7 +764,7 @@ end
 
 # Fully developed boiling heat transfer correlations START:
 function jens_lottes_fully_developed_boiling_heat_flux(
-    p, system, nozzle_position, helical_station_properties,
+    p, system, nozzle_station, helical_station,
     gas_side_wall_surface_temperature, coolant_side_wall_surface_temperature,
     coolant_temperature, coolant_pressure
 )
@@ -764,7 +778,7 @@ function jens_lottes_fully_developed_boiling_heat_flux(
 end
 
 function thom_fully_developed_boiling_heat_flux(
-    p, system, nozzle_position, helical_station_properties,
+    p, system, nozzle_station, helical_station,
     gas_side_wall_surface_temperature, coolant_side_wall_surface_temperature,
     coolant_temperature, coolant_pressure
 )
@@ -780,31 +794,88 @@ function thom_fully_developed_boiling_heat_flux(
 end
 #END
 
-function march_nozzle_length!(
-    #we're going to find the coolant_inlet_pressure that causes the orifice upstream of the 
-    #cooling channels to discharge to ambient temperature
-    #we could make this an ODEProblem, but I just want to get this working
-    coolant_inlet_pressure,
-    p, system, nozzle_positions,
+function _converge_wall_surface_temperatures(
+    u, p, system, nozzle_station, helical_station,
+    gas_side_wall_surface_temperature, coolant_side_wall_surface_temperature,
+    coolant_temperature, coolant_pressure
 )
-    p.coolant_temperature = p.inlet_coolant_temperature
-    p.coolant_pressure = coolant_inlet_pressure
+    gas_side_wall_surface_temperature = u.gas_side_wall_surface_temperature
+    coolant_side_wall_surface_temperature = u.coolant_side_wall_surface_temperature
 
 
 end
 
+function get_helix_frictional_pressure_drop(
+    p, system, nozzle_station, helical_station,
+    gas_side_wall_surface_temperature, coolant_side_wall_surface_temperature,
+    coolant_temperature, coolant_pressure
+)
+    mass_flux = p.coolant_mass_flow / (p.number_of_channels * single_channel_flow_area)
+
+    coolant_density = system.tp_flash(model, coolant_pressure, coolant_temperature, system.coolant_mole_fractions)
+
+    coolant_velocity = mass_flux / coolant_density
+
+    coolant_pressure_drop = (p.rough_friction_factor * (helical_station.channel_length_along_nozzle_station / helical_station.hydraulic_diameter) * coolant_density * coolant_velocity^2) / 2
+
+    return coolant_pressure_drop
+end
+
+function march_nozzle_length(
+    #we're going to find the coolant_inlet_pressure that causes the orifice upstream of the 
+    #cooling channels to discharge to ambient pressure
+    #we could make this an ODEProblem, but I just want to get this working
+    coolant_inlet_pressure,
+    p, system, nozzle_stations,
+)
+    p.coolant_temperature = p.inlet_coolant_temperature
+    p.coolant_pressure = coolant_inlet_pressure
+
+    coolant_temperatures = []
+    coolant_pressures = []
+
+    for nozzle_station in nozzle_stations
+        helical_station = get_helical_station(
+            p, system, nozzle_station,
+            p.coolant_temperature, p.coolant_pressure
+        )
+
+        #update next position's temperature and pressure
+        p.coolant_temperature += coolant_side_heat_flux / (p.coolant_mass_flow / p.coolant_cp)
+        
+        coolant_pressure_drop = get_helix_frictional_pressure_drop(
+            p, system, nozzle_station, helical_station,
+            gas_side_wall_surface_temperature, coolant_side_wall_surface_temperature,
+            p.coolant_temperature, p.coolant_pressure
+        )
+        p.coolant_pressure -= coolant_pressure_drop
+
+
+        #update next nozzle position's pressure and temperature
+
+        push!(coolant_temperatures, p.coolant_temperature)
+        push!(coolant_pressures, p.coolant_pressure)
+    end
+
+    #calculate pressure based on the orifice area
+    #NOTE: just for now, we're going to assume incompressible flow and just error if the fluid would flash after expansion
+    #in the future, we'll want to use a NHNE injector model so we can be more certain about this
+    outlet_pressure = p.coolant_pressure - (1 / 2) * rho * (p.coolant_mass_flow / (p.outlet_orifice_discharge_coefficient * p.outlet_orifice_area))^2
+
+    return outlet_pressure - p.ambient_pressure
+end
 
 using Plots
 
 function plot_important_values(
-    properties, system, nozzle_positions, 
+    properties, system, nozzle_stations, 
     gas_side_wall_surface_temperature, coolant_side_wall_surface_temperature
 )
     returned_values_vec = ComponentVector[]
 
-    for nozzle_position in nozzle_positions
+    for nozzle_station in nozzle_stations
         returned_values = get_bartz_heat_transfer_coefficient(
-            properties, system, nozzle_position, upreferred(150.0u"°C")
+            properties, system, nozzle_station, upreferred(150.0u"°C")
         )
 
 
@@ -814,7 +885,7 @@ function plot_important_values(
 
     for name in propertynames(returned_values_vec[1])
         plt = plot(
-            [nozzle_position.middle_position for nozzle_position in nozzle_positions], 
+            [nozzle_station.middle_position for nozzle_station in nozzle_stations], 
             [getproperty(returned_values, name) for returned_values in returned_values_vec],
             title = String(name)
         )
@@ -833,7 +904,7 @@ properties = add_uncertainties_to_properties(properties, uncertainties)
 properties = get_nominal_p(properties, uncertainties)
 
 plot_important_values(
-    properties, system, nozzle_positions,
+    properties, system, nozzle_stations,
     200.0u"°C", 110.0u"°C"
 )
 
