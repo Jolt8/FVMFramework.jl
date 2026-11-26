@@ -36,7 +36,7 @@ Improvements:
     - Summed up: LLMs can write code with no assumptions in it (tooling) or with literature-standard assumptions I can look up. They don't write code that makes new modelling decisions.
 
 ## Most Important Transient Event
-- For all the physics that you choose to use, make sure that they're not faster than the fastest thing you actually care about
+- For all the physics that you choose to use, make sure that they're not faster than the fastest thing you actually care about and if they're faster make them instant
 - For example, SLAU2 was not useful because we were not trying to capture millisecond chamber startup transients
 - The mid_section having its own volume was not useful once again because we did not need to capture its millisecond transients
 
