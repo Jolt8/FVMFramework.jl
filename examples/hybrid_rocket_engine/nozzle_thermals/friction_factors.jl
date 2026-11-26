@@ -1,6 +1,5 @@
 #These were starting to take up too much space, so I decided to move them
 
-
 function _colebrook_friction_factor(
     friction_factor,
     p, system, nozzle_position, helical_station_properties
@@ -61,4 +60,19 @@ function curved_rough_friction_factor(
     )
 
     return rough_friction_factor * (smooth_friction_factor / smooth_curved_friction_factor)
+end
+
+# Pressure drop equation:
+function get_helix_frictional_pressure_drop(
+    p, system, nozzle_station, helical_station,
+    gas_side_wall_surface_temperature, coolant_side_wall_surface_temperature,
+    coolant_temperature, coolant_pressure
+)
+    mass_flux = p.coolant_mass_flow / (p.number_of_channels * single_channel_flow_area)
+
+    coolant_velocity = mass_flux / p.coolant_density
+
+    coolant_pressure_drop = p.rough_friction_factor * (helical_station.channel_length_along_nozzle_station / helical_station.hydraulic_diameter) * ((p.coolant_density * coolant_velocity^2) / 2)
+
+    return coolant_pressure_drop
 end
