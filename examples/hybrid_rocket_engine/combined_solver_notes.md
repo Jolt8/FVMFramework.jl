@@ -273,6 +273,7 @@ Improvements:
 
 ### Uncertainty Quantification
 - The uncertainty quantification and how that general system can be generally used to design something that will have the highest chance of success in addition to giving you information on what parameters are going to be the most valuable to retrieve from experiemtal data is amazing
+- margin ratio = (capacity − demand) / combined uncertainty of capacity and demand
 
 ### Use of Empirical Models
 - Due to the use of many empirical models, I trust this model significantly more than basically all of the models that I've used so far for this specific problem
