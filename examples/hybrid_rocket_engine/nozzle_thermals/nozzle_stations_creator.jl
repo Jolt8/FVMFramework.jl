@@ -58,7 +58,7 @@ function create_nozzle_stations(cad_data; n_converging = 100, n_diverging = 100)
             half_angle = cad_data.converging_half_angle
         else
             is_converging = false
-            is_diverging = false
+            is_diverging = true
             half_angle = cad_data.diverging_half_angle
         end
 
